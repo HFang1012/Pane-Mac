@@ -1,4 +1,13 @@
-// Builds build/Pane.app for this Mac and signs it locally so macOS will open it.
+// Builds build/Pane.app for this Mac and signs it so macOS will open it.
+//
+// Signing: macOS remembers permissions (Accessibility, Screen Recording, Automation) by the app's signature.
+// An ad-hoc signature is new on every build, so each update looked like a different app and lost them all.
+// So Pane is signed with its own long-lived certificate, "Pane Signing", and every build keeps the same identity.
+// The certificate is a .p12 file plus its password, from (first found):
+//   PANE_SIGN_P12 (base64 of the .p12) and PANE_SIGN_PASSWORD   ← the release workflow, from repo secrets
+//   ~/.pane-signing/pane.p12 and ~/.pane-signing/password        ← your Mac
+// Without either it falls back to ad-hoc (fine for trying a build, but permissions won't carry over),
+// unless PANE_SIGN_REQUIRED is set, as it is for releases.
 //
 // The version comes from your newest git tag (v1.2.3 → 1.2.3), so tagging a release is all it takes:
 //   git tag v1.2.3 && npm run release
@@ -7,6 +16,8 @@ const { packager } = require('@electron/packager');
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+const crypto = require('crypto');
 
 const root = path.join(__dirname, '..');
 const build = path.join(root, 'build');
@@ -30,6 +41,55 @@ function pickVersion() {
     return { version: tag.replace(/^v/, ''), from: note };
   }
   return { version: pkg.version, from: 'package.json' };
+}
+
+function signingCert() {
+  if (process.env.PANE_SIGN_P12) {
+    return { p12: Buffer.from(process.env.PANE_SIGN_P12, 'base64'), password: process.env.PANE_SIGN_PASSWORD || '' };
+  }
+  const dir = path.join(os.homedir(), '.pane-signing');
+  try {
+    return { p12: fs.readFileSync(path.join(dir, 'pane.p12')), password: fs.readFileSync(path.join(dir, 'password'), 'utf8').trim() };
+  } catch {
+    return null;
+  }
+}
+
+// The certificate goes into a throwaway keychain just for this build, so nothing is added to yours.
+function sign(app) {
+  const cert = signingCert();
+  if (!cert) {
+    if (process.env.PANE_SIGN_REQUIRED) {
+      console.error('No signing certificate (PANE_SIGN_P12 / PANE_SIGN_PASSWORD). Releases must be signed as Pane, or updates lose their permissions.');
+      process.exit(1);
+    }
+    console.warn('No Pane signing certificate found: signing ad-hoc. Permissions given to this build won\'t carry over to the next.');
+    execFileSync('codesign', ['--force', '--deep', '--sign', '-', app], { stdio: 'inherit' });
+    return;
+  }
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'pane-sign-'));
+  const keychain = path.join(work, 'sign.keychain-db');
+  const p12 = path.join(work, 'pane.p12');
+  const kcPass = crypto.randomBytes(16).toString('hex');
+  let searchList = null;
+  const sec = (...args) => execFileSync('security', args, { stdio: ['ignore', 'pipe', 'inherit'] });
+  try {
+    fs.writeFileSync(p12, cert.p12, { mode: 0o600 });
+    sec('create-keychain', '-p', kcPass, keychain);
+    sec('set-keychain-settings', keychain); // no auto-lock mid-build
+    sec('unlock-keychain', '-p', kcPass, keychain);
+    sec('import', p12, '-k', keychain, '-P', cert.password, '-T', '/usr/bin/codesign');
+    sec('set-key-partition-list', '-S', 'apple-tool:,apple:,codesign:', '-s', '-k', kcPass, keychain);
+    // codesign only finds identities in keychains on the search list, so it's on there for the signing only.
+    searchList = sec('list-keychains', '-d', 'user').toString().split('\n').map((l) => l.trim().replace(/^"|"$/g, '')).filter(Boolean);
+    sec('list-keychains', '-d', 'user', '-s', keychain, ...searchList);
+    execFileSync('codesign', ['--force', '--deep', '--keychain', keychain, '--sign', 'Pane Signing', app], { stdio: 'inherit' });
+    console.log('Signed as "Pane Signing"');
+  } finally {
+    if (searchList) try { sec('list-keychains', '-d', 'user', '-s', ...searchList); } catch {}
+    try { sec('delete-keychain', keychain); } catch {}
+    fs.rmSync(work, { recursive: true, force: true });
+  }
 }
 
 (async () => {
@@ -70,7 +130,7 @@ function pickVersion() {
 
   fs.renameSync(path.join(appDir, 'Pane.app'), path.join(build, 'Pane.app'));
   fs.rmSync(path.join(build, '.tmp'), { recursive: true, force: true });
-  execFileSync('codesign', ['--force', '--deep', '--sign', '-', path.join(build, 'Pane.app')], { stdio: 'inherit' });
+  sign(path.join(build, 'Pane.app'));
   console.log(`Built build/Pane.app (version ${version})`);
 })().catch((err) => {
   console.error(err);

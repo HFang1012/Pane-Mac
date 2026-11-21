@@ -40,8 +40,19 @@ jobs:
       - name: Install
         run: npm ci
 
+      # Signed with Pane's own certificate (see scripts/package.js), so an update keeps the permissions
+      # you gave the last version. The build stops rather than ship an ad-hoc signed Pane.
       - name: Build Pane.app and Pane.dmg
+        env:
+          PANE_SIGN_P12: ${{ secrets.PANE_SIGN_P12 }}
+          PANE_SIGN_PASSWORD: ${{ secrets.PANE_SIGN_PASSWORD }}
+          PANE_SIGN_REQUIRED: '1'
         run: npm run release
+
+      - name: Check it's signed as Pane
+        run: |
+          codesign -dr - build/Pane.app 2>&1 | tee /dev/stderr | grep -q 'certificate leaf = H"1351e7dc4049217b68344cd5f3d313de433d612c"' \
+            || { echo "::error::Pane.app isn't signed with the Pane Signing certificate"; exit 1; }
 
       - name: Check the version matches the tag
         run: |

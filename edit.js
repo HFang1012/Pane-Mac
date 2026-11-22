@@ -1113,6 +1113,7 @@ let mode = 'replace';
 function setFormat(ext) { $('format').value = ext; onFormat(); }
 function onFormat() {
   const other = isOther();
+  syncFormat();
   $('ending').hidden = !other;
   if (other && document.activeElement !== $('ending')) requestAnimationFrame(() => $('ending').focus());
   K?.onFormat?.(fmt());
@@ -1120,6 +1121,77 @@ function onFormat() {
   changed();
 }
 $('format').addEventListener('change', onFormat);
+
+// The type menu is Pane's own: a button and a list, drawn from the hidden <select>, which stays the one
+// place the choice lives (so everything that reads $('format').value keeps working).
+function buildFormatMenu() {
+  const m = $('formatMenu');
+  m.innerHTML = '';
+  for (const el of $('format').children) {
+    if (el.tagName === 'HR') { m.append(document.createElement('hr')); continue; }
+    const v = el.value, own = v === F?.own;
+    const b = document.createElement('button');
+    b.className = 'opt'; b.type = 'button'; b.role = 'option'; b.dataset.value = v; b.tabIndex = -1;
+    b.innerHTML = '<svg class="tick" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm"></span>';
+    b.querySelector('.nm').textContent = v === OTHER ? 'Other ending…' : (LABELS[v] || v.toUpperCase());
+    if (own) b.insertAdjacentHTML('beforeend', '<span class="tag">as it is</span>');
+    if (v !== OTHER) { const e = document.createElement('span'); e.className = 'end'; e.textContent = `.${v}`; b.append(e); }
+    m.append(b);
+  }
+  syncFormat();
+}
+function syncFormat() {
+  const sel = $('format'), o = sel.selectedOptions[0];
+  $('formatLabel').textContent = !o ? '' : o.value === OTHER ? 'Other ending…' : (LABELS[o.value] || o.value.toUpperCase());
+  for (const b of $('formatMenu').querySelectorAll('.opt')) b.setAttribute('aria-selected', String(b.dataset.value === sel.value));
+}
+const menuOpts = () => [...$('formatMenu').querySelectorAll('.opt')];
+function openFormatMenu(focusLast = false) {
+  const m = $('formatMenu');
+  if (!m.hidden) return;
+  m.hidden = false;
+  $('formatBtn').setAttribute('aria-expanded', 'true');
+  const opts = menuOpts();
+  const at = opts.find((b) => b.getAttribute('aria-selected') === 'true') || (focusLast ? opts.at(-1) : opts[0]);
+  at?.focus();
+  at?.scrollIntoView({ block: 'nearest' });
+}
+function closeFormatMenu(refocus = true) {
+  const m = $('formatMenu');
+  if (m.hidden) return;
+  m.hidden = true;
+  $('formatBtn').setAttribute('aria-expanded', 'false');
+  if (refocus) $('formatBtn').focus();
+}
+function pickFormat(v) {
+  closeFormatMenu();
+  if ($('format').value === v) return;
+  $('format').value = v;
+  onFormat();
+}
+$('formatBtn').addEventListener('click', () => ($('formatMenu').hidden ? openFormatMenu() : closeFormatMenu()));
+$('formatBtn').addEventListener('keydown', (e) => {
+  if (['ArrowDown', 'ArrowUp'].includes(e.key)) { e.preventDefault(); e.stopPropagation(); openFormatMenu(e.key === 'ArrowUp'); }
+});
+$('formatMenu').addEventListener('click', (e) => { const b = e.target.closest('.opt'); if (b) pickFormat(b.dataset.value); });
+$('formatMenu').addEventListener('keydown', (e) => {
+  e.stopPropagation(); // the editor's own keys (arrows nudge a crop) stay out of the menu
+  const opts = menuOpts(), i = opts.indexOf(document.activeElement);
+  const go = (j) => { e.preventDefault(); opts[(j + opts.length) % opts.length]?.focus(); };
+  if (e.key === 'ArrowDown') go(i + 1);
+  else if (e.key === 'ArrowUp') go(i - 1);
+  else if (e.key === 'Home') go(0);
+  else if (e.key === 'End') go(opts.length - 1);
+  else if (e.key === 'Escape') { e.preventDefault(); closeFormatMenu(); }
+  else if (e.key === 'Tab') closeFormatMenu(false);
+  else if (e.key.length === 1 && /\w/.test(e.key)) { // type a letter to jump to the first type that starts with it
+    const k = e.key.toLowerCase();
+    const n = [...opts.slice(i + 1), ...opts.slice(0, i + 1)].find((b) => b.querySelector('.nm').textContent.toLowerCase().startsWith(k));
+    if (n) { e.preventDefault(); n.focus(); }
+  }
+});
+addEventListener('pointerdown', (e) => { if (!e.target.closest('.select')) closeFormatMenu(false); });
+addEventListener('blur', () => closeFormatMenu(false));
 $('ending').addEventListener('input', () => {
   $('ending').classList.toggle('bad', !!typed() && !ENDING.test(typed()));
   $('ext').textContent = `.${ending()}`;
@@ -1302,6 +1374,7 @@ async function start(keepToast = false) {
   // A type Pane can read but not write (MP3) starts on the first one it can.
   F.def = F.formats.includes(F.own) ? F.own : F.formats[0];
   sel.value = F.def;
+  buildFormatMenu();
   $('ext').textContent = `.${F.def}`;
   mode = F.prefs.copy ? 'copy' : 'replace';
   K = KINDS[F.kind];

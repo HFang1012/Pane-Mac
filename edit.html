@@ -187,7 +187,30 @@
   .save { display: grid; grid-template-columns: auto auto 1fr auto; gap: 14px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--edge); background: var(--card); }
   .fmt { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; color: var(--ink-2); }
   .select { position: relative; }
-  .select select { -webkit-appearance: none; appearance: none; height: 34px; padding: 0 30px 0 12px; border-radius: 10px; border: 0; background: var(--well); font-size: 13px; font-weight: 800; color: var(--ink); cursor: pointer; outline: none; }
+  /* The type menu: Pane's own, not macOS's. A button like the other wells; its list rises out of the save bar. */
+  .pick { height: 34px; padding: 0 30px 0 12px; border-radius: 10px; border: 0; background: var(--well); font-size: 13px; font-weight: 800; color: var(--ink); cursor: pointer; white-space: nowrap; transition: background 140ms ease; }
+  .pick:hover, .pick[aria-expanded="true"] { background: color-mix(in srgb, var(--well) 80%, var(--ink) 8%); }
+  .select:has(.pick[aria-expanded="true"])::after { rotate: 225deg; top: 15px; }
+  .select::after { transition: rotate 200ms var(--bouncy), top 200ms var(--bouncy); }
+  .fmenu {
+    position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 30; min-width: 100%; width: max-content; max-height: min(420px, 70vh); overflow: auto;
+    padding: 6px; border-radius: 14px; background: var(--card); box-shadow: 0 0 0 1px var(--edge), 0 4px 0 var(--card-lip), 0 18px 40px -12px rgba(20, 24, 60, .35);
+    transform-origin: 24px 100%; animation: fmenu-in 260ms var(--bouncy);
+  }
+  @keyframes fmenu-in { from { opacity: 0; transform: translateY(6px) scale(.94); } }
+  .fmenu .opt {
+    display: flex; align-items: center; gap: 10px; width: 100%; height: 32px; padding: 0 10px 0 8px; border: 0; border-radius: 9px; background: none;
+    font-size: 13px; font-weight: 700; color: var(--ink); text-align: left; cursor: pointer; outline: none; white-space: nowrap;
+  }
+  .fmenu .opt:hover, .fmenu .opt:focus-visible, .fmenu .opt:focus { background: var(--well); }
+  .fmenu .opt .tick { width: 14px; flex: none; color: var(--ink); opacity: 0; }
+  .fmenu .opt[aria-selected="true"] .tick { opacity: 1; }
+  .fmenu .opt[aria-selected="true"] { background: color-mix(in srgb, var(--act) 55%, transparent); }
+  .fmenu .opt .nm { flex: 1; }
+  .fmenu .opt .tag { font-size: 11px; font-weight: 800; color: var(--ink-2); background: var(--well); border-radius: 6px; padding: 1px 6px; }
+  .fmenu .opt[aria-selected="true"] .tag { background: color-mix(in srgb, var(--card) 70%, transparent); }
+  .fmenu .opt .end { margin-left: 14px; font: 700 11.5px ui-monospace, "SF Mono", Menlo, monospace; color: var(--ink-2); }
+  .fmenu hr { border: 0; height: 1px; background: var(--edge); margin: 5px 6px; }
   .select::after { content: ""; position: absolute; right: 12px; top: 13px; width: 6px; height: 6px; border: solid var(--ink-2); border-width: 0 2px 2px 0; rotate: 45deg; pointer-events: none; }
   .seg { position: relative; display: inline-flex; padding: 3px; border-radius: 11px; background: var(--well); }
   .seg button { position: relative; z-index: 1; height: 28px; padding: 0 12px; border-radius: 8px; font-size: 12px; font-weight: 800; color: var(--ink-2); transition: color 160ms ease; }
@@ -345,7 +368,7 @@
   <aside class="panel" id="panel" aria-label="Tools"></aside>
 </main>
 <footer class="save" id="savebar">
-  <div class="fmt"><span>Save as</span><span class="select"><select id="format" aria-label="File type"></select></span><span class="endwrap"><input class="txt end" id="ending" placeholder="ending" spellcheck="false" maxlength="15" aria-label="Ending to save with" hidden></span></div>
+  <div class="fmt"><span>Save as</span><span class="select"><select id="format" aria-label="File type" hidden tabindex="-1"></select><button class="pick" id="formatBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="File type"><span id="formatLabel"></span></button><div class="fmenu" id="formatMenu" role="listbox" aria-label="File type" hidden></div></span><span class="endwrap"><input class="txt end" id="ending" placeholder="ending" spellcheck="false" maxlength="15" aria-label="Ending to save with" hidden></span></div>
   <div class="seg" id="mode" role="radiogroup" aria-label="Save over the original or keep it">
     <span class="thumb"></span>
     <button role="radio" data-mode="replace">Replace original</button>

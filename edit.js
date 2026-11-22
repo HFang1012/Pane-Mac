@@ -931,3 +931,9 @@ async function start(keepToast = false) {
   changed();
 }
 start();
+
+// ---------- window buttons (the editor has no macOS title bar) ----------
+document.getElementById('winClose').addEventListener('click', () => scrawl.send('tweak:window', 'close'));
+document.getElementById('winHide').addEventListener('click', () => scrawl.send('tweak:window', 'hide'));
+addEventListener('blur', () => document.body.classList.add('blurred'));
+addEventListener('focus', () => document.body.classList.remove('blurred'));

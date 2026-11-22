@@ -1568,7 +1568,9 @@ function openEditor(file, from = null) {
   const bounds = { x: Math.round(wa.x + (wa.width - W) / 2), y: Math.round(wa.y + (wa.height - H) / 2), width: W, height: H };
   const w = new BrowserWindow({
     ...bounds, minWidth: 880, minHeight: 580,
-    titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 18, y: 19 }, backgroundColor: '#E4E5F3', show: false,
+    // No macOS title bar or traffic lights: the editor draws its own close and hide buttons in its bar.
+    // Still resizable, rounded and shadowed like any window; ⌘W and ⌘M work from the Window menu.
+    frame: false, backgroundColor: '#E4E5F3', show: false,
     fullscreenable: true, title: path.basename(file),
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
@@ -1682,6 +1684,13 @@ ipcMain.handle('tweak:frame', async (e, at) => {
     if (!String(out).includes('"ok"')) throw new Error('Couldn’t grab that frame.');
     return { ok: true, path: dest, name: path.basename(dest) };
   } catch (err) { return { error: err.message }; }
+});
+// The editor's own window buttons (it has no title bar).
+ipcMain.on('tweak:window', (e, what) => {
+  const w = editorFor(e);
+  if (!w) return;
+  if (what === 'close') w.close();
+  else if (what === 'hide') w.minimize();
 });
 ipcMain.on('tweak:reveal', (e, file) => {
   const w = editorFor(e);

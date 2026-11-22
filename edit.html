@@ -24,9 +24,19 @@
   [hidden] { display: none !important; }
 
   /* ---------- title bar ---------- */
-  .bar { -webkit-app-region: drag; display: flex; align-items: center; gap: 10px; padding: 0 14px 0 86px; border-bottom: 1px solid var(--edge); background: var(--paper); }
+  .bar { -webkit-app-region: drag; display: flex; align-items: center; gap: 10px; padding: 0 14px 0 14px; border-bottom: 1px solid var(--edge); background: var(--paper); }
   .bar > * { -webkit-app-region: no-drag; }
   .bar .g { display: inline-flex; -webkit-app-region: drag; }
+  /* Window buttons: Pane's own, in place of macOS's traffic lights. Two chunky keys in a well, the same
+     shape as the rest of the bar. Close warms to rose on hover; hide just lifts. */
+  .wbtns { display: inline-flex; gap: 4px; padding: 3px; margin-right: 4px; border-radius: 11px; background: var(--well); }
+  .wbtn { width: 26px; height: 24px; border-radius: 8px; display: grid; place-items: center; color: var(--ink-2);
+    transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease, transform 200ms var(--bouncy); }
+  .wbtn svg { width: 12px; height: 12px; }
+  .wbtn:hover { background: var(--card); color: var(--ink); box-shadow: 0 2px 0 var(--card-lip); }
+  .wbtn.x:hover { background: #F7D3DC; color: #8A2343; box-shadow: 0 2px 0 #E3A5B5; }
+  .wbtn:active { transform: translateY(1px) scale(0.94); box-shadow: none; }
+  body.blurred .wbtns { opacity: 0.6; }
   .title { display: flex; align-items: baseline; min-width: 0; padding: 3px 4px 3px 9px; border-radius: 9px; transition: background 140ms ease; }
   .title:hover, .title:focus-within { background: var(--well); }
   .title input { border: 0; background: none; outline: none; font-size: 14px; font-weight: 800; padding: 0; min-width: 1ch; max-width: 360px; field-sizing: content; }
@@ -225,6 +235,10 @@
 </head>
 <body>
 <header class="bar">
+  <span class="wbtns">
+    <button class="wbtn x" id="winClose" title="Close (⌘W)" aria-label="Close"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3l6 6M9 3 3 9"/></svg></button>
+    <button class="wbtn" id="winHide" title="Hide (⌘M)" aria-label="Hide"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2.5 6h7"/></svg></button>
+  </span>
   <span class="g" id="glyph"></span>
   <label class="title" title="Rename"><input id="stem" spellcheck="false" aria-label="File name"><span class="ext" id="ext"></span></label>
   <span class="dirty" id="dirty" title="Changed, not saved"></span>

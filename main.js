@@ -1842,6 +1842,24 @@ ipcMain.on('window:fit', (_e, h, animate) => {
   const y = Math.max(area.y, Math.min(b.y, area.y + area.height - (height + frame)));
   settingsWin.setContentBounds({ x: b.x, y: y + frame, width: 900, height }, !!animate && settingsWin.isVisible());
 });
+// Dragging the settings window's top or bottom edge by the grab strips (switcher.js).
+let edgeDrag = null;
+ipcMain.on('window:edge', (_e, phase, edge, y) => {
+  if (!settingsWin) return;
+  if (phase === 'start') { edgeDrag = { edge, y0: y, b: settingsWin.getBounds() }; return; }
+  if (phase === 'end' || !edgeDrag) { edgeDrag = null; return; }
+  const { b, y0 } = edgeDrag;
+  const area = screen.getDisplayMatching(b).workArea;
+  const min = settingsWin.getMinimumSize()[1] || 360;
+  const dy = Math.round(y - y0);
+  if (edgeDrag.edge === 'bottom') {
+    const height = Math.max(min, Math.min(b.height + dy, area.y + area.height - b.y));
+    settingsWin.setBounds({ ...b, height });
+  } else {
+    const top = Math.max(area.y, Math.min(b.y + dy, b.y + b.height - min));
+    settingsWin.setBounds({ ...b, y: top, height: b.y + b.height - top });
+  }
+});
 ipcMain.on('bind:cancel', () => { binding = false; });
 // Pane's own update sheet in the settings window (see updater.js).
 ipcMain.handle('update:get', () => Updater.get());

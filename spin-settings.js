@@ -1,5 +1,8 @@
 // The Spin page of the settings window. Shares S, save(), shake(), swapText(), status and the held-key
 // chooser (the Spin key's well is one of settings.js's wells) with settings.js.
+// Spotify isn't linked (yet), so there are no playlists to list. Assumed until Spotify says otherwise, so the
+// playlists row can only appear on load, never show and then fold away.
+let plNeedsLink = true;
 
 // ---------- which music app ----------
 // Plain glyphs, not the apps' own logos: a streaming record, a note, and a media keycap.
@@ -53,7 +56,8 @@ function renderApps() {
     el.setAttribute('aria-checked', on);
   }
   document.getElementById('spotifyRow').hidden = S.spin.app !== 'spotify';
-  document.getElementById('playlistRow').hidden = S.spin.app === 'other';
+  // Unlinked, the playlists row would only say "link Spotify below", so it waits until there's a list.
+  document.getElementById('playlistRow').hidden = S.spin.app === 'other' || (S.spin.app === 'spotify' && plNeedsLink);
 }
 
 // ---------- the preview: Spin's wheel, small ----------
@@ -261,6 +265,8 @@ function showPlaylists(r) {
   else if (r.running === false) note = `Open ${name} to choose a playlist.`;
   else if (!r.items?.length) note = 'No playlists yet.';
   plNote.textContent = note;
+  plNeedsLink = !!r.needsLink && !r.error;
+  document.getElementById('playlistRow').hidden = S.spin.app === 'other' || (S.spin.app === 'spotify' && plNeedsLink);
   const items = note ? [] : r.items;
   // Only rebuild when the list itself changed, so scrolling and hovering aren't disturbed.
   const key = items.map((p) => p.id).join('|');
@@ -311,6 +317,8 @@ function showSpotify(acct, redirect) {
   if (redirect) document.getElementById('spotifyRedirect').textContent = redirect;
   document.getElementById('spotifyLinked').hidden = !acct.connected;
   document.getElementById('spotifyLink').hidden = acct.connected;
+  plNeedsLink = !acct.connected;
+  document.getElementById('playlistRow').hidden = S.spin.app === 'other' || (S.spin.app === 'spotify' && plNeedsLink);
   document.getElementById('spotifyName').textContent = acct.name ? `Spotify linked as ${acct.name}` : 'Spotify linked';
   document.getElementById('spotifyAbout').hidden = acct.connected; // once linked, one line is enough
   document.getElementById('spotifyRelink').hidden = !acct.connected || acct.canPlay !== false;

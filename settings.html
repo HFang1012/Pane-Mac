@@ -19,7 +19,7 @@
   button:focus { outline: none; }
   button:focus-visible { box-shadow: 0 0 0 3px var(--accent-soft); border-radius: 12px; }
 
-  .page { display: grid; grid-template-columns: 340px 452px; gap: 30px; padding: 56px 38px 28px; width: 900px; align-items: start; }
+  .page { display: grid; grid-template-columns: 340px 452px; gap: 30px; padding: 48px 38px 20px; width: 900px; align-items: start; }
   /* The window is one fixed size (the tallest page); shorter pages start at the top like the rest.
      The top padding keeps the cards clear of the tool button in the corner. */
 
@@ -33,7 +33,7 @@
   @keyframes pop { from { opacity: 0; transform: translateY(10px) scale(0.5); } }
 
   /* ---------- intro ---------- */
-  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 17px; margin-bottom: 14px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 17px; margin-bottom: 10px; }
   .brand .mark { display: inline-flex; width: 30px; height: 22px; align-items: center; justify-content: center; }
   .brand .mark svg { width: 30px; height: 22px; }
   .brand:hover svg .scribble { animation: scribble 900ms var(--smooth); }
@@ -43,7 +43,7 @@
   h1 { font-size: 26px; line-height: 1.12; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
   .lede { color: var(--ink-2); font-weight: 500; margin: 8px 0 0; line-height: 1.45; }
 
-  .keyrow { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 18px; }
+  .keyrow { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; }
   .keyslot { display: grid; gap: 8px; justify-items: center; }
   .keylabel { font-size: 12px; font-weight: 600; color: var(--ink-2); }
   .keys { display: flex; gap: 10px; align-items: center; }
@@ -166,7 +166,7 @@
   .tile.nope { animation: nope 360ms ease; }
   @keyframes nope { 20% { transform: translateX(-5px); } 40% { transform: translateX(5px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(2px); } }
 
-  .rows { display: grid; gap: 11px; margin-top: 16px; }
+  .rows { display: grid; gap: 9px; margin-top: 12px; }
   .row { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; }
   .row h3 { font-size: 14px; font-weight: 600; margin: 0; }
   .row p { color: var(--ink-2); font-size: 12px; font-weight: 500; margin: 1px 0 0; }
@@ -216,6 +216,11 @@
   .switch[aria-checked="true"]:active::after { transform: translateX(16px); }
 
   .page[hidden] { display: none; }
+
+  /* Grab strips along the top and bottom edges. macOS only gives a few points at the very edge to resize,
+     and the window's drag area covers the rest, so these make the edge easy to catch (see switcher.js). */
+  .grip { position: fixed; left: 0; right: 0; height: 8px; z-index: 50; cursor: ns-resize; -webkit-app-region: no-drag; }
+  .grip.top { top: 0; } .grip.bottom { bottom: 0; }
 
   /* ---------- tool switcher: top right, clear of the traffic lights ---------- */
   /* It sits last in the page: Electron applies drag and no-drag areas in page order, so anything
@@ -305,7 +310,7 @@
   .try:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--accent-lip); }
   .try:focus-visible { box-shadow: 0 4px 0 var(--accent-lip), 0 0 0 3px var(--accent-soft); border-radius: 15px; }
 
-  .row.stack { grid-template-columns: 1fr; gap: 8px; }
+  .row.stack { grid-template-columns: 1fr; gap: 6px; }
   .field { position: relative; -webkit-app-region: no-drag; }
   .field textarea {
     width: 100%; resize: none; border: 0; outline: none; font: inherit; font-size: 14px; font-weight: 600; color: var(--ink);
@@ -421,10 +426,10 @@
   /* ---------- good to know: a few tips for each tool, in the space under the left column ---------- */
   .tips {
     --fill: var(--card); --lip: 5px; --lip-color: var(--card-lip); --r: 24px;
-    margin-top: 24px; width: 340px; padding: 16px 18px 14px; -webkit-app-region: no-drag;
+    margin-top: 18px; width: 340px; padding: 14px 18px 12px; -webkit-app-region: no-drag;
   }
   .tips-tag { display: inline-block; margin-bottom: 10px; padding: 3px 10px; border-radius: 999px; background: var(--well); color: var(--ink-2); font-size: 11px; font-weight: 800; }
-  .tips ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .tips ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
   .tips li { display: grid; grid-template-columns: 30px 1fr; gap: 11px; align-items: center; font-size: 12px; font-weight: 600; line-height: 1.4; color: var(--ink-2); }
   .tips li b { color: var(--ink); font-weight: 800; }
   .tips .ic { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-lip); box-shadow: 0 2px 0 var(--accent); }
@@ -536,9 +541,9 @@
   .mini.go:active { box-shadow: 0 1px 0 var(--accent-lip); }
   .mini[hidden] { display: none; }
   .mini:disabled { opacity: 0.6; cursor: default; }
-  .link { display: grid; gap: 10px; }
+  .link { display: grid; gap: 8px; }
   .link[hidden] { display: none; }
-  .link ol { margin: 0; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 8px; }
+  .link ol { margin: 0; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 6px; }
   .link li { counter-increment: s; display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: center; font-size: 12px; font-weight: 600; color: var(--ink-2); }
   .link li::before { content: counter(s); width: 20px; height: 20px; border-radius: 7px; display: grid; place-items: center; background: var(--well); color: var(--ink); font-size: 11px; font-weight: 800; }
   .link li b { color: var(--ink); }
@@ -1008,7 +1013,7 @@
         <div class="field-mini"><h3>Songs</h3><div class="stepper" data-key="spin.count" data-values="3,4,5,6"></div></div>
         <div class="field-mini"><h3>Size</h3><div class="stepper" data-key="spin.size" data-values="60,76,96" data-labels="Small,Medium,Large"></div></div>
       </div>
-      <div class="row stack spin-row rise" style="--d:330ms" id="playlistRow">
+      <div class="row stack spin-row rise" style="--d:330ms" id="playlistRow" hidden>
         <div class="pl-head">
           <div><h3>Playlists</h3><p>Click one to start it from the top.</p></div>
           <button class="mini" id="plRefresh">Refresh</button>
@@ -1285,6 +1290,8 @@
   </div>
 </div>
 <button class="upd-corner" id="updCorner" tabindex="-1"><span class="dot"><svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3.5M3.8 7.6L8 3.4l4.2 4.2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span id="updCornerText">Update</span></button>
+<div class="grip top" data-edge="top" aria-hidden="true"></div>
+<div class="grip bottom" data-edge="bottom" aria-hidden="true"></div>
 <script src="wheel.js"></script>
 <script src="tools.js"></script>
 <script src="settings.js"></script>

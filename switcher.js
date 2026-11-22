@@ -131,6 +131,27 @@ function fit() {
   });
 }
 const ro = new ResizeObserver(() => fit());
+
+// ---------- dragging the top or bottom edge ----------
+// The strips in settings.html: hold and drag, and the main process moves that edge with the pointer.
+document.querySelectorAll('.grip').forEach((g) => {
+  g.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    g.setPointerCapture(e.pointerId);
+    scrawl.send('window:edge', 'start', g.dataset.edge, e.screenY);
+    const move = (m) => scrawl.send('window:edge', 'move', g.dataset.edge, m.screenY);
+    const up = () => {
+      g.removeEventListener('pointermove', move);
+      g.removeEventListener('pointerup', up);
+      g.removeEventListener('pointercancel', up);
+      scrawl.send('window:edge', 'end');
+    };
+    g.addEventListener('pointermove', move);
+    g.addEventListener('pointerup', up);
+    g.addEventListener('pointercancel', up);
+  });
+});
 Object.values(PAGES).forEach((p) => ro.observe(p));
 
 // Fill each brand mark with its tool's glyph.

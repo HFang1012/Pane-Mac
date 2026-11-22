@@ -35,6 +35,13 @@ const I = {
   note: '<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   warn: '<path d="M12 8v5M12 16.5v.5"/><circle cx="12" cy="12" r="9"/>',
+  up: '<path d="M12 19V5"/><path d="m6 11 6-6 6 6"/>',
+  grid: '<rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/>',
+  list: '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/>',
+  cols: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9.5 4.5v15M15 4.5v15"/>',
+  gallery: '<rect x="3.5" y="4" width="17" height="11" rx="2.5"/><rect x="3.5" y="17.5" width="4" height="3" rx="1"/><rect x="10" y="17.5" width="4" height="3" rx="1"/><rect x="16.5" y="17.5" width="4" height="3" rx="1"/>',
+  chev: '<path d="m9 6 6 6-6 6"/>',
+  folder: '<path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h3.5l2 2.5H18a2.5 2.5 0 0 1 2.5 2.5v7A2.5 2.5 0 0 1 18 19.5H6A2.5 2.5 0 0 1 3.5 17z"/>',
 };
 const icon = (k, w = 2.2) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${I[k]}</svg>`;
 
@@ -99,7 +106,8 @@ $('undo').addEventListener('click', () => undo('undo'));
 $('redo').addEventListener('click', () => undo('redo'));
 function isDirty() {
   if (!F || !K) return false;
-  return (K.dirty ? K.dirty() : JSON.stringify(state) !== base) || $('stem').value !== F.stem || fmt() !== F.def;
+  if (K.noSave) return $('stem').value.trim() !== F.stem;
+  return (K.dirty ? K.dirty() : JSON.stringify(state) !== base) || $('stem').value.trim() !== F.stem || ending() !== F.def;
 }
 function changed() {
   $('dirty').classList.toggle('on', isDirty());
@@ -791,12 +799,338 @@ const TextKind = {
   keys() { return false; },
 };
 
+// ============ folders ============
+// A folder opens like Finder: its contents as icons, a list, columns or a gallery, and what's inside it
+// counted up on the right. Its name in the bar renames it. Double-click anything inside to tweak that
+// instead: the folder's new name is kept first, then this window opens the file (or the folder).
+const thumbs = new Map(); // path@size → data URL, Finder's own pictures
+function thumb(p, size) {
+  const key = `${p}@${size}`;
+  if (!thumbs.has(key)) thumbs.set(key, scrawl.invoke('tweak:thumb', p, size).catch(() => null));
+  return thumbs.get(key);
+}
+// An <img> that fills in with the thumbnail once it scrolls into view.
+const seen = new IntersectionObserver((list) => {
+  for (const it of list) {
+    if (!it.isIntersecting) continue;
+    const img = it.target;
+    seen.unobserve(img);
+    thumb(img.dataset.path, +img.dataset.size).then((u) => { if (u) { img.src = u; img.classList.add('in'); } });
+  }
+}, { rootMargin: '200px' });
+function thumbImg(entry, size, cls = 'th') {
+  const img = el('img', cls);
+  img.alt = ''; img.draggable = false;
+  img.dataset.path = entry.path; img.dataset.size = size;
+  seen.observe(img);
+  return img;
+}
+const fmtDate = (ms) => (ms ? new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—');
+const KIND_NAME = { image: 'Pictures', video: 'Videos', audio: 'Sounds', text: 'Text and documents', other: 'Other files' };
+const VIEWS = [['icons', 'grid', 'Icons'], ['list', 'list', 'List'], ['columns', 'cols', 'Columns'], ['gallery', 'gallery', 'Gallery']];
+
+const DirKind = {
+  noSave: true,
+  async init() {
+    let view = 'icons';
+    try { view = localStorage.getItem('tweak.view') || 'icons'; } catch {}
+    if (!VIEWS.some(([v]) => v === view)) view = 'icons';
+    state = { view };
+    this.sel = null; this.cols = [F.path]; this.colSel = []; this.rendered = false;
+    stage.classList.add('foldery');
+    stage.innerHTML = `<div class="fbar"><button class="ibtn" id="fup" title="Up to the folder it’s in (⌘↑)">${icon('up')}</button><div class="crumbs" id="crumbs"></div><span class="grow"></span><div class="vseg" id="vseg" role="radiogroup" aria-label="View">${VIEWS.map(([v, i, n]) => `<button role="radio" data-v="${v}" title="${n}" aria-label="${n}">${icon(i)}</button>`).join('')}</div></div><div class="fview enter" id="fview"></div><div class="fstatus" id="fstatus"></div>`;
+    $('fup').disabled = F.dir === F.path;
+    $('fup').addEventListener('click', (e) => { e.currentTarget.blur(); go(F.dir); });
+    const parts = F.path.split('/').filter(Boolean);
+    const crumbs = $('crumbs');
+    parts.slice(-3).forEach((name, i, arr) => {
+      const at = '/' + parts.slice(0, parts.length - arr.length + i + 1).join('/');
+      const b = button(name, () => { if (at !== F.path) go(at); }, 'crumb');
+      if (i === arr.length - 1) b.classList.add('here');
+      if (i) crumbs.append(el('span', 'sep', icon('chev')));
+      crumbs.append(b);
+    });
+    $('vseg').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-v]');
+      if (!b) return;
+      b.blur();
+      state = { view: b.dataset.v };
+      try { localStorage.setItem('tweak.view', state.view); } catch {}
+      this.render();
+    });
+    const r = await scrawl.invoke('tweak:list', F.path);
+    if (r?.error) throw new Error(r.error);
+    this.entries = r.entries;
+    this.more = r.more;
+    this.lists = new Map([[F.path, r.entries]]);
+    this.panel();
+    this.render();
+  },
+  apply() {},
+  info() { return null; },
+  status() {
+    const n = this.entries.length, sel = this.sel;
+    $('fstatus').textContent = `${n.toLocaleString()} item${n === 1 ? '' : 's'}${this.more ? ' (showing the first 3,000)' : ''}` +
+      (sel ? `  ·  ${sel.name} selected${sel.size != null ? `, ${fmtSize(sel.size)}` : ''}` : '');
+  },
+  render() {
+    $('vseg').querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', b.dataset.v === state.view));
+    const v = $('fview');
+    v.className = `fview v-${state.view}${this.rendered ? '' : ' enter'}`;
+    this.rendered = true;
+    v.innerHTML = '';
+    if (!this.entries.length) { v.append(el('div', 'fempty', `${icon('folder', 1.8)}<b>Nothing in here</b>`)); this.status(); return; }
+    this[state.view](v);
+    this.status();
+  },
+  // Clicking picks, double-clicking tweaks it.
+  item(node, entry, host) {
+    node.dataset.path = entry.path;
+    node.addEventListener('click', () => this.pick(entry, host));
+    node.addEventListener('dblclick', () => go(entry.path));
+    if (this.sel?.path === entry.path) node.classList.add('on');
+  },
+  pick(entry) {
+    this.sel = entry;
+    $('fview').querySelectorAll('.on').forEach((n) => n.classList.remove('on'));
+    $('fview').querySelectorAll(`[data-path="${CSS.escape(entry.path)}"]`).forEach((n) => n.classList.add('on'));
+    if (state.view === 'gallery') this.hero(entry);
+    this.chosen(entry);
+    this.status();
+  },
+  icons(v) {
+    for (const e of this.entries) {
+      const n = el('button', 'icon');
+      n.append(thumbImg(e, 160), el('span', 'nm'));
+      n.lastChild.textContent = e.name;
+      n.title = e.name;
+      this.item(n, e);
+      v.append(n);
+    }
+  },
+  list(v) {
+    const t = el('div', 'table');
+    t.append(el('div', 'tr th', '<span>Name</span><span>Date Modified</span><span>Size</span><span>Kind</span>'));
+    for (const e of this.entries) {
+      const r = el('button', 'tr');
+      const nm = el('span', 'nm');
+      nm.append(thumbImg(e, 48, 'ic'), el('span'));
+      nm.lastChild.textContent = e.name;
+      r.append(nm, el('span', '', fmtDate(e.mtime)), el('span', '', e.dir ? '—' : fmtSize(e.size)), el('span'));
+      r.lastChild.textContent = e.label;
+      this.item(r, e);
+      t.append(r);
+    }
+    v.append(t);
+  },
+  // Finder's columns: a folder picked in one column opens in the next; a file picked shows its preview last.
+  async columns(v) {
+    const row = el('div', 'cols');
+    v.append(row);
+    for (let i = 0; i < this.cols.length; i++) {
+      const dir = this.cols[i];
+      let list = this.lists.get(dir);
+      if (!list) { const r = await scrawl.invoke('tweak:list', dir); list = r?.entries || []; this.lists.set(dir, list); }
+      if (state.view !== 'columns' || !row.isConnected) return;
+      const col = el('div', 'col');
+      if (!list.length) col.append(el('p', 'cempty', 'Empty'));
+      for (const e of list) {
+        const r = el('button', 'cr');
+        r.dataset.path = e.path;
+        r.append(thumbImg(e, 48, 'ic'), el('span', 'nm'));
+        r.children[1].textContent = e.name;
+        if (e.dir) r.insertAdjacentHTML('beforeend', `<i>${icon('chev')}</i>`);
+        if (this.colSel[i] === e.path) r.classList.add('on');
+        r.addEventListener('click', () => {
+          this.colSel = this.colSel.slice(0, i).concat(e.path);
+          this.cols = this.cols.slice(0, i + 1).concat(e.dir ? [e.path] : []);
+          this.sel = e;
+          this.chosen(e);
+          this.status();
+          const keep = v.querySelector('.cols').scrollLeft;
+          this.render();
+          requestAnimationFrame(() => { const c = $('fview').querySelector('.cols'); if (c) c.scrollLeft = Math.max(keep, c.scrollWidth); });
+        });
+        r.addEventListener('dblclick', () => go(e.path));
+        col.append(r);
+      }
+      row.append(col);
+    }
+    const last = this.sel && !this.sel.dir && this.colSel.at(-1) === this.sel.path ? this.sel : null;
+    if (last) {
+      const pv = el('div', 'col preview');
+      pv.append(thumbImg(last, 512, 'big'), el('b'), el('small'));
+      pv.children[1].textContent = last.name;
+      pv.children[2].textContent = [last.label, fmtSize(last.size)].filter(Boolean).join(', ');
+      pv.append(button(last.ok ? 'Tweak it' : 'Open it here', () => go(last.path), 'tbtn sm go'));
+      row.append(pv);
+    }
+  },
+  gallery(v) {
+    const hero = el('div', 'hero', '<div class="pic" id="hpic"></div><div class="cap"><b id="hname"></b><small id="hsub"></small></div>');
+    const strip = el('div', 'strip2');
+    for (const e of this.entries) {
+      const n = el('button', 'g');
+      n.append(thumbImg(e, 160));
+      n.title = e.name;
+      this.item(n, e);
+      strip.append(n);
+    }
+    v.append(hero, strip);
+    if (!this.sel) { this.sel = this.entries[0]; strip.firstChild.classList.add('on'); this.chosen(this.sel); }
+    this.hero(this.sel);
+  },
+  hero(e) {
+    if (!$('hpic') || !e) return;
+    const pic = $('hpic');
+    pic.innerHTML = '';
+    pic.append(thumbImg(e, 768, 'big'));
+    $('hname').textContent = e.name;
+    $('hsub').textContent = [e.label, e.dir ? null : fmtSize(e.size), fmtDate(e.mtime)].filter(Boolean).join('  ·  ');
+    pic.ondblclick = () => go(e.path);
+  },
+  // The inspector: the folder's numbers, what kinds of files are in it, and what's picked.
+  panel() {
+    const g = group('This folder');
+    const dl = el('dl', 'facts');
+    const fact = (k, v, id) => { dl.insertAdjacentHTML('beforeend', `<dt>${k}</dt><dd${id ? ` id="${id}"` : ''}></dd>`); dl.lastChild.textContent = v; };
+    fact('Items', `${this.entries.length.toLocaleString()}${this.more ? '+' : ''}`);
+    fact('All inside', 'Counting…', 'fAll');
+    fact('Size', 'Counting…', 'fSize');
+    fact('Created', fmtDate(F.ctime));
+    fact('Modified', fmtDate(F.mtime));
+    fact('Where', F.dir);
+    dl.lastChild.classList.add('where');
+    dl.lastChild.title = 'Show in Finder';
+    dl.lastChild.addEventListener('click', () => scrawl.send('tweak:reveal', F.path));
+    g.append(dl);
+    const kinds = group('What’s inside');
+    kinds.append(el('p', 'note', 'Counting…'));
+    scrawl.invoke('tweak:stats', F.path).then((s) => {
+      if (!s || !$('fAll')) return;
+      const more = s.partial ? '+' : '';
+      $('fAll').textContent = `${s.files.toLocaleString()}${more} file${s.files === 1 ? '' : 's'}, ${s.folders.toLocaleString()}${more} folder${s.folders === 1 ? '' : 's'}`;
+      $('fSize').textContent = `${fmtSize(s.bytes) || '0 bytes'}${s.partial ? ' or more' : ''}`;
+      kinds.querySelector('.note').remove();
+      const rows = Object.entries(s.kinds).sort((a, b) => b[1] - a[1]);
+      if (!rows.length) { kinds.append(el('p', 'note', 'No files, only folders.')); return; }
+      const max = rows[0][1];
+      for (const [k, n] of rows) {
+        const r = el('div', `kbar k-${k}`, '<span class="kl"></span><span class="kn"></span><i><b></b></i>');
+        r.querySelector('.kl').textContent = KIND_NAME[k] || k;
+        r.querySelector('.kn').textContent = n.toLocaleString();
+        r.querySelector('b').style.width = `${Math.max(4, (n / max) * 100)}%`;
+        kinds.append(r);
+      }
+      if (s.partial) kinds.append(el('p', 'note', 'A big folder: Pane stopped counting partway.'));
+    });
+    this.pickG = group('Picked');
+    this.chosen(null);
+  },
+  chosen(e) {
+    const g = this.pickG;
+    g.querySelectorAll(':scope > :not(h3)').forEach((n) => n.remove());
+    if (!e) { g.append(el('p', 'note', 'Click something to see it here. Double-click it to tweak it; this folder keeps its new name first.')); return; }
+    const top = el('div', 'pickrow');
+    top.append(thumbImg(e, 96, 'pt'), el('div'));
+    top.lastChild.append(el('b'), el('small'));
+    top.querySelector('b').textContent = e.name;
+    top.querySelector('small').textContent = [e.label, e.dir ? null : fmtSize(e.size)].filter(Boolean).join(', ');
+    g.append(top);
+    const dl = el('dl', 'facts');
+    dl.innerHTML = '<dt>Modified</dt><dd></dd><dt>Created</dt><dd></dd>';
+    dl.children[1].textContent = fmtDate(e.mtime);
+    dl.children[3].textContent = fmtDate(e.ctime);
+    g.append(dl);
+    g.append(button(e.dir ? `${icon('folder')}<span>Open this folder</span>` : e.ok ? `${icon('crop')}<span>Tweak it</span>` : `<span>Open it here</span>`, () => go(e.path), 'tbtn go'));
+  },
+  keys(e) {
+    const list = state.view === 'columns' ? null : this.entries;
+    if (e.key === 'Enter' && this.sel) { go(this.sel.path); return true; }
+    if (!list || !list.length || !e.key.startsWith('Arrow')) return false;
+    let i = list.findIndex((x) => x.path === this.sel?.path);
+    let step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1;
+    if (state.view === 'icons' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      const items = $('fview').children;
+      const perRow = items.length > 1 ? [...items].findIndex((n) => n.offsetTop !== items[0].offsetTop) : 1;
+      step *= perRow > 0 ? perRow : items.length;
+    }
+    i = i < 0 ? 0 : clamp(i + step, 0, list.length - 1);
+    this.pick(list[i]);
+    $('fview').querySelector('.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    return true;
+  },
+};
+
+// Tweak something else in this window: keep this one's new name first, then open that.
+async function go(p) {
+  if (!(await commitName())) return;
+  if (await scrawl.invoke('tweak:swap', p)) start();
+}
+
+// ---------- renaming: the name in the bar changes the file's name as soon as you're done typing ----------
+let renaming = null;
+function commitName() {
+  if (renaming) return renaming;
+  if (!F || !F.path) return Promise.resolve(true);
+  const v = $('stem').value.trim();
+  if (!v || v === F.stem) { $('stem').value = F.stem; changed(); return Promise.resolve(true); }
+  renaming = (async () => {
+    const r = await scrawl.invoke('tweak:rename', { stem: v });
+    if (r?.ok) { renamed(r); toast(`Renamed to ${r.name}`, r.path); return true; }
+    $('stem').value = F.stem;
+    toast(r?.error || 'Couldn’t rename it.', null, true);
+    changed();
+    return false;
+  })().finally(() => { renaming = null; });
+  return renaming;
+}
+// The file kept its insides but moved: follow it, so playing and saving still find it.
+function renamed(r) {
+  const dot = r.name.lastIndexOf('.');
+  const isDir = F.kind === 'dir';
+  F.path = r.path; F.name = r.name;
+  F.stem = isDir || dot <= 0 ? r.name : r.name.slice(0, dot);
+  if (!isDir) F.ext = dot > 0 ? r.name.slice(dot + 1).toLowerCase() : '';
+  F.url = `file://${r.path.split('/').map(encodeURIComponent).join('/')}`;
+  $('stem').value = F.stem;
+  document.title = r.name;
+  const m = K?.v || K?.a;
+  if (m) { const t = m.currentTime, playing = !m.paused; m.src = F.url; m.addEventListener('loadedmetadata', () => { m.currentTime = t; if (playing) m.play(); }, { once: true }); }
+  if (!F.ok || isDir) $('ext').textContent = F.ext ? `.${F.ext}` : '';
+  changed();
+}
+
 // ---------- save bar ----------
-const fmt = () => $('format').value;
+// "Other ending…" names the file with any ending you type. What's inside stays the type it is.
+const OTHER = '__other';
+const ENDING = /^[A-Za-z0-9_-]{1,15}$/;
+const isOther = () => $('format').value === OTHER;
+const typed = () => $('ending').value.trim().replace(/^\.+/, '');
+const fmt = () => (isOther() ? F?.def : $('format').value);
+const ending = () => (isOther() ? (ENDING.test(typed()) ? typed() : F?.def) : $('format').value);
 let mode = 'replace';
 function setFormat(ext) { $('format').value = ext; onFormat(); }
-function onFormat() { K?.onFormat?.(fmt()); $('ext').textContent = `.${fmt()}`; changed(); }
+function onFormat() {
+  const other = isOther();
+  $('ending').hidden = !other;
+  if (other && document.activeElement !== $('ending')) requestAnimationFrame(() => $('ending').focus());
+  K?.onFormat?.(fmt());
+  $('ext').textContent = `.${ending()}`;
+  changed();
+}
 $('format').addEventListener('change', onFormat);
+$('ending').addEventListener('input', () => {
+  $('ending').classList.toggle('bad', !!typed() && !ENDING.test(typed()));
+  $('ext').textContent = `.${ending()}`;
+  changed();
+});
+// A typed ending that's on the menu anyway becomes that choice, so it's converted properly.
+$('ending').addEventListener('change', () => {
+  const t = typed().toLowerCase();
+  if (F?.formats?.includes(t)) { $('ending').value = ''; setFormat(t); }
+});
+$('ending').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('ending').blur(); } });
 function placeThumb() {
   const on = $('mode').querySelector(`[data-mode="${mode}"]`), th = $('mode').querySelector('.thumb');
   th.style.left = `${on.offsetLeft}px`; th.style.width = `${on.offsetWidth}px`;
@@ -811,28 +1145,36 @@ $('mode').addEventListener('click', (e) => {
   describeSave();
 });
 $('stem').addEventListener('input', changed);
-$('stem').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('stem').blur(); } });
+$('stem').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); $('stem').blur(); }
+  if (e.key === 'Escape') { e.preventDefault(); $('stem').value = F?.stem ?? ''; changed(); $('stem').blur(); }
+});
+$('stem').addEventListener('blur', () => commitName());
 const LABELS = { png: 'PNG', jpg: 'JPEG', webp: 'WebP', heic: 'HEIC', avif: 'AVIF', tiff: 'TIFF', gif: 'GIF', bmp: 'BMP', ico: 'Icon (ICO)', pdf: 'PDF', mp4: 'MP4 video', mov: 'QuickTime movie', m4v: 'M4V video', m4a: 'M4A sound', wav: 'WAV sound', aiff: 'AIFF sound', caf: 'CAF sound', txt: 'Plain text', md: 'Markdown', json: 'JSON', csv: 'CSV', html: 'Web page (HTML)', xml: 'XML', yaml: 'YAML', js: 'JavaScript', css: 'CSS', py: 'Python', rtf: 'Rich text (RTF)', docx: 'Word (DOCX)', odt: 'OpenDocument', doc: 'Word 97 (DOC)' };
 function describeSave() {
-  if (!F) return;
-  const name = `${$('stem').value.trim() || F.stem}.${fmt()}`;
+  if (!F || !K || K.noSave) return;
+  const name = `${$('stem').value.trim() || F.stem}.${ending()}`;
   const same = name === F.name;
-  const note = K?.convert?.(fmt()).note;
+  const custom = isOther() && ending() !== F.def;
+  const note = custom ? (F.kind === 'text' || F.kind === 'rich' ? 'Only the ending is new.' : `Still ${/^[aeiou]/i.test(LABELS[F.def] || F.def) ? 'an' : 'a'} ${(LABELS[F.def] || F.def.toUpperCase()).replace(/ \(.*\)$/, '')} inside; only the ending is new.`) : K?.convert?.(fmt()).note;
   let what;
   if (mode === 'copy') what = `Saves <b></b> beside the original.`;
   else if (same) what = `Saves over <b></b>.${F.prefs.trash ? ' The old version goes to the Trash.' : ''}`;
   else what = `<b></b> takes the place of ${F.name}${F.prefs.trash ? ', which goes to the Trash' : ''}.`;
   $('what').innerHTML = what + (note ? ` ${note}` : '') + (K?.info?.() ? ` <span>${K.info()}</span>` : '');
-  $('what').querySelector('b').textContent = mode === 'copy' ? (same ? `${F.stem} copy.${fmt()}` : name) : name;
-  $('saveText').textContent = mode === 'copy' ? 'Save copy' : fmt() !== F.own ? `Save as ${(LABELS[fmt()] || fmt().toUpperCase()).replace(/ \(.*\)$/, '').replace(/ (video|sound|movie)$/, '')}` : 'Save';
+  $('what').querySelector('b').textContent = mode === 'copy' ? (same ? `${F.stem} copy.${ending()}` : name) : name;
+  $('saveText').textContent = mode === 'copy' ? 'Save copy' : custom ? `Save as .${ending()}` : fmt() !== F.own ? `Save as ${(LABELS[fmt()] || fmt().toUpperCase()).replace(/ \(.*\)$/, '').replace(/ (video|sound|movie)$/, '')}` : 'Save';
 }
 async function save() {
-  if (!F || !K || $('save').classList.contains('busy')) return;
+  if (!F || !K || K.noSave || $('save').classList.contains('busy')) return;
+  if (isOther() && !ENDING.test(typed())) { toast('Type an ending: letters and numbers, up to 15.', null, true); $('ending').focus(); return; }
+  if (!(await commitName())) return;
   const btn = $('save');
   btn.classList.add('busy');
   $('fill').style.width = '8%';
   try {
-    const job = { ...(await K.job(fmt())), ext: fmt(), stem: $('stem').value.trim() || F.stem, copy: mode === 'copy' };
+    const job = { ...(await K.job(fmt())), ext: fmt(), stem: F.stem, copy: mode === 'copy' };
+    if (isOther()) job.ending = typed();
     const r = await scrawl.invoke('tweak:save', job);
     $('fill').style.width = '100%';
     if (r?.ok) {
@@ -865,6 +1207,7 @@ function toast(msg, file = null, err = false) {
 // ---------- keys ----------
 addEventListener('keydown', (e) => {
   if (e.metaKey && e.key === 's') { e.preventDefault(); save(); return; }
+  if (e.metaKey && e.key === 'ArrowUp' && F?.dir && F.dir !== F.path && !e.target.matches('input, textarea')) { e.preventDefault(); go(F.dir); return; }
   const typing = e.target.matches('input, textarea, select');
   if (e.metaKey && e.key.toLowerCase() === 'z' && !typing && !K?.text) { e.preventDefault(); undo(e.shiftKey ? 'redo' : 'undo'); return; }
   if (typing || e.metaKey || e.ctrlKey) return;
@@ -872,7 +1215,7 @@ addEventListener('keydown', (e) => {
 });
 
 // ---------- open, drop ----------
-$('open').addEventListener('click', async (e) => { e.currentTarget.blur(); if (await scrawl.invoke('tweak:swap')) start(); });
+$('open').addEventListener('click', async (e) => { e.currentTarget.blur(); if (!(await commitName())) return; if (await scrawl.invoke('tweak:swap')) start(); });
 $('reveal').addEventListener('click', (e) => { e.currentTarget.blur(); if (F) scrawl.send('tweak:reveal', F.path); });
 let drag = 0;
 addEventListener('dragenter', (e) => { if (e.dataTransfer?.types.includes('Files')) { drag++; $('drop').classList.add('on'); } });
@@ -883,11 +1226,36 @@ addEventListener('drop', async (e) => {
   drag = 0; $('drop').classList.remove('on');
   const f = e.dataTransfer.files[0];
   const p = f && scrawl.pathFor(f);
-  if (p && await scrawl.invoke('tweak:swap', p)) start();
+  if (p) go(p);
 });
 
 // ---------- go ----------
-const KINDS = { image: ImageKind, video: VideoKind, audio: AudioKind, text: TextKind, rich: TextKind };
+const KINDS = { image: ImageKind, video: VideoKind, audio: AudioKind, text: TextKind, rich: TextKind, dir: DirKind };
+// A file Tweak can't edit can still be renamed, given another ending, and looked at.
+function aboutFile() {
+  const g = group('About it');
+  const dl = el('dl', 'facts');
+  const rows = [['Kind', F.label], ['Size', fmtSize(F.size)], ['Created', fmtDate(F.ctime)], ['Modified', fmtDate(F.mtime)], ['Where', F.dir]];
+  for (const [k, v] of rows) { dl.insertAdjacentHTML('beforeend', `<dt>${k}</dt><dd></dd>`); dl.lastChild.textContent = v || '—'; }
+  dl.lastChild.classList.add('where');
+  dl.lastChild.addEventListener('click', () => scrawl.send('tweak:reveal', F.path));
+  g.append(dl);
+  const eg = group('Ending');
+  eg.append(el('p', 'note', 'Gives it a different ending. What’s inside stays as it is.'));
+  const row = el('div', 'row');
+  const inp = el('input', 'txt');
+  inp.value = F.ext; inp.placeholder = 'none'; inp.spellcheck = false; inp.maxLength = 15; inp.style.flex = '1';
+  const go2 = button('Change', async () => {
+    const v = inp.value.trim().replace(/^\.+/, '');
+    if (v && !ENDING.test(v)) { toast('An ending is letters and numbers, up to 15.', null, true); return; }
+    if (!(await commitName())) return;
+    const r = await scrawl.invoke('tweak:rename', { stem: F.stem, ext: v });
+    if (r?.ok) { renamed(r); toast(`Renamed to ${r.name}`, r.path); } else toast(r?.error || 'Couldn’t rename it.', null, true);
+  }, 'tbtn sm go');
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') go2.click(); });
+  row.append(inp, go2);
+  eg.append(row);
+}
 function showProblem(title, text) {
   stage.classList.remove('texty');
   stage.innerHTML = `<div class="empty"><div>${Tools.glyph('tweak', 46)}<h2></h2><p></p><button class="tbtn go" id="pick">Open another file</button></div></div>`;
@@ -896,19 +1264,30 @@ function showProblem(title, text) {
   $('pick').addEventListener('click', async () => { if (await scrawl.invoke('tweak:swap')) start(); });
   panel.innerHTML = '';
   $('savebar').hidden = true;
+  if (F && !F.error && F.path) aboutFile();
 }
 async function start(keepToast = false) {
   if (!keepToast) $('toast').classList.remove('on');
   K?.a?.pause?.(); K?.v?.pause?.();
+  stage.classList.remove('foldery');
   K = null; state = null; hist.past = []; hist.future = [];
   panel.innerHTML = ''; stage.className = 'stage'; stage.innerHTML = '';
   F = await scrawl.invoke('tweak:load');
   if (!F || F.error) { $('stem').value = F?.name || ''; $('chip').textContent = ''; showProblem('Can’t open this file', F?.error || 'Something went wrong.'); return; }
   $('stem').value = F.stem;
   $('ext').textContent = F.ext ? `.${F.ext}` : '';
-  $('chip').textContent = [F.label, fmtSize(F.size)].filter(Boolean).join(', ');
+  $('chip').textContent = [F.label, F.kind === 'dir' ? null : fmtSize(F.size)].filter(Boolean).join(', ');
   document.title = F.name;
+  $('ending').value = ''; $('ending').hidden = true;
   if (!F.ok) { showProblem(F.label, F.why); return; }
+  if (F.kind === 'dir') {
+    $('savebar').hidden = true;
+    $('undo').disabled = $('redo').disabled = true;
+    K = DirKind;
+    try { await K.init(); } catch (err) { K = null; showProblem('Can’t open this folder', err.message); return; }
+    changed();
+    return;
+  }
   $('savebar').hidden = false;
   const sel = $('format');
   sel.innerHTML = '';
@@ -917,6 +1296,9 @@ async function start(keepToast = false) {
     o.value = x; o.textContent = `${LABELS[x] || x.toUpperCase()}${x === F.own ? '  (as it is)' : ''}`;
     sel.append(o);
   }
+  const other = document.createElement('option');
+  other.value = OTHER; other.textContent = 'Other ending…';
+  sel.append(document.createElement('hr'), other);
   // A type Pane can read but not write (MP3) starts on the first one it can.
   F.def = F.formats.includes(F.own) ? F.own : F.formats[0];
   sel.value = F.def;

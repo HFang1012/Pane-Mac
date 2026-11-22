@@ -483,14 +483,18 @@
   .tfile { position: absolute; width: 13%; display: grid; justify-items: center; gap: 6px; padding: 8px 0 6px; border: 0; background: none; font: inherit; color: var(--ink); cursor: pointer; z-index: 1; }
   .tfile .art { width: 58%; aspect-ratio: 1.15; border-radius: 10px; box-shadow: inset 0 -4px 0 rgba(12,13,31,0.18); position: relative; }
   .tfile b { font-size: 12px; font-weight: 800; white-space: nowrap; }
-  .tfile[data-k="image"] .art { background: linear-gradient(135deg, #F4B07A, #E4789A); }
-  .tfile[data-k="image"] .art::after { content: ""; position: absolute; right: 18%; top: 20%; width: 18%; aspect-ratio: 1; border-radius: 50%; background: #FFE9A8; }
-  .tfile[data-k="video"] .art { background: var(--dark); }
-  .tfile[data-k="video"] .art::after { content: ""; position: absolute; left: 42%; top: 30%; border: 9px solid transparent; border-left: 13px solid #ECEDFB; }
-  .tfile[data-k="audio"] .art { background: linear-gradient(135deg, #8192FF, #B9A5F4); }
-  .tfile[data-k="audio"] .art::after { content: "♪"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 22px; font-weight: 800; }
-  .tfile[data-k="text"] .art { width: 44%; aspect-ratio: 0.8; border-radius: 5px; background: #fff; background-image: repeating-linear-gradient(transparent 0 7px, #D5D7EA 7px 9px); background-size: 70% 100%; background-position: center 30%; background-repeat: no-repeat; }
-  .tfile.dir .art { background: #8FC6F5; border-radius: 6px 6px 10px 10px; }
+  /* A file's little picture, the same on the desk and inside a folder. */
+  [data-k] > .art { position: relative; }
+  [data-k="image"] > .art { background: var(--pic, linear-gradient(135deg, #F4B07A, #E4789A)); }
+  [data-k="image"] > .art::after { content: ""; position: absolute; right: 18%; top: 20%; width: 18%; aspect-ratio: 1; border-radius: 50%; background: #FFE9A8; }
+  [data-k="video"] > .art { background: var(--dark); }
+  [data-k="video"] > .art::after { content: ""; position: absolute; left: 50%; top: 50%; translate: -30% -50%; border: 0.5em solid transparent; border-left: 0.75em solid #ECEDFB; border-right: 0; }
+  [data-k="audio"] > .art { background: linear-gradient(135deg, #8192FF, #B9A5F4); }
+  [data-k="audio"] > .art::after { content: "♪"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 1.3em; font-weight: 800; }
+  [data-k="text"] > .art { width: 44%; aspect-ratio: 0.8; border-radius: 5px; background: #fff; background-image: repeating-linear-gradient(transparent 0 7px, #D5D7EA 7px 9px); background-size: 70% 100%; background-position: center 30%; background-repeat: no-repeat; box-shadow: inset 0 -3px 0 rgba(12,13,31,0.12), 0 0 0 1px #D5D7EA; }
+  [data-k="dir"] > .art { background: #8FC6F5; border-radius: 6px 6px 10px 10px; }
+  [data-k="dir"] > .art::before { content: ""; position: absolute; left: 0; top: -9%; width: 42%; height: 20%; border-radius: 4px 4px 0 0; background: #6FAFE8; }
+  .tfile .art { font-size: 15px; }
   .tmarks { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; pointer-events: none; z-index: 2; transition: left 360ms var(--smooth), top 360ms var(--smooth), width 360ms var(--smooth), height 360ms var(--smooth), opacity 160ms ease; }
   .tmarks.on { opacity: 1; }
   .tmarks svg { position: absolute; width: 11px; height: 11px; overflow: visible; }
@@ -512,11 +516,21 @@
   .tedit { position: absolute; left: 24%; top: 9%; width: 70%; height: 84%; z-index: 4; border-radius: 12px; background: var(--card); overflow: hidden; display: grid; grid-template-rows: 30px 1fr 42px;
     box-shadow: 0 5px 0 var(--card-lip), 0 24px 40px -14px rgba(12,13,31,0.5); transform-origin: 0 40%; opacity: 0; scale: 0.3; pointer-events: none; transition: opacity 200ms ease, scale 520ms var(--bouncy); }
   .stage.editing .tedit { opacity: 1; scale: 1; pointer-events: auto; }
-  .tedit .tb { display: flex; align-items: center; gap: 6px; padding: 0 10px; border-bottom: 1px solid var(--edge); font-size: 12px; font-weight: 800; }
-  .tedit .tb i { width: 9px; height: 9px; border-radius: 50%; background: var(--edge); }
-  .tedit .tb i:first-child { background: #FF6159; cursor: pointer; }
-  .tedit .tb span { margin-left: 8px; }
-  .tedit .tb small { color: var(--ink-2); font-weight: 800; }
+  .tedit .tb { position: relative; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 5px; border-bottom: 1px solid var(--edge); font-size: 12px; font-weight: 800; background: var(--paper); min-width: 0; }
+  /* Pane's own window keys, as in the app: close and hide in a little well, no traffic lights. */
+  .tedit .wb { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--well); flex: none; }
+  .tedit .wb button { width: 20px; height: 18px; border: 0; border-radius: 6px; display: grid; place-items: center; background: none; color: var(--ink-2); cursor: pointer; transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease, transform 200ms var(--bouncy); }
+  .tedit .wb svg { width: 9px; height: 9px; }
+  .tedit .wb button:hover { background: var(--card); color: var(--ink); box-shadow: 0 1.5px 0 var(--card-lip); }
+  .tedit .wb button.x:hover { background: #F7D3DC; color: #8A2343; box-shadow: 0 1.5px 0 #E3A5B5; }
+  .tedit .wb button:active { transform: translateY(1px) scale(0.92); box-shadow: none; }
+  .tedit .tt { display: flex; align-items: baseline; flex: none; min-width: 0; margin-left: 4px; padding: 2px 3px 2px 6px; border-radius: 7px; cursor: text; transition: background 140ms ease; }
+  .tedit .tt:hover, .tedit .tt:focus-within { background: var(--well); }
+  .tedit .tt input { border: 0; background: none; outline: none; font: inherit; font-weight: 800; color: var(--ink); padding: 0; min-width: 2ch; max-width: 150px; }
+  .tedit .tt span { color: var(--ink-2); padding-right: 3px; }
+  .tedit .tb small { color: var(--ink-2); font-weight: 700; font-size: 10.5px; background: var(--well); border-radius: 6px; padding: 1px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tedit .tb .say { position: absolute; right: 8px; font-size: 10.5px; font-weight: 800; color: var(--accent-ink); background: var(--accent-soft); border-radius: 6px; padding: 1px 7px; opacity: 0; translate: 0 4px; transition: opacity 200ms ease, translate 300ms var(--bouncy); white-space: nowrap; }
+  .tedit .tb .say.on { opacity: 1; translate: 0 0; }
   .tedit .bd { display: grid; grid-template-columns: 1fr 34%; min-height: 0; }
   .tedit .mat { position: relative; display: grid; place-items: center; background-color: #262950; background-image: linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px); background-size: 18px 18px; overflow: hidden; }
   .tedit .pic { position: relative; width: 74%; aspect-ratio: 16 / 10; background: linear-gradient(135deg, #F4B07A, #E4789A); transition: transform 400ms var(--bouncy), filter 200ms ease; }
@@ -537,6 +551,80 @@
   .tedit .side button.on { background: var(--ink); color: #fff; box-shadow: 0 2px 0 #0C0D1F; }
   .tedit .ft { display: flex; align-items: center; gap: 8px; padding: 0 10px; border-top: 1px solid var(--edge); font-size: 11.5px; font-weight: 700; color: var(--ink-2); }
   .tedit .ft select { font: inherit; font-weight: 800; color: var(--ink); border: 0; border-radius: 8px; background: var(--well); height: 26px; padding: 0 6px; }
+  .tedit .ft .tend { width: 64px; height: 26px; border: 0; border-radius: 8px; background: var(--well); font: inherit; font-weight: 800; color: var(--ink); padding: 0 8px; outline: none; animation: tpop 300ms var(--bouncy); }
+  .tedit .ft .tend:focus { box-shadow: inset 0 0 0 2px var(--accent-lip); }
+  .tedit .ft .tend[hidden] { display: none; }
+  @keyframes tpop { from { opacity: 0; transform: translateX(-6px) scale(0.9); } }
+  /* A folder: Finder's four views on the left, what's in it on the right. */
+  .tedit .fd { display: none; grid-template-columns: minmax(0, 1fr) 32%; min-height: 0; min-width: 0; }
+  .tedit[data-k="dir"] .fd { display: grid; }
+  .tedit[data-k="dir"] .bd { display: none; }
+  .tedit[data-k="dir"] .ft > :not(.what) { display: none; }
+  .tedit[data-k="dir"] .ft .what { display: block; }
+  .tedit .fmain { display: grid; grid-template-rows: 28px 1fr; min-width: 0; min-height: 0; }
+  .tedit .fbar { display: flex; align-items: center; gap: 4px; padding: 0 6px; border-bottom: 1px solid var(--edge); min-width: 0; }
+  .tedit .fbar .up { width: 22px; height: 20px; border: 0; border-radius: 6px; background: none; color: var(--ink-2); display: grid; place-items: center; cursor: pointer; }
+  .tedit .fbar .up:hover { background: var(--well); color: var(--ink); }
+  .tedit .fbar .up:disabled { opacity: 0.35; cursor: default; background: none; }
+  .tedit .fbar svg { width: 12px; height: 12px; }
+  .tedit .fbar .crumb { flex: 1; min-width: 0; font-size: 11px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tedit .fbar .crumb i { font-style: normal; color: var(--ink-2); font-weight: 700; }
+  .tedit .vseg { display: inline-flex; gap: 1px; padding: 2px; border-radius: 7px; background: var(--well); flex: none; }
+  .tedit .vseg button { width: 22px; height: 18px; border: 0; border-radius: 5px; background: none; color: var(--ink-2); display: grid; place-items: center; cursor: pointer; transition: background 140ms ease, color 140ms ease; }
+  .tedit .vseg button.on { background: var(--card); color: var(--ink); box-shadow: 0 1.5px 0 var(--card-lip); }
+  .tedit .fv { min-height: 0; overflow: auto; position: relative; }
+  .tedit .fv button { border: 0; background: none; font: inherit; color: var(--ink); cursor: pointer; padding: 0; text-align: left; }
+  .tedit .fv .art { display: block; width: 34px; aspect-ratio: 1.15; border-radius: 6px; box-shadow: inset 0 -3px 0 rgba(12,13,31,0.18); font-size: 11px; flex: none; }
+  .tedit .fv [data-k="text"] > .art { width: 26px; }
+  .tedit .fv [data-k="dir"] > .art { border-radius: 3px 3px 6px 6px; }
+  .tedit .fv.v-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); align-content: start; gap: 2px; padding: 10px 8px; }
+  .tedit .fv.v-icons .it { display: grid; justify-items: center; align-content: start; gap: 5px; padding: 8px 2px 6px; border-radius: 9px; }
+  .tedit .fv.v-icons .it:hover { background: var(--well); }
+  .tedit .fv.v-icons .it b { font-size: 10.5px; font-weight: 800; padding: 1px 5px; border-radius: 5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+  .tedit .fv.v-icons .it.on b { background: var(--accent); }
+  .tedit .fv.v-list .it { display: grid; grid-template-columns: 1fr 52px 64px; gap: 6px; align-items: center; width: 100%; height: 24px; padding: 0 10px; font-size: 10.5px; font-weight: 700; color: var(--ink-2); }
+  .tedit .fv.v-list .it:nth-child(even) { background: color-mix(in srgb, var(--well) 70%, transparent); }
+  .tedit .fv.v-list .it.hd { position: sticky; top: 0; z-index: 1; background: var(--card); border-bottom: 1px solid var(--edge); font-weight: 800; cursor: default; }
+  .tedit .fv.v-list .it > span:first-child { display: flex; align-items: center; gap: 6px; color: var(--ink); font-weight: 800; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tedit .fv.v-list .art { width: 16px; border-radius: 3px; font-size: 6px; box-shadow: none; }
+  .tedit .fv.v-list [data-k="text"] > .art { width: 12px; background-image: none; }
+  .tedit .fv.v-list .it.on { background: var(--accent); }
+  .tedit .fv.v-list .it.on > span { color: var(--ink); }
+  .tedit .fv.v-cols { display: flex; overflow-x: auto; }
+  .tedit .fv .col { flex: none; width: 128px; border-right: 1px solid var(--edge); padding: 4px; display: flex; flex-direction: column; gap: 1px; overflow-y: auto; }
+  .tedit .fv .col .it { display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 6px; border-radius: 6px; font-size: 10.5px; font-weight: 800; flex: none; }
+  .tedit .fv .col .it:hover { background: var(--well); }
+  .tedit .fv .col .it .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tedit .fv .col .it.on { background: var(--accent); }
+  .tedit .fv .col .art { width: 14px; border-radius: 3px; font-size: 5px; box-shadow: none; }
+  .tedit .fv .col [data-k="text"] > .art { width: 11px; background-image: none; }
+  .tedit .fv .col .it i { font-style: normal; color: var(--ink-2); }
+  .tedit .fv .col.pv { width: 150px; align-items: center; justify-content: center; text-align: center; gap: 6px; }
+  .tedit .fv .col.pv .art { width: 70px; font-size: 22px; border-radius: 10px; }
+  .tedit .fv .col.pv [data-k="text"] > .art { width: 52px; background-image: repeating-linear-gradient(transparent 0 7px, #D5D7EA 7px 9px); }
+  .tedit .fv .col.pv b { font-size: 11px; } .tedit .fv .col.pv small { font-size: 10px; color: var(--ink-2); font-weight: 700; }
+  .tedit .fv.v-gal { display: grid; grid-template-rows: 1fr 52px; }
+  .tedit .fv .hero { display: grid; place-items: center; align-content: center; gap: 6px; background: var(--dark); color: #ECEDFB; min-height: 0; }
+  .tedit .fv .hero .art { width: 104px; font-size: 30px; border-radius: 12px; box-shadow: 0 14px 24px -10px rgba(5,6,20,0.7); }
+  .tedit .fv .hero [data-k="text"] > .art { width: 76px; background-image: repeating-linear-gradient(transparent 0 7px, #D5D7EA 7px 9px); }
+  .tedit .fv .hero b { font-size: 11.5px; } .tedit .fv .hero small { font-size: 10px; color: #A6A9CF; font-weight: 700; }
+  .tedit .fv .strip { display: flex; gap: 3px; padding: 6px 8px; overflow-x: auto; border-top: 1px solid var(--edge); background: var(--paper); }
+  .tedit .fv .strip .it { flex: none; width: 40px; height: 40px; border-radius: 8px; display: grid; place-items: center; transition: background 120ms ease, transform 200ms var(--bouncy); }
+  .tedit .fv .strip .it.on { background: var(--accent); transform: translateY(-2px); }
+  .tedit .fv .strip .art { width: 26px; font-size: 9px; }
+  .tedit .fv .strip [data-k="text"] > .art { width: 19px; }
+  .tedit .fside { background: var(--paper); padding: 8px; display: grid; gap: 6px; align-content: start; overflow: auto; border-left: 1px solid var(--edge); }
+  .tedit .fside .card { background: var(--card); border-radius: 10px; box-shadow: 0 2px 0 var(--card-lip); padding: 7px 9px; display: grid; gap: 4px; }
+  .tedit .fside h4 { margin: 0; font-size: 10.5px; font-weight: 800; }
+  .tedit .fside dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 10.5px; }
+  .tedit .fside dt { color: var(--ink-2); font-weight: 700; } .tedit .fside dd { margin: 0; text-align: right; font-weight: 800; }
+  .tedit .fside .kb { display: grid; grid-template-columns: 1fr auto; gap: 2px 6px; font-size: 10px; font-weight: 700; }
+  .tedit .fside .kb i { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--well); overflow: hidden; }
+  .tedit .fside .kb i b { display: block; height: 100%; border-radius: 2px; background: var(--c, var(--accent)); transition: width 500ms var(--smooth); }
+  .tedit .fside .go2 { height: 24px; border: 0; border-radius: 7px; background: var(--cobalt); box-shadow: inset 0 -2px 0 var(--cobalt-lip); color: #fff; font: inherit; font-size: 10.5px; font-weight: 800; cursor: pointer; }
+  .tedit .fside .note { margin: 0; font-size: 10px; font-weight: 700; color: var(--ink-2); line-height: 1.35; }
+  .tedit .swapin { animation: tswap 380ms var(--bouncy); }
+  @keyframes tswap { from { opacity: 0; transform: translateY(8px) scale(0.97); } }
   .tedit .ft .what { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tedit .ft .go { height: 28px; padding: 0 14px; border: 0; border-radius: 9px; background: var(--cobalt); box-shadow: inset 0 -3px 0 var(--cobalt-lip); color: #fff; font: inherit; font-weight: 800; font-size: 12px; cursor: pointer; }
   .tfile.saved .art { animation: tsaved 620ms var(--bouncy); }
@@ -552,6 +640,8 @@
     .tedit { left: 3%; top: 12%; width: 94%; height: 80%; } .tedit .tb small { display: none; }
     .tedit .bd { grid-template-columns: 1fr; grid-template-rows: 1fr auto; } .tedit .side { grid-template-columns: 1fr 1fr; }
     .tedit .ft .what { display: none; }
+    .tedit .fd { grid-template-columns: minmax(0, 1fr); } .tedit .fside { display: none; } .tedit .vseg button { width: 19px; }
+    .tedit .tt input { max-width: 90px; }
   }
 
   /* ---------- Jot's demo: a note at the pointer, a paper airplane, a reminder in the corner ---------- */
@@ -1024,9 +1114,26 @@
           <div class="tmarks"><svg viewBox="0 0 18 18"><path class="lp" d="M15 3H3V15"/><path d="M15 3H3V15"/></svg><svg viewBox="0 0 18 18"><path class="lp" d="M3 3H15V15"/><path d="M3 3H15V15"/></svg><svg viewBox="0 0 18 18"><path class="lp" d="M15 15H3V3"/><path d="M15 15H3V3"/></svg><svg viewBox="0 0 18 18"><path class="lp" d="M3 15H15V3"/><path d="M3 15H15V3"/></svg></div>
           <div class="ttag"><b></b><small></small></div>
           <div class="tedit" role="dialog" aria-label="Tweak editor">
-            <div class="tb"><i title="Close"></i><i></i><i></i><span class="tname"></span><small class="tkind"></small></div>
+            <div class="tb">
+              <span class="wb"><button type="button" class="x" title="Close" aria-label="Close"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 3l6 6M9 3 3 9"/></svg></button><button type="button" class="hide" title="Hide" aria-label="Hide"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M2.5 6h7"/></svg></button></span>
+              <label class="tt" title="Rename"><input class="tname" spellcheck="false" aria-label="Name"><span class="text"></span></label><small class="tkind"></small><span class="say"></span>
+            </div>
             <div class="bd"><div class="mat"><div class="pic"><div class="cut"></div></div><div class="trim"><span></span></div></div><div class="side"></div></div>
-            <div class="ft"><span>Save as</span><select aria-label="File type"></select><span class="what"></span><button type="button" class="go">Save</button></div>
+            <div class="fd">
+              <div class="fmain">
+                <div class="fbar"><button type="button" class="up" title="Up" aria-label="Up a folder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m6 11 6-6 6 6"/></svg></button><span class="crumb"></span>
+                  <span class="vseg" role="radiogroup" aria-label="View">
+                    <button type="button" data-v="icons" title="Icons" aria-label="Icons"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></svg></button>
+                    <button type="button" data-v="list" title="List" aria-label="List"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg></button>
+                    <button type="button" data-v="cols" title="Columns" aria-label="Columns"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9.5 4.5v15M15 4.5v15"/></svg></button>
+                    <button type="button" data-v="gal" title="Gallery" aria-label="Gallery"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><rect x="3.5" y="4" width="17" height="11" rx="2.5"/><path d="M4 19.5h3M10.5 19.5h3M17 19.5h3" stroke-linecap="round"/></svg></button>
+                  </span>
+                </div>
+                <div class="fv"></div>
+              </div>
+              <div class="fside"></div>
+            </div>
+            <div class="ft"><span>Save as</span><select aria-label="File type"></select><input class="tend" placeholder=".ending" spellcheck="false" maxlength="15" aria-label="Ending" hidden><span class="what"></span><button type="button" class="go">Save</button></div>
           </div>
         </div>
       </div>
@@ -1051,7 +1158,7 @@
         </button>
         <p class="toy-cap" aria-live="polite"><span>Drag a corner, or click to turn</span></p>
       </div>
-      <p class="switch-note" style="margin-top:16px">Crop, turn and resize pictures. Trim, crop or mute a video, pull out its sound, or save a frame. Trim songs. Find and replace in text. Change any file’s type, and save over it or as a copy. The old version goes to the Trash.</p>
+      <p class="switch-note" style="margin-top:16px">Crop, turn and resize pictures. Trim, crop or mute a video, pull out its sound, or save a frame. Trim songs. Find and replace in text. Rename anything, change any file’s type or give it an ending of your own, and save over it or as a copy. The old version goes to the Trash. Point at a folder to look inside it as icons, a list, columns or a gallery, see what’s in it, and tweak a file from there.</p>
     </article>
     <p class="switch-note">Every shortcut can be changed, in Pane and right here: click a key under any demo and hold new ones. Switch tools from the button in the corner of Pane’s window.</p>
   </section>
@@ -2311,96 +2418,292 @@
 
 
   // ---------- Tweak's desk: point at a file, click it, edit, save ----------
+  // Every file here is a little record (name, ending, kind, size). The desk's buttons point at them, and a
+  // folder holds more of them, so renaming or saving in the editor changes the same thing the desk shows.
   (function () {
     const st = document.getElementById('tstage'); if (!st) return;
     const marks = st.querySelector('.tmarks'), tag = st.querySelector('.ttag'), ed = st.querySelector('.tedit');
+    const $e = (q) => ed.querySelector(q);
     const files = [...st.querySelectorAll('.tfile')];
-    const KIND = { image: 'HEIC photo', video: 'QuickTime movie', audio: 'MP3 audio', text: 'CSV table', dir: 'Folder' };
+    const LABEL = { heic: 'HEIC photo', png: 'PNG image', jpg: 'JPEG image', webp: 'WebP image', mov: 'QuickTime movie', mp4: 'MP4 video', gif: 'GIF', m4a: 'M4A audio', mp3: 'MP3 audio', wav: 'WAV audio', aiff: 'AIFF audio', csv: 'CSV table', json: 'JSON', md: 'Markdown', txt: 'Plain text' };
     const FORMATS = { image: ['heic', 'png', 'jpg', 'webp'], video: ['mov', 'mp4', 'gif', 'm4a'], audio: ['m4a', 'wav', 'aiff'], text: ['csv', 'json', 'md', 'txt'] };
     const TOOLS = { image: ['Crop 16:9', 'Square', 'Turn', 'Black and white'], video: ['Trim', 'Crop', 'Mute', 'Save a frame'], audio: ['Trim', 'Quieter'], text: ['Sort lines', 'UPPER', 'Find and replace'] };
     const TEXT = { csv: 'name,age\nAda,36\nLin,29\n', json: '[\n  { "name": "Ada", "age": "36" },\n  { "name": "Lin", "age": "29" }\n]' };
-    const label = (f) => f.dataset.name + (f.dataset.ext ? '.' + f.dataset.ext : '');
-    files.forEach((f) => { f.querySelector('b').textContent = label(f); });
-    let hot = null, open = null, idle = 0, auto = null;
+    const KCOLOR = { image: '#E4789A', video: '#5567E3', audio: '#B9A5F4', text: '#CDEB5A', dir: '#8FC6F5' };
+    const KNAME = { image: 'Pictures', video: 'Videos', audio: 'Sounds', text: 'Text', dir: 'Folders' };
+    const ENDING = /^[A-Za-z0-9_-]{1,15}$/;
+    const OTHER = '__other';
+
+    const node = (name, ext, k, size, mtime, more = {}) => ({ name, ext, k, size, mtime, ...more });
+    const folder = (name, mtime, kids) => { const f = { name, ext: '', k: 'dir', mtime, kids }; kids.forEach((c) => (c.parent = f)); return f; };
+    const drafts = folder('Drafts', 'Nov 12', [
+      node('sketch', 'jpg', 'image', 412e3, 'Nov 11', { pic: 'linear-gradient(135deg, #7ED3A8, #8FC6F5)' }),
+      node('notes', 'txt', 'text', 1.2e3, 'Nov 12', { text: 'call Lin about the logo\nfix the intro cut\n' }),
+    ]);
+    const projects = folder('Projects', 'Nov 18', [
+      node('logo', 'png', 'image', 84e3, 'Nov 18', { pic: 'linear-gradient(135deg, #CDEB5A, #5567E3)' }),
+      node('pitch', 'mov', 'video', 48.2e6, 'Nov 16'),
+      node('theme', 'm4a', 'audio', 3.1e6, 'Nov 15'),
+      node('todo', 'md', 'text', 2e3, 'Nov 17', { text: '# Todo\n- [ ] new logo\n- [x] cut pitch video\n- [ ] theme song\n' }),
+      drafts,
+    ]);
+    const DESK = {
+      beach: node('beach', 'heic', 'image', 2.4e6, 'Nov 9'), clip: node('clip', 'mov', 'video', 18e6, 'Nov 3'),
+      'voice memo': node('voice memo', 'mp3', 'audio', 640e3, 'Nov 14'), people: node('people', 'csv', 'text', 0.4e3, 'Nov 10'), Projects: projects,
+    };
+    files.forEach((f) => { f.rec = DESK[f.dataset.name]; f.rec.el = f; });
+
+    const full = (r) => r.name + (r.ext ? '.' + r.ext : '');
+    const size = (n) => n == null ? '' : n < 1024 ? `${Math.round(n)} bytes` : n < 1048576 ? `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KB` : `${(n / 1048576).toFixed(1)} MB`;
+    const label = (r) => r.k === 'dir' ? 'Folder' : LABEL[r.ext] || `${r.ext.toUpperCase()} file`;
+    const totals = (r) => { const t = { files: 0, folders: 0, bytes: 0, kinds: {} }; (function walk(d) { d.kids.forEach((c) => { if (c.k === 'dir') { t.folders++; walk(c); } else { t.files++; t.bytes += c.size || 0; t.kinds[c.k] = (t.kinds[c.k] || 0) + 1; } }); })(r); return t; };
+    const sub = (r) => r.k === 'dir' ? `Folder, ${r.kids.length} item${r.kids.length === 1 ? '' : 's'}` : `${label(r)}, ${size(r.size)}`;
+    const art = (r) => { const w = document.createElement('span'); w.dataset.k = r.k; w.className = 'ak'; const a = document.createElement('span'); a.className = 'art'; if (r.pic) w.style.setProperty('--pic', r.pic); w.append(a); return w; };
+    const paint = () => files.forEach((f) => { f.querySelector('b').textContent = full(f.rec); if (f.rec.pic) f.style.setProperty('--pic', f.rec.pic); });
+    paint();
+
+    let hot = null, open = null, parked = null, idle = 0, view = 'icons', pick = null, colPath = [];
     function point(f) {
       hot = f;
       if (!f) { marks.classList.remove('on'); tag.classList.remove('on'); return; }
       const r = f.getBoundingClientRect(), s = st.getBoundingClientRect(), ic = f.querySelector('.art').getBoundingClientRect(), pad = 2;
       Object.assign(marks.style, { left: (ic.left - s.left - pad) + 'px', top: (ic.top - s.top - pad) + 'px', width: (ic.width + pad * 2) + 'px', height: (ic.height + pad * 2) + 'px' });
-      const dir = f.dataset.k === 'dir';
-      marks.classList.toggle('nope', dir);
-      tag.querySelector('b').textContent = label(f);
-      tag.querySelector('small').textContent = dir ? 'Folders can’t be tweaked' : KIND[f.dataset.k];
+      tag.querySelector('b').textContent = full(f.rec);
+      tag.querySelector('small').textContent = sub(f.rec);
       Object.assign(tag.style, { left: Math.min(r.left - s.left, s.width - 170) + 'px', top: (r.bottom - s.top + 8) + 'px' });
       marks.classList.add('on'); tag.classList.add('on');
     }
-    function edit(f) {
-      if (f.dataset.k === 'dir') { marks.classList.remove('shake'); void marks.offsetWidth; marks.classList.add('shake'); return; }
-      open = f;
-      const k = f.dataset.k;
+    // The editor grows out of the file it opens from, and goes back into it.
+    function aim(f) {
+      if (!f) return;
+      const x = f.offsetLeft + f.offsetWidth / 2 - ed.offsetLeft, y = f.offsetTop + f.offsetHeight / 3 - ed.offsetTop;
+      ed.style.transformOrigin = `${x}px ${y}px`;
+    }
+    const deskOf = (r) => { while (r && !r.el) r = r.parent; return r?.el || null; };
+    let sayT = 0;
+    function say(t) { const e = $e('.say'); e.textContent = t; e.classList.add('on'); clearTimeout(sayT); sayT = setTimeout(() => e.classList.remove('on'), 2200); }
+
+    // ---- open something in the editor: a file to edit, or a folder to look in ----
+    function edit(r, { swap = false, select = null } = {}) {
+      open = r; parked = null;
+      const k = r.k;
       ed.dataset.k = k;
-      ed.querySelector('.tname').textContent = label(f);
-      ed.querySelector('.tkind').textContent = KIND[k];
-      const pic = ed.querySelector('.pic');
+      $e('.tname').value = r.name; fit();
+      $e('.text').textContent = r.ext ? '.' + r.ext : '';
+      $e('.tkind').textContent = sub(r);
+      if (k === 'dir') { pick = select; colPath = [r]; showDir(); }
+      else showFile(r);
+      if (swap) { const b = $e(k === 'dir' ? '.fd' : '.bd'); b.classList.remove('swapin'); void b.offsetWidth; b.classList.add('swapin'); }
+      else { aim(deskOf(r)); }
+      st.classList.add('editing');
+    }
+    function showFile(r) {
+      const k = r.k, pic = $e('.pic');
       pic.style.transform = ''; pic.style.filter = '';
+      pic.style.setProperty('--pic', r.pic || '');
+      if (r.pic) pic.style.background = r.pic; else pic.style.removeProperty('background');
       pic.querySelector('.cut').style.inset = '0';
-      ed.querySelector('.trim span').style.cssText = '';
-      if (k === 'text') pic.firstChild.nodeType === 3 ? (pic.firstChild.textContent = TEXT.csv) : pic.prepend(document.createTextNode(TEXT.csv));
-      else if (pic.firstChild.nodeType === 3) pic.firstChild.remove();
-      const side = ed.querySelector('.side');
+      $e('.trim span').style.cssText = '';
+      if (k === 'text') pic.firstChild?.nodeType === 3 ? (pic.firstChild.textContent = baseText()) : pic.prepend(document.createTextNode(baseText()));
+      else if (pic.firstChild?.nodeType === 3) pic.firstChild.remove();
+      const side = $e('.side');
       side.innerHTML = '';
       TOOLS[k].forEach((t) => {
         const b = document.createElement('button'); b.type = 'button'; b.textContent = t;
         b.addEventListener('click', () => { b.classList.toggle('on'); act(k, t, b.classList.contains('on')); });
         side.append(b);
       });
-      const sel = ed.querySelector('select');
-      sel.innerHTML = FORMATS[k].map((x) => `<option value="${x}">${x.toUpperCase()}</option>`).join('');
-      sel.value = FORMATS[k].includes(f.dataset.ext) ? f.dataset.ext : FORMATS[k][0];
+      const sel = $e('select');
+      sel.innerHTML = FORMATS[k].map((x) => `<option value="${x}">${x.toUpperCase()}${x === r.ext ? ' (as it is)' : ''}</option>`).join('') + `<option value="${OTHER}">Other…</option>`;
+      sel.value = FORMATS[k].includes(r.ext) ? r.ext : FORMATS[k][0];
+      $e('.tend').value = ''; $e('.tend').hidden = true;
       what();
-      st.classList.add('editing');
     }
+    const baseText = () => open.text || TEXT[$e('select').value === 'json' ? 'json' : 'csv'];
     function act(k, t, on) {
-      const pic = ed.querySelector('.pic'), cut = pic.querySelector('.cut'), trim = ed.querySelector('.trim span');
+      const pic = $e('.pic'), cut = pic.querySelector('.cut'), trim = $e('.trim span');
       if (t === 'Crop 16:9' || t === 'Crop') cut.style.inset = on ? '6% 4% 10% 4%' : '0';
       if (t === 'Square') cut.style.inset = on ? '0 22% 0 22%' : '0';
       if (t === 'Turn') pic.style.transform = on ? 'rotate(90deg) scale(0.62)' : '';
       if (t === 'Black and white' || t === 'Mute' || t === 'Quieter') pic.style.filter = on ? 'grayscale(1)' : '';
       if (t === 'Trim') trim.style.cssText = on ? '--a:18%;--b:26%' : '';
       if (k === 'text') {
-        let v = TEXT[ed.querySelector('select').value === 'json' ? 'json' : 'csv'];
+        let v = baseText();
         if (t === 'UPPER' && on) v = v.toUpperCase();
         if (t === 'Sort lines' && on) v = v.split('\n').filter(Boolean).sort().join('\n');
         pic.firstChild.textContent = v;
       }
     }
+    // "Other…" names the file with any ending you type; what's inside stays the type it was.
+    const other = () => $e('select').value === OTHER;
+    const typed = () => $e('.tend').value.trim().replace(/^\.+/, '');
+    const ending = () => other() ? (ENDING.test(typed()) ? typed() : open.ext) : $e('select').value;
     function what() {
-      const ext = ed.querySelector('select').value, f = open;
-      const next = f.dataset.name + '.' + ext;
-      ed.querySelector('.what').textContent = ext === f.dataset.ext ? 'Saves over ' + next + '.' : next + ' takes its place. The old one goes to the Trash.';
-      ed.querySelector('.go').textContent = ext === f.dataset.ext ? 'Save' : 'Save as ' + ext.toUpperCase();
-      if (f.dataset.k === 'text') ed.querySelector('.pic').firstChild.textContent = ext === 'json' ? TEXT.json : TEXT.csv;
+      const f = open; if (!f || f.k === 'dir') return;
+      const ext = ending(), next = ($e('.tname').value.trim() || f.name) + '.' + ext, same = ext === f.ext;
+      $e('.text').textContent = '.' + ext;
+      const inside = other() && !same && f.k !== 'text' ? ` Still ${label(f).replace(/^[AEIOU]/, 'an $&').replace(/^(?!an )/, 'a ')} inside.` : '';
+      $e('.what').textContent = same ? 'Saves over ' + next + '.' : next + ' takes its place. The old one goes to the Trash.' + inside;
+      $e('.go').textContent = same ? 'Save' : other() ? 'Save as .' + ext : 'Save as ' + ext.toUpperCase();
+      if (f.k === 'text' && !f.text) $e('.pic').firstChild.textContent = $e('select').value === 'json' ? TEXT.json : TEXT.csv;
     }
-    ed.querySelector('select').addEventListener('change', what);
-    function close() { st.classList.remove('editing'); open = null; }
-    ed.querySelector('.tb i').addEventListener('click', close);
-    ed.querySelector('.go').addEventListener('click', () => {
-      const f = open, ext = ed.querySelector('select').value;
-      f.dataset.ext = ext;
-      f.querySelector('b').textContent = label(f);
+    $e('select').addEventListener('change', () => {
+      const o = other();
+      $e('.tend').hidden = !o;
+      if (o) { $e('.tend').focus(); }
+      what();
+    });
+    $e('.tend').addEventListener('input', what);
+    $e('.tend').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $e('.tend').blur(); } });
+
+    // ---- the name: Enter (or clicking away) renames it there and then ----
+    const nameIn = $e('.tname');
+    // The name field is as wide as the name (Safari has no field-sizing).
+    const fit = () => { nameIn.style.width = `calc(${Math.max(2, nameIn.value.length)}ch + 2px)`; };
+    ['input', 'blur', 'focus'].forEach((t) => nameIn.addEventListener(t, fit));
+    function commitName() {
+      const r = open; if (!r) return;
+      const v = nameIn.value.trim().replace(/[/:]/g, '-');
+      if (!v || v === r.name) { nameIn.value = r.name; return; }
+      const sib = r.parent ? r.parent.kids : Object.values(DESK);
+      if (sib.some((x) => x !== r && full(x) === v + (r.ext ? '.' + r.ext : ''))) { nameIn.value = r.name; say('That name’s taken'); return; }
+      r.name = v;
+      paint();
+      $e('.tkind').textContent = sub(r);
+      if (r.k === 'dir') showDir(); else what();
+      say('Renamed to ' + full(r));
+    }
+    nameIn.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); nameIn.blur(); }
+      if (e.key === 'Escape') { e.preventDefault(); nameIn.value = open?.name || ''; nameIn.blur(); }
+      e.stopPropagation();
+    });
+    nameIn.addEventListener('input', () => { if (open && open.k !== 'dir') what(); });
+    nameIn.addEventListener('blur', commitName);
+
+    // ---- a folder, Finder-style ----
+    ed.querySelectorAll('.vseg button').forEach((b) => b.addEventListener('click', () => { view = b.dataset.v; showDir(); }));
+    $e('.fbar .up').addEventListener('click', () => { if (open?.parent) go(open.parent); });
+    function item(r, inner) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'it'; b.title = full(r);
+      inner(b);
+      if (pick === r) b.classList.add('on');
+      // Picking redraws the view, so a double-click is told apart by hand: the same thing twice, quickly.
+      b.addEventListener('click', () => {
+        const now = Date.now(), twice = last.r === r && now - last.t < 450;
+        last = { r, t: now };
+        if (twice) { go(r); return; }
+        pick = r; showDir(true);
+      });
+      return b;
+    }
+    let last = { r: null, t: 0 };
+    function showDir(keepScroll = false) {
+      const d = open, fv = $e('.fv'), scroll = fv.scrollLeft, scrollY = fv.scrollTop, stripX = fv.querySelector('.strip')?.scrollLeft || 0;
+      ed.querySelectorAll('.vseg button').forEach((b) => b.classList.toggle('on', b.dataset.v === view));
+      $e('.fbar .up').disabled = !d.parent;
+      const crumbs = []; for (let x = d; x; x = x.parent) crumbs.unshift(x.name);
+      $e('.crumb').innerHTML = crumbs.map((c, i) => i < crumbs.length - 1 ? `<i>${esc(c)} ›</i> ` : esc(c)).join('');
+      fv.className = 'fv v-' + view; fv.innerHTML = '';
+      const kids = d.kids;
+      if (view === 'icons') kids.forEach((r) => fv.append(item(r, (b) => { b.append(art(r)); const n = document.createElement('b'); n.textContent = full(r); b.append(n); })));
+      if (view === 'list') {
+        const h = document.createElement('div'); h.className = 'it hd'; h.innerHTML = '<span>Name</span><span>Modified</span><span>Size</span>'; fv.append(h);
+        kids.forEach((r) => fv.append(item(r, (b) => { const n = document.createElement('span'); n.append(art(r), full(r)); b.append(n); b.insertAdjacentHTML('beforeend', `<span>${r.mtime}</span><span>${r.k === 'dir' ? '—' : size(r.size)}</span>`); })));
+      }
+      if (view === 'cols') {
+        // Column one is this folder; a folder picked in a column opens beside it; a file picked shows its preview.
+        if (pick) { colPath = [d]; let x = pick; const chain = []; while (x && x !== d) { chain.unshift(x); x = x.parent; } chain.forEach((c) => { if (c.k === 'dir') colPath.push(c); }); }
+        colPath.forEach((dir, i) => {
+          const col = document.createElement('div'); col.className = 'col';
+          dir.kids.forEach((r) => {
+            const b = item(r, (b) => { b.append(art(r)); const n = document.createElement('span'); n.className = 'nm'; n.textContent = full(r); b.append(n); if (r.k === 'dir') b.insertAdjacentHTML('beforeend', '<i>›</i>'); });
+            if (colPath[i + 1] === r || pick === r) b.classList.add('on');
+            col.append(b);
+          });
+          fv.append(col);
+        });
+        if (pick && pick.k !== 'dir') {
+          const pv = document.createElement('div'); pv.className = 'col pv';
+          pv.append(art(pick)); pv.insertAdjacentHTML('beforeend', '<b></b><small></small>');
+          pv.querySelector('b').textContent = full(pick); pv.querySelector('small').textContent = sub(pick);
+          fv.append(pv);
+        }
+        if (keepScroll) fv.scrollLeft = scroll; requestAnimationFrame(() => { fv.scrollLeft = fv.scrollWidth; });
+      }
+      if (view === 'gal') {
+        const p = pick || kids[0]; pick = p;
+        const hero = document.createElement('div'); hero.className = 'hero';
+        if (p) { hero.append(art(p)); hero.insertAdjacentHTML('beforeend', '<b></b><small></small>'); hero.querySelector('b').textContent = full(p); hero.querySelector('small').textContent = sub(p) + ' · ' + p.mtime; hero.ondblclick = () => go(p); }
+        const strip = document.createElement('div'); strip.className = 'strip';
+        kids.forEach((r) => strip.append(item(r, (b) => b.append(art(r)))));
+        fv.append(hero, strip);
+        if (keepScroll) strip.scrollLeft = stripX;
+      }
+      if (keepScroll && view !== 'cols') fv.scrollTop = scrollY;
+      side(d);
+      const t = totals(d);
+      $e('.what').textContent = `${kids.length} items, ${size(t.bytes)}. Double-click one to tweak it.`;
+    }
+    const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+    function side(d) {
+      const t = totals(d), el = $e('.fside');
+      const max = Math.max(1, ...Object.values(t.kinds));
+      el.innerHTML = `<div class="card"><h4>This folder</h4><dl><dt>Items</dt><dd>${d.kids.length}</dd><dt>Inside</dt><dd>${t.files} files, ${t.folders} folder${t.folders === 1 ? '' : 's'}</dd><dt>Size</dt><dd>${size(t.bytes)}</dd><dt>Modified</dt><dd>${d.mtime}</dd></dl></div>` +
+        `<div class="card"><h4>What’s inside</h4>${Object.entries(t.kinds).map(([k, n]) => `<div class="kb"><span>${KNAME[k]}</span><span>${n}</span><i><b style="width:${(n / max) * 100}%;--c:${KCOLOR[k]}"></b></i></div>`).join('')}</div>` +
+        `<div class="card pk"></div>`;
+      const pk = el.querySelector('.pk');
+      if (!pick) { pk.innerHTML = '<h4>Picked</h4><p class="note">Click something to see it. Double-click to tweak it.</p>'; return; }
+      pk.innerHTML = `<h4></h4><dl><dt>Kind</dt><dd></dd><dt>${pick.k === 'dir' ? 'Items' : 'Size'}</dt><dd></dd></dl><button type="button" class="go2"></button>`;
+      pk.querySelector('h4').textContent = full(pick);
+      pk.querySelectorAll('dd')[0].textContent = label(pick);
+      pk.querySelectorAll('dd')[1].textContent = pick.k === 'dir' ? pick.kids.length : size(pick.size);
+      const g = pk.querySelector('.go2'); g.textContent = pick.k === 'dir' ? 'Open folder' : 'Tweak it'; g.onclick = () => go(pick);
+    }
+    // Opening something from a folder: the folder keeps its new name, then the window shows that instead.
+    function go(r) {
+      if (document.activeElement === nameIn) nameIn.blur(); else commitName();
+      const from = open;
+      edit(r, { swap: true, select: r.k === 'dir' && from && from.parent === r ? from : null });
+    }
+
+    // ---- window keys: close puts it away; hide tucks it into its file, and clicking the file brings it back ----
+    function close(keep = false) {
+      if (document.activeElement === nameIn) nameIn.blur();
+      const r = open;
+      aim(deskOf(r));
+      st.classList.remove('editing');
+      parked = keep ? r : null;
+      open = null;
+      return r;
+    }
+    $e('.wb .x').addEventListener('click', () => close());
+    $e('.wb .hide').addEventListener('click', () => close(true));
+    $e('.go').addEventListener('click', () => {
+      const f = open;
+      if (other() && !ENDING.test(typed())) { $e('.tend').focus(); say('Type an ending'); return; }
+      if (document.activeElement === nameIn) nameIn.blur();
+      f.ext = ending();
+      paint();
+      // Saved inside a folder: back to the folder, with the file picked. On the desk: back to the desk.
+      if (f.parent) { edit(f.parent, { swap: true, select: f }); say('Saved ' + full(f)); return; }
       close();
-      f.classList.remove('saved'); void f.offsetWidth; f.classList.add('saved');
-      setTimeout(() => point(f), 60);
+      const d = f.el; d.classList.remove('saved'); void d.offsetWidth; d.classList.add('saved');
+      setTimeout(() => point(d), 60);
     });
     files.forEach((f) => {
       f.addEventListener('pointerenter', () => { idle = Date.now(); if (!open) point(f); });
       f.addEventListener('focus', () => { if (!open) point(f); });
-      f.addEventListener('click', () => { idle = Date.now(); if (!open) edit(f); });
+      f.addEventListener('click', () => {
+        idle = Date.now(); if (open) return;
+        if (parked && deskOf(parked) === f) { const r = parked; parked = null; open = r; aim(f); st.classList.add('editing'); return; }
+        edit(f.rec);
+      });
     });
     st.addEventListener('pointerleave', () => { if (!open) point(null); });
     // Left alone, the marks wander between the files on their own.
     let n = 0;
-    auto = setInterval(() => {
+    setInterval(() => {
       if (open || Date.now() - idle < 6000 || document.hidden || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
       const r = st.getBoundingClientRect();
       if (r.bottom < 0 || r.top > innerHeight) return;

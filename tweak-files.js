@@ -66,7 +66,7 @@ function looksLikeText(file) {
 // { kind: image|video|audio|text|rich|dir|other, label, ok, why }
 function kindOf(file, { dir = false } = {}) {
   const ext = extOf(file);
-  if (dir) return { kind: 'dir', ext, label: 'Folder', ok: false, why: 'Folders can’t be tweaked' };
+  if (dir) return { kind: 'dir', ext: '', label: 'Folder', ok: true };
   if (IMAGE.includes(ext)) return { kind: 'image', ext, label: LABEL[ext] || `${ext.toUpperCase()} image`, ok: true };
   if (VIDEO.includes(ext)) return { kind: 'video', ext, label: LABEL[ext] || 'Video', ok: true };
   if (AUDIO.includes(ext)) return { kind: 'audio', ext, label: LABEL[ext] || 'Audio', ok: true };
@@ -95,10 +95,10 @@ async function load(file) {
   const st = await fsp.stat(file);
   const k = kindOf(file, { dir: st.isDirectory() });
   const info = {
-    path: file, dir: path.dirname(file), name: path.basename(file), stem: stem(file), ext: k.ext, kind: k.kind, label: k.label,
-    ok: k.ok, why: k.why || null, size: st.size, mtime: st.mtimeMs, url: require('url').pathToFileURL(file).href,
+    path: file, dir: path.dirname(file), name: path.basename(file), stem: k.kind === 'dir' ? path.basename(file) : stem(file), ext: k.ext, kind: k.kind, label: k.label,
+    ok: k.ok, why: k.why || null, size: st.size, mtime: st.mtimeMs, ctime: st.birthtimeMs, url: require('url').pathToFileURL(file).href,
   };
-  if (!k.ok) return info;
+  if (!k.ok || k.kind === 'dir') return info;
   if (k.kind === 'image') {
     let src = file, mime = MIME[k.ext];
     if (!BROWSER_IMAGE.includes(k.ext)) { // HEIC, TIFF, PSD…: sips makes a PNG the editor can draw
@@ -121,6 +121,73 @@ async function load(file) {
   return info;
 }
 
+// ---------- names ----------
+// A new name, and for a file maybe a new ending, with nothing inside changed. `ext` undefined keeps the ending.
+// A folder's whole name is its name (no ending). A change of case alone is allowed on macOS's disks.
+async function rename(src, { stem: newStem, ext }) {
+  const st = await fsp.stat(src);
+  const isDir = st.isDirectory();
+  const keepExt = isDir ? '' : extOfName(path.basename(src));
+  const end = isDir ? '' : ext === undefined ? keepExt : String(ext || '');
+  if (end && !ENDING.test(end)) throw new Error('An ending is letters and numbers, up to 15.');
+  const base = cleanStem(newStem, isDir ? path.basename(src) : stem(src));
+  const dest = path.join(path.dirname(src), `${base}${end ? `.${end}` : ''}`);
+  if (dest === src) return src;
+  try {
+    const there = await fsp.stat(dest);
+    if (there.ino !== st.ino) throw Object.assign(new Error(`There’s already a ${path.basename(dest)} there.`), { taken: true });
+  } catch (err) { if (err.taken) throw err; }
+  await fsp.rename(src, dest);
+  return dest;
+}
+// The ending as written (not lowercased), so a rename keeps "Photo.JPG" as it was.
+const extOfName = (base) => { const dot = base.lastIndexOf('.'); return dot > 0 ? base.slice(dot + 1) : ''; };
+const ENDING = /^[A-Za-z0-9_-]{1,15}$/;
+
+// ---------- folders ----------
+// What's in a folder, one level down, for the editor's Finder-like views. Hidden files stay hidden.
+async function list(dir, { hidden = false, max = 3000 } = {}) {
+  const ents = (await fsp.readdir(dir, { withFileTypes: true })).filter((d) => hidden || !d.name.startsWith('.'));
+  const out = await Promise.all(ents.slice(0, max).map(async (d) => {
+    const p = path.join(dir, d.name);
+    let st = null;
+    try { st = await fsp.stat(p); } catch {}
+    const isDir = st ? st.isDirectory() : d.isDirectory();
+    // Apps and other bundles are folders on disk but files to everyone: they open as themselves, not inside.
+    const bundle = isDir && /\.(app|bundle|framework|pkg|photoslibrary|rtfd)$/i.test(d.name);
+    const k = kindOf(p, { dir: isDir && !bundle });
+    return { name: d.name, path: p, dir: isDir && !bundle, size: st && !isDir ? st.size : null, mtime: st?.mtimeMs ?? null, ctime: st?.birthtimeMs ?? null, kind: k.kind, label: bundle ? 'Package' : k.label, ext: k.ext, ok: bundle ? false : k.ok };
+  }));
+  out.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  return { entries: out, more: ents.length > max };
+}
+// Everything under a folder, counted: files, folders, bytes and kinds. Huge folders stop early and say so.
+async function dirStats(dir, { maxEntries = 40000, maxMs = 2500 } = {}) {
+  const t0 = Date.now();
+  const s = { files: 0, folders: 0, bytes: 0, kinds: {}, partial: false, top: 0 };
+  const queue = [dir];
+  let first = true;
+  while (queue.length) {
+    if (s.files + s.folders > maxEntries || Date.now() - t0 > maxMs) { s.partial = true; break; }
+    const d = queue.shift();
+    let ents;
+    try { ents = await fsp.readdir(d, { withFileTypes: true }); } catch { continue; }
+    if (first) { s.top = ents.filter((e) => !e.name.startsWith('.')).length; first = false; }
+    await Promise.all(ents.map(async (e) => {
+      if (e.name.startsWith('.')) return;
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) { s.folders++; queue.push(p); return; }
+      if (e.isSymbolicLink()) return;
+      s.files++;
+      try { s.bytes += (await fsp.stat(p)).size; } catch {}
+      const k = kindOf(p).kind;
+      const key = k === 'rich' ? 'text' : k;
+      s.kinds[key] = (s.kinds[key] || 0) + 1;
+    }));
+  }
+  return s;
+}
+
 // A name that isn't taken in this folder: "Photo.png", then "Photo 2.png", "Photo 3.png"…
 function freeName(dir, base, ext, except) {
   const name = (n) => path.join(dir, `${base}${n > 1 ? ` ${n}` : ''}${ext ? `.${ext}` : ''}`);
@@ -136,6 +203,7 @@ const cleanStem = (s, fallback) => String(s || '').replace(/[/:\u0000]/g, '-').r
 //   copy: a new file beside it ("Photo copy.png"), the original stays.
 //   otherwise: the original is replaced. Same name and type: overwritten in place. A new name or type:
 //   the new file appears and the original goes (to the Trash, unless `trash` is off).
+// `ext` is what the new file is named with; it may be an ending the user typed, not the type it's written as.
 function plan(src, { stem: newStem, ext, copy }) {
   const dir = path.dirname(src);
   const base = cleanStem(newStem, stem(src));
@@ -233,4 +301,4 @@ function saveMedia(src, { ops, ext }, p, opts) {
   });
 }
 
-module.exports = { kindOf, load, plan, saveImage, saveText, saveMedia, freeName, extOf, stem, FORMATS, LABEL, run };
+module.exports = { kindOf, load, plan, rename, list, dirStats, ENDING, saveImage, saveText, saveMedia, freeName, extOf, stem, FORMATS, LABEL, run };

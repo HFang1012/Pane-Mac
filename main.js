@@ -1696,8 +1696,10 @@ async function printPdf(html) {
 ipcMain.handle('tweak:save', async (e, job) => {
   const w = editorFor(e);
   if (!w || !job || typeof job.ext !== 'string' || !/^[a-z0-9]{1,10}$/.test(job.ext)) return { error: 'Nothing to save.' };
+  // A typed ending (Other…) names the file; `ext` is still the type it's written as.
+  if (job.ending != null && !TweakFiles.ENDING.test(job.ending)) return { error: 'An ending is letters and numbers, up to 15.' };
   const src = w.filePath;
-  const p = TweakFiles.plan(src, { stem: job.stem, ext: job.ext, copy: !!job.copy });
+  const p = TweakFiles.plan(src, { stem: job.stem, ext: job.ending || job.ext, copy: !!job.copy });
   const opts = {
     trash: settings.tweak.trash, trashItem: (f) => shell.trashItem(f), printPdf, helper: helperPath(),
     progress: (v) => { if (!w.isDestroyed()) w.webContents.send('tweak:progress', v); },
@@ -1715,6 +1717,35 @@ ipcMain.handle('tweak:save', async (e, job) => {
   } catch (err) {
     return { error: err.message || 'Saving didn’t work.' };
   }
+});
+// A new name (and maybe ending) for the file or folder in this window, straight away: nothing inside changes.
+ipcMain.handle('tweak:rename', async (e, job) => {
+  const w = editorFor(e);
+  if (!w || !job || typeof job.stem !== 'string') return { error: 'Nothing to rename.' };
+  try {
+    const dest = await TweakFiles.rename(w.filePath, { stem: job.stem, ext: typeof job.ext === 'string' ? job.ext : undefined });
+    w.filePath = dest; w.setTitle(path.basename(dest)); w.setRepresentedFilename(dest);
+    return { ok: true, path: dest, name: path.basename(dest) };
+  } catch (err) { return { error: err.message || 'Couldn’t rename it.' }; }
+});
+// A folder's contents, its totals, and Finder's own thumbnails, for the editor's folder views.
+const okDir = (p) => typeof p === 'string' && path.isAbsolute(p);
+ipcMain.handle('tweak:list', async (e, dir) => {
+  if (!editorFor(e) || !okDir(dir)) return { error: 'Not a folder.' };
+  try { return await TweakFiles.list(dir); } catch (err) { return { error: err.code === 'EACCES' || err.code === 'EPERM' ? 'Pane isn’t allowed to look in here.' : err.message }; }
+});
+ipcMain.handle('tweak:stats', async (e, dir) => {
+  if (!editorFor(e) || !okDir(dir)) return null;
+  try { return await TweakFiles.dirStats(dir); } catch { return null; }
+});
+ipcMain.handle('tweak:thumb', async (e, file, size = 256) => {
+  if (!editorFor(e) || !okDir(file)) return null;
+  const px = Math.max(32, Math.min(1024, Math.round(+size || 256)));
+  try {
+    const img = await nativeImage.createThumbnailFromPath(file, { width: px, height: px });
+    if (!img.isEmpty()) return img.toDataURL();
+  } catch {}
+  try { return (await app.getFileIcon(file, { size: 'large' })).toDataURL(); } catch { return null; }
 });
 // A song's bytes, for drawing its waveform (decoded in the editor). Long files are skipped.
 ipcMain.handle('tweak:bytes', async (e) => {
@@ -1757,7 +1788,7 @@ ipcMain.handle('tweak:swap', async (e, file) => {
   if (!w) return false;
   let next = typeof file === 'string' && path.isAbsolute(file) && fs.existsSync(file) ? file : null;
   if (!next) {
-    const r = await dialog.showOpenDialog(w, { properties: ['openFile'] });
+    const r = await dialog.showOpenDialog(w, { properties: ['openFile', 'openDirectory'] });
     if (r.canceled || !r.filePaths[0]) return false;
     next = r.filePaths[0];
   }
@@ -1765,7 +1796,7 @@ ipcMain.handle('tweak:swap', async (e, file) => {
   return true;
 });
 async function chooseAndEdit(parent) {
-  const r = await dialog.showOpenDialog(parent && !parent.isDestroyed() ? parent : undefined, { properties: ['openFile'], message: 'Pick a file to tweak' });
+  const r = await dialog.showOpenDialog(parent && !parent.isDestroyed() ? parent : undefined, { properties: ['openFile', 'openDirectory'], message: 'Pick a file or folder to tweak' });
   if (!r.canceled && r.filePaths[0]) openEditor(r.filePaths[0]);
 }
 ipcMain.on('tweak:choose', () => chooseAndEdit(settingsWin));

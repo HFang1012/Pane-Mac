@@ -95,6 +95,9 @@ func windowAt(_ pt: CGPoint, skip: Set<pid_t>) -> (pid: pid_t, layer: Int, bound
   for w in list {
     guard let pid = w[kCGWindowOwnerPID as String] as? pid_t, !skip.contains(pid) else { continue }
     if let a = w[kCGWindowAlpha as String] as? Double, a < 0.05 { continue }
+    // The Window Server's own surfaces are never what you're pointing at. One of them ("underbelly") lies
+    // over the top ~100 points of the screen, just above the desktop's icons, and hid the top row from Tweak.
+    if (w[kCGWindowOwnerName as String] as? String) == "Window Server" { continue }
     guard let bd = w[kCGWindowBounds as String] as? NSDictionary, let b = CGRect(dictionaryRepresentation: bd as CFDictionary),
           b.contains(pt) else { continue }
     let layer = (w[kCGWindowLayer as String] as? Int) ?? 0

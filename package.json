@@ -1,6 +1,6 @@
 {
   "name": "pane",
-  "version": "1.5.12",
+  "version": "1.5.13",
   "description": "Small tools that sit on top of your Mac: Scrawl to draw on your screen, Away to blur it while you step away, Spin to run your music from a wheel, Jot to take a quick note that reminds you later, Tweak to edit any file you point at.",
   "main": "main.js",
   "scripts": {

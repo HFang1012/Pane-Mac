@@ -1006,6 +1006,9 @@ function showAway(preview = false) {
       vibrancy: 'fullscreen-ui',
       visualEffectState: 'active', // stay blurred even though nothing here is clicked
       hasShadow: false,
+      // macOS rounds a frameless window's corners, and the blur with them. Screens with square corners
+      // (most external displays) then show four sharp, unblurred slivers. Away covers the screen edge to edge.
+      roundedCorners: false,
       resizable: false,
       movable: false,
       minimizable: false,
@@ -1725,7 +1728,12 @@ function createSettings() {
     width: 900,
     height: 640,
     useContentSize: true,
-    resizable: false,
+    // Only its height can be dragged: the pages are laid out for 900pt across.
+    // On a short screen the content scrolls instead of hiding under the menu bar.
+    resizable: true,
+    minWidth: 900,
+    maxWidth: 900,
+    minHeight: 360,
     maximizable: false,
     fullscreenable: false,
     titleBarStyle: 'hiddenInset',
@@ -1814,8 +1822,16 @@ ipcMain.handle('bind:start', (_e, which) => {
 // The settings page measures its tallest page, and the fixed-width window takes that height.
 // The window's own color (seen for a moment while it resizes) follows the tool's theme.
 ipcMain.on('window:bg', (_e, color) => { if (/^#[0-9a-f]{6}$/i.test(color)) settingsWin?.setBackgroundColor(color); });
+// It never grows past the screen it's on: the window is kept inside the work area (below the menu bar,
+// above the Dock), and anything taller scrolls.
 ipcMain.on('window:fit', (_e, h, animate) => {
-  if (settingsWin && h > 300 && h < 1400) settingsWin.setContentSize(900, Math.ceil(h), !!animate && settingsWin.isVisible());
+  if (!settingsWin || !(h > 300)) return; // no upper cap: the work area is the cap
+  const area = screen.getDisplayMatching(settingsWin.getBounds()).workArea;
+  const frame = settingsWin.getSize()[1] - settingsWin.getContentSize()[1]; // title bar, if any
+  const height = Math.min(Math.ceil(h), area.height - frame);
+  const b = settingsWin.getBounds();
+  const y = Math.max(area.y, Math.min(b.y, area.y + area.height - (height + frame)));
+  settingsWin.setContentBounds({ x: b.x, y: y + frame, width: 900, height }, !!animate && settingsWin.isVisible());
 });
 ipcMain.on('bind:cancel', () => { binding = false; });
 // Pane's own update sheet in the settings window (see updater.js).

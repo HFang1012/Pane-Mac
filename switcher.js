@@ -92,10 +92,13 @@ const SMOOTH_EASE = getComputedStyle(document.documentElement).getPropertyValue(
 
 // ---------- one window size for every page ----------
 // The window is as tall as the tallest page (and never shorter than the "Show me how" sheet needs),
-// so switching tools never resizes it. It only grows, if a page's content grows past it.
+// so switching tools never resizes it. It grows right away when a page's content grows, and shrinks
+// back (a moment later, once things settle) when content goes away, like the Accessibility banner
+// folding up after access is granted.
 const DEMO_ROOM = 580;
 let windowH = 0;
 let fitFrame = 0;
+let shrinkTimer = 0;
 function naturalHeight(p) {
   // Measure every page as if it were showing, without painting the hidden ones.
   const hidden = p.hidden;
@@ -106,13 +109,25 @@ function naturalHeight(p) {
   p.hidden = hidden;
   return h;
 }
+function tallest() { return Math.max(DEMO_ROOM, ...Object.values(PAGES).map(naturalHeight)); }
 function fit() {
   cancelAnimationFrame(fitFrame);
   fitFrame = requestAnimationFrame(() => {
-    const h = Math.max(DEMO_ROOM, ...Object.values(PAGES).map(naturalHeight));
-    if (h <= windowH) return;
-    windowH = h;
-    scrawl.send('window:fit', h, false);
+    const h = tallest();
+    if (h > windowH) {
+      clearTimeout(shrinkTimer);
+      windowH = h;
+      scrawl.send('window:fit', h, false);
+    } else if (h < windowH) {
+      // Wait out a collapse animation, then shrink once, smoothly.
+      clearTimeout(shrinkTimer);
+      shrinkTimer = setTimeout(() => {
+        const now = tallest();
+        if (now >= windowH) return;
+        windowH = now;
+        scrawl.send('window:fit', now, true);
+      }, 450);
+    }
   });
 }
 const ro = new ResizeObserver(() => fit());

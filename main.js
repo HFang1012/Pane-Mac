@@ -1626,12 +1626,15 @@ function openEditor(file, from = null) {
     // No macOS title bar or traffic lights: the editor draws its own close and hide buttons in its bar.
     // Still resizable, rounded and shadowed like any window; ⌘W and ⌘M work from the Window menu.
     frame: false, backgroundColor: '#E4E5F3', show: false,
-    fullscreenable: true, title: path.basename(file),
+    fullscreenable: false, title: path.basename(file),
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
   w.filePath = file;
   editors.add(w);
-  // Open on the Space you're looking at (even over a full-screen app), then stay there like any window.
+  // A pop-up over whatever you're in, even a full-screen app: it floats above other apps' windows and stays on
+  // the Space you're looking at. (Turning that off later would make macOS carry it, and you, off a full-screen
+  // app to a desktop Space.)
+  w.setAlwaysOnTop(true, 'floating');
   w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
   w.loadFile(path.join(__dirname, 'edit.html'));
   // Opened from a file on screen: a stand-in grows out of it first, and the window appears where it lands.
@@ -1642,7 +1645,6 @@ function openEditor(file, from = null) {
     if (ghost) w.setOpacity(0);
     w.show(); w.focus(); app.focus({ steal: true });
     if (ghost) fadeWindow(w, 0, 1, 110, () => { if (!ghost.isDestroyed()) ghost.destroy(); });
-    setTimeout(() => { if (!w.isDestroyed()) w.setVisibleOnAllWorkspaces(false, { skipTransformProcessType: true }); }, 600);
   };
   w.once('ready-to-show', () => { ready = true; reveal(); });
   if (ghost) {

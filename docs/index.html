@@ -715,6 +715,103 @@
     .item img, .item svg.folder { width: 64px; height: 64px; }
     .item { font-size: 12px; }
   }
+  /* ---------- hucklberi's card: hover the byline name ---------- */
+  .byline { position: relative; z-index: 20; } /* above .quick, whose pop animation makes its own layer */
+  .who { display: inline-block; } /* the card centers on the whole byline (the <p>), so it stays on screen on phones */
+  .who-name {
+    font-weight: 800; color: var(--ink); text-decoration: underline 2px var(--accent); text-underline-offset: 4px;
+    transition: color 160ms ease, text-decoration-color 160ms ease;
+  }
+  .who.open .who-name, .who-name:hover { color: var(--accent-ink); text-decoration-color: var(--accent-lip); }
+  .who-card {
+    position: absolute; left: 50%; top: calc(100% + 16px); translate: -50% 0;
+    display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center;
+    width: max-content; max-width: calc(100vw - 32px); padding: 16px 20px 18px 16px;
+    --blue: #7C8FE0; --blue-lip: #5A6CC4; --blue-soft: #E3E8FC; --blue-ink: #3D4FAE; --blue-paper: #F5F7FF; --blue-edge: #D3DAF6;
+    --yellow: #FFD45C; --yellow-lip: #E9A93A; --yellow-soft: #FFF0C4;
+    background: var(--blue-paper); border-radius: 28px; text-align: left; letter-spacing: normal; color: var(--ink);
+    box-shadow: 0 0 0 2px var(--blue-edge), 0 7px 0 2px var(--blue-edge), 0 22px 44px rgba(61, 79, 174, 0.2);
+    transform-origin: 50% -12px; opacity: 0; visibility: hidden; scale: 0.5; rotate: -5deg;
+    transition: opacity 150ms ease, scale 220ms var(--smooth), rotate 220ms var(--smooth), visibility 0s linear 220ms;
+  }
+  .who.open .who-card {
+    opacity: 1; visibility: visible; scale: 1; rotate: 0deg;
+    transition: opacity 140ms ease, scale 620ms var(--bouncy), rotate 620ms var(--bouncy), visibility 0s;
+  }
+  .who-card::before { content: ""; position: absolute; left: 0; right: 0; top: -18px; height: 18px; } /* bridge so the mouse can cross the gap */
+  .who-card::after { content: ""; position: absolute; left: calc(50% + 11px); top: -7px; width: 18px; height: 18px; border-radius: 5px; background: var(--blue-paper); box-shadow: -2px -2px 0 var(--blue-edge); transform: translateX(-50%) rotate(45deg); }
+
+  .who-pic {
+    position: relative; width: 84px; height: 84px; padding: 4px; margin: 4px 4px 10px; border-radius: 28px; background: var(--win);
+    box-shadow: 0 0 0 3px var(--yellow), 0 6px 0 3px var(--yellow-lip);
+    opacity: 0; scale: 0.4; rotate: -16deg; transition: opacity 120ms ease, scale 200ms var(--smooth), rotate 200ms var(--smooth);
+  }
+  .who-pic img { display: block; width: 100%; height: 100%; border-radius: 24px; object-fit: cover; }
+  .who-pic::after { content: ""; position: absolute; left: 12px; top: 10px; width: 18px; height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.7); rotate: -32deg; }
+  .who.open .who-pic { opacity: 1; scale: 1; rotate: -5deg; transition: opacity 160ms ease 80ms, scale 700ms var(--bouncy) 80ms, rotate 700ms var(--bouncy) 80ms; }
+  .who.woke .who-pic { animation: hop 560ms var(--bouncy); }
+  @keyframes hop { 30% { translate: 0 -8px; rotate: 4deg; } }
+
+  .who-info > * { opacity: 0; translate: 0 8px; transition: opacity 120ms ease, translate 160ms ease; }
+  .who.open .who-info > * { opacity: 1; translate: 0 0; transition: opacity 220ms ease var(--w), translate 520ms var(--bouncy) var(--w); }
+  .who-title { display: block; color: var(--blue-ink); font-size: 22px; font-weight: 800; line-height: 1.15; letter-spacing: -0.01em; padding-right: 48px; margin-bottom: 4px; --w: 120ms; }
+  .who-row { display: grid; grid-template-columns: 80px auto; align-items: center; font-size: 14px; font-weight: 700; margin-top: 6px; }
+  .who-row:nth-child(2) { --w: 170ms; }
+  .who-row:nth-child(3) { --w: 220ms; }
+  .who-k { justify-self: start; font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--blue-ink); background: var(--blue-soft); padding: 1px 7px; border-radius: 999px; }
+  .who-v { justify-self: start; font-weight: 700; text-decoration: underline 2px transparent; text-underline-offset: 3px; transition: text-decoration-color 140ms ease, color 140ms ease; }
+  .who-v:hover { text-decoration-color: var(--yellow); }
+  .who-info { min-width: 0; }
+  .who-copy { cursor: copy; }
+  @media (max-width: 420px) {
+    .who-card { gap: 10px; padding: 14px 14px 16px 12px; }
+    .who-pic { width: 66px; height: 66px; border-radius: 22px; }
+    .who-pic img { border-radius: 18px; }
+    .who-title { font-size: 19px; }
+    .who-row { grid-template-columns: 1fr; gap: 2px; font-size: 13.5px; margin-top: 7px; }
+    .who-v { overflow-wrap: anywhere; }
+  }
+  .who-copy.done { color: var(--yellow-lip); }
+
+  /* The napper: z's drift up while it sleeps; a click wakes it into a star. */
+  .nap {
+    position: absolute; top: 12px; right: 12px; width: 42px; height: 42px; border-radius: 15px;
+    background: var(--blue-soft); box-shadow: 0 4px 0 color-mix(in srgb, var(--blue-soft) 50%, var(--blue)); margin-bottom: 4px;
+    transition: background 300ms ease, box-shadow 300ms ease, translate 200ms var(--bouncy);
+  }
+  .nap:hover { translate: 0 -1px; }
+  .nap:active { translate: 0 3px; box-shadow: 0 1px 0 color-mix(in srgb, var(--blue-soft) 50%, var(--blue)); }
+  .nap .z { position: absolute; left: 11px; bottom: 9px; font-size: 15px; font-weight: 800; line-height: 1; color: var(--blue-ink); opacity: 0; pointer-events: none; animation: snooze 2.4s ease-in-out infinite; }
+  .nap .z2 { animation-delay: 0.8s; }
+  .nap .z3 { animation-delay: 1.6s; }
+  @keyframes snooze {
+    0% { opacity: 0; transform: translate(0, 3px) scale(0.55) rotate(6deg); }
+    25% { opacity: 1; }
+    75% { opacity: 1; }
+    100% { opacity: 0; transform: translate(13px, -17px) scale(1.1) rotate(-12deg); }
+  }
+  .nap .star { position: absolute; left: 3px; top: 3px; width: 36px; height: 36px; overflow: visible; pointer-events: none; scale: 0; rotate: -150deg; transition: scale 240ms var(--smooth), rotate 240ms var(--smooth); }
+  .nap .spark { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: var(--blue); opacity: 0; pointer-events: none; }
+  .nap .spark:nth-of-type(even) { background: var(--yellow); }
+  .nap.awake { background: var(--yellow-soft); box-shadow: 0 4px 0 #EBCB7A; }
+  .nap.awake:active { box-shadow: 0 1px 0 #EBCB7A; }
+  .nap.awake .z { animation: none; opacity: 0; }
+  .nap.awake .star { scale: 1; rotate: 0deg; transition: scale 640ms var(--bouncy), rotate 640ms var(--bouncy); animation: twinkle 2.8s ease-in-out 700ms infinite; }
+  @keyframes twinkle { 50% { transform: rotate(12deg) scale(1.07); } }
+  .nap.awake .spark { animation: spark 620ms var(--smooth) both; }
+  @keyframes spark { from { opacity: 1; transform: rotate(var(--a)) translateY(0) scale(1); } to { opacity: 0; transform: rotate(var(--a)) translateY(-30px) scale(0.3); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .who-card, .who.open .who-card, .who-pic, .who.open .who-pic, .who-info > *, .who.open .who-info > * { scale: 1; rotate: 0deg; translate: none; transition-property: opacity, visibility; }
+    .who-card, .who.open .who-card { translate: -50% 0; }
+    .who.woke .who-pic, .nap.awake .star, .nap.awake .spark { animation: none; }
+    .nap .z { animation: none; opacity: 1; }
+    .nap .z1 { transform: scale(0.65); }
+    .nap .z2 { transform: translate(6px, -7px) scale(0.8); }
+    .nap .z3 { transform: translate(13px, -15px); }
+    .nap .star { transition: none; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .pop, .rise { animation: none; }
     .twirl .heads { opacity: 1; animation: none !important; }
@@ -739,7 +836,23 @@
   <section class="hero">
     <img class="icon pop" src="icon.png" alt="" width="128" height="128">
     <h1 class="rise" style="--d:120ms">Pane</h1>
-    <p class="byline rise" style="--d:160ms">by hucklberi</p>
+    <p class="byline rise" style="--d:160ms">by <span class="who" id="who"><button class="who-name" type="button" aria-expanded="false" aria-controls="who-card">hucklberi</button><span class="who-card" id="who-card" role="group" aria-label="About hucklberi">
+      <span class="who-pic"><img src="hucklberi.webp" alt="hucklberi’s profile picture" width="84" height="84"></span>
+      <span class="who-info">
+        <strong class="who-title">hucklberi</strong>
+        <span class="who-row"><span class="who-k">Discord</span><button class="who-v who-copy" type="button" data-copy="basicallyahucklberi" title="Copy username">basicallyahucklberi</button></span>
+        <span class="who-row"><span class="who-k">Email</span><a class="who-v" href="mailto:hfanggamedev@gmail.com">hfanggamedev@gmail.com</a></span>
+      </span>
+      <button class="nap" type="button" aria-label="Wake it up" aria-pressed="false">
+        <span class="z z1" aria-hidden="true">z</span><span class="z z2" aria-hidden="true">z</span><span class="z z3" aria-hidden="true">z</span>
+        <svg class="star" viewBox="0 0 40 40" aria-hidden="true">
+          <path d="M20 5 L24.1 14.3 L34.3 15.4 L26.7 22.2 L28.8 32.1 L20 27 L11.2 32.1 L13.3 22.2 L5.7 15.4 L15.9 14.3 Z" fill="#FFD45C" stroke="#E9A93A" stroke-width="3" stroke-linejoin="round"/>
+          <circle cx="17.2" cy="19.6" r="1.4" fill="#2B2733"/><circle cx="22.8" cy="19.6" r="1.4" fill="#2B2733"/>
+          <ellipse cx="14.6" cy="22.6" rx="1.7" ry="1.1" fill="#F49CB0"/><ellipse cx="25.4" cy="22.6" rx="1.7" ry="1.1" fill="#F49CB0"/>
+        </svg>
+        <span class="spark" style="--a:0deg"></span><span class="spark" style="--a:60deg"></span><span class="spark" style="--a:120deg"></span><span class="spark" style="--a:180deg"></span><span class="spark" style="--a:240deg"></span><span class="spark" style="--a:300deg"></span>
+      </button>
+    </span></span></p>
     <p class="lede rise" style="--d:200ms">Five small tools for your Mac, each a shortcut away. Change any shortcut to keys you like.</p>
 
     <div class="quick pop" style="--d:300ms">
@@ -1023,6 +1136,45 @@
 <script src="spin.js"></script>
 <script>
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // hucklberi's card: a mouse opens it on hover; touch and keyboard open it with a tap or Enter.
+  (() => {
+    const who = document.getElementById('who');
+    const name = who.querySelector('.who-name');
+    const nap = who.querySelector('.nap');
+    const copy = who.querySelector('.who-copy');
+    let timer = 0, pointer = 'mouse';
+    const open = () => { clearTimeout(timer); who.classList.add('open'); name.setAttribute('aria-expanded', 'true'); };
+    const close = (wait = 0) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => { who.classList.remove('open'); name.setAttribute('aria-expanded', 'false'); }, wait);
+    };
+    who.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') open(); });
+    who.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') close(240); });
+    name.addEventListener('pointerdown', e => { pointer = e.pointerType; });
+    name.addEventListener('click', () => {
+      if (!who.classList.contains('open')) open();
+      else if (pointer !== 'mouse') close();  // a mouse already opened it by hovering, so a click shouldn't shut it
+      pointer = '';
+    });
+    who.addEventListener('focusout', e => { if (!who.contains(e.relatedTarget) && !who.matches(':hover')) close(); });
+    document.addEventListener('pointerdown', e => { if (!who.contains(e.target)) close(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && who.classList.contains('open')) { close(); name.focus(); } });
+
+    nap.addEventListener('click', () => {
+      const awake = nap.classList.toggle('awake');
+      nap.setAttribute('aria-pressed', String(awake));
+      nap.setAttribute('aria-label', awake ? 'Let it sleep' : 'Wake it up');
+      who.classList.toggle('woke', awake);
+    });
+
+    copy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(copy.dataset.copy); } catch { return; }
+      copy.textContent = 'copied!';
+      copy.classList.add('done');
+      setTimeout(() => { copy.textContent = copy.dataset.copy; copy.classList.remove('done'); }, 1200);
+    });
+  })();
+
   const isMac = /Macintosh|Mac OS X/.test(navigator.userAgent);
   const fine = document.getElementById('fine');
   const button = document.getElementById('download');

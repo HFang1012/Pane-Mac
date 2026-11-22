@@ -41,7 +41,7 @@ let tweakStarted = false;
 function updateTweak() {
   if (!S?.tweak) return;
   if (!tweakStarted) { tweakStarted = true; tweakShortcut.render(S.tweak.keys.symbols, { pop: true }); }
-  document.getElementById('tweakLede').textContent = `${S.tweak.mode === 'shortcut' ? 'Press the Tweak keys' : 'Double-tap the Tweak key'} and point at a file on your desktop or in Finder. Click it to crop, trim, cut or rewrite it, change its type, and save it back.`;
+  document.getElementById('tweakLede').textContent = `${S.tweak.mode === 'shortcut' ? 'Press the Tweak keys' : 'Double-tap the Tweak key'} and point at a file on your desktop, in Finder, or in an app’s Open dialog. Click it to crop, trim, cut or rewrite it, change its type, and save it back.`;
   document.getElementById('tweakCopy').setAttribute('aria-checked', !!S.tweak.copy);
   document.getElementById('tweakTrash').setAttribute('aria-checked', S.tweak.trash !== false);
   updateTweakStatus();

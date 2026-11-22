@@ -69,7 +69,7 @@ const DEFAULTS = {
     enabled: true,
   },
   tweak: {
-    // Double-tap right ⌥ and the pointer picks out files on the desktop and in Finder. Click one to edit it.
+    // Double-tap right ⌥ and the pointer picks out files on the desktop, in Finder and in Open/Save dialogs. Click one to edit it.
     // Or press a shortcut instead.
     mode: 'double', // 'double' | 'shortcut'
     key: { codes: [UiohookKey.AltRight], symbol: '⌥', name: 'Right Option', side: 'right' },
@@ -1449,7 +1449,7 @@ function setJotEnabled(on) {
 
 // ---------- Tweak: point at a file, click it, edit it ----------
 // Double-tap the Tweak key (right ⌥ to start) and a layer covers every screen. As the pointer moves, the file
-// under it on the desktop or in a Finder window lights up, with its name and type beside it. Click one and
+// under it on the desktop, in a Finder window or in an app's Open/Save dialog lights up, with its name and type beside it. Click one and
 // it opens in Tweak's editor. Esc, a right-click, a click on nothing or the key twice again puts it away.
 // The file under the pointer comes from native/pane-files, which reads Finder through Accessibility.
 const TweakFiles = require('./tweak-files.js');

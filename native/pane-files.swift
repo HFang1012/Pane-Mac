@@ -1,8 +1,9 @@
 // Tweak's native helper. Pane runs it for the two things Electron can't do on its own:
 //
 //   pane-files hover <panePid>     Reads "x y" lines on stdin. For each, answers with one JSON line: the file
-//                                  under that screen point on the desktop or in a Finder window (its path and
-//                                  its frame on screen), or {} for none. Uses Accessibility, which Pane has.
+//                                  under that screen point on the desktop, in a Finder window or in any app's
+//                                  Open/Save dialog (its path and its frame on screen), or {} for none. Uses
+//                                  Accessibility, which Pane has.
 //   pane-files media '<json>'      Trims, crops, rotates, flips, mutes or quiets a video or a song, or pulls the
 //                                  sound out of a video, with AVFoundation. Prints {"progress":0.4} lines while
 //                                  it works and {"ok":true} or {"error":"…"} at the end.
@@ -43,8 +44,9 @@ func filePath(_ e: AXUIElement) -> String? {
   let path = u.path
   return path.isEmpty || path == "/" ? nil : path
 }
+// Column views (in Finder and in Open/Save dialogs) keep each column's list under AXContents, not AXChildren.
 func children(_ e: AXUIElement) -> [AXUIElement] {
-  for name in ["AXVisibleRows", kAXVisibleChildrenAttribute, kAXChildrenAttribute] {
+  for name in ["AXVisibleRows", kAXVisibleChildrenAttribute, kAXChildrenAttribute, "AXContents"] {
     if let kids = attr(e, name) as? [AXUIElement], !kids.isEmpty { return kids }
   }
   return []
@@ -72,11 +74,20 @@ func descend(_ e: AXUIElement, _ pt: CGPoint, _ depth: Int) -> Hit? {
     if r == "AXRow" || r == "AXCell" {
       if let p = pathInside(k, depth: 4), let f = f { return Hit(path: p, frame: f) }
     }
+    // A column view's item: a small group of the file's icon and its name (which carries the URL).
+    if r == "AXGroup", let f = f, f.height < 120 {
+      if let p = (attr(k, kAXChildrenAttribute) as? [AXUIElement])?.lazy.compactMap({ filePath($0) }).first { return Hit(path: p, frame: f) }
+    }
     if let hit = descend(k, pt, depth + 1) { return hit }
     if let p = filePath(k), let f = f { return Hit(path: p, frame: f) }
   }
   return nil
 }
+
+// Sandboxed apps' Open/Save dialogs are drawn by this service, in a window it owns, on the app's behalf.
+let panelService = "com.apple.appkit.xpc.openAndSavePanelService"
+// Open/Save dialogs that aren't sheets float at the modal-panel level.
+let modalPanelLayer = Int(CGWindowLevelForKey(.modalPanelWindow))
 
 // The window in front at this point that isn't Pane's.
 func windowAt(_ pt: CGPoint, skip: Set<pid_t>) -> (pid: pid_t, layer: Int, bounds: CGRect)? {
@@ -88,9 +99,9 @@ func windowAt(_ pt: CGPoint, skip: Set<pid_t>) -> (pid: pid_t, layer: Int, bound
           b.contains(pt) else { continue }
     let layer = (w[kCGWindowLayer as String] as? Int) ?? 0
     // Floating windows are looked through: the menu bar, the Dock (whose window spans the whole screen),
-    // see-through overlays like the screenshot tool's, other apps' panels. Files live in normal windows
-    // and on the desktop.
-    if layer > 0 { continue }
+    // see-through overlays like the screenshot tool's, other apps' panels. Files live in normal windows,
+    // on the desktop, and in Open/Save dialogs (which float a little).
+    if layer > 0 && layer != modalPanelLayer && layer != modalPanelLayer + 1 { continue }
     return (pid, layer, b)
   }
   return nil
@@ -98,6 +109,42 @@ func windowAt(_ pt: CGPoint, skip: Set<pid_t>) -> (pid: pid_t, layer: Int, bound
 
 func near(_ a: CGRect, _ b: CGRect) -> Bool {
   abs(a.minX - b.minX) < 3 && abs(a.minY - b.minY) < 3 && abs(a.width - b.width) < 3 && abs(a.height - b.height) < 3
+}
+
+// An app's windows and the sheets hanging off them (an Open/Save sheet is a child of its window). Some apps
+// (Discord, and others built on Electron) list no windows at all while a sheet is up, but their focused
+// window is the sheet itself.
+func windowsAndSheets(_ app: AXUIElement) -> [AXUIElement] {
+  var out: [AXUIElement] = []
+  var tops = (attr(app, kAXWindowsAttribute) as? [AXUIElement]) ?? []
+  if let f = attr(app, kAXFocusedWindowAttribute), CFGetTypeID(f) == AXUIElementGetTypeID() { tops.append(f as! AXUIElement) }
+  for w in tops {
+    out.append(w)
+    for k in (attr(w, kAXChildrenAttribute) as? [AXUIElement]) ?? [] where role(k) == "AXSheet" { out.append(k) }
+  }
+  return out
+}
+func isFileDialog(_ e: AXUIElement) -> Bool {
+  let sub = (attr(e, kAXSubroleAttribute) as? String) ?? ""
+  return role(e) == "AXSheet" || sub == "AXDialog" || sub == "AXSystemDialog"
+}
+
+// The Accessibility element for an on-screen window in some app other than Finder: only an Open/Save dialog
+// (a sheet or a dialog) counts, so Pane never walks a whole browser page or document looking for files.
+func dialogElement(pid: pid_t, bounds: CGRect) -> AXUIElement? {
+  let owner = NSRunningApplication(processIdentifier: pid)
+  let isService = owner?.bundleIdentifier == panelService
+  var apps: [pid_t] = [pid]
+  // The service's window holds a view of the dialog that's read through the app it's for, which is in front.
+  if isService, let front = NSWorkspace.shared.frontmostApplication?.processIdentifier, front != pid { apps.insert(front, at: 0) }
+  for p in apps {
+    let app = AXUIElementCreateApplication(p)
+    for w in windowsAndSheets(app) {
+      guard let f = frameOf(w), near(f, bounds) else { continue }
+      if isService || isFileDialog(w) { return w }
+    }
+  }
+  return nil
 }
 
 func hover(panePid: pid_t) {
@@ -109,20 +156,23 @@ func hover(panePid: pid_t) {
     let pt = CGPoint(x: parts[0], y: parts[1])
     // PANE_HOVER_DESKTOP looks only at the desktop's icons, whatever is in front (for testing).
     let forceDesktop = ProcessInfo.processInfo.environment["PANE_HOVER_DESKTOP"] != nil
-    guard let finder = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first,
-          let win = forceDesktop ? (finder.processIdentifier, -1, CGRect.null) : windowAt(pt, skip: skip),
-          win.pid == finder.processIdentifier else { emit([:]); continue }
-    let app = AXUIElementCreateApplication(finder.processIdentifier)
+    let finder = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first
+    guard let win = forceDesktop ? (finder?.processIdentifier ?? 0, -1, CGRect.null) : windowAt(pt, skip: skip) else { emit([:]); continue }
     var hit: Hit?
-    if win.layer < 0 {
-      // The desktop: Finder's scroll area of icons (not one of its AXWindows).
-      for top in (attr(app, kAXChildrenAttribute) as? [AXUIElement]) ?? [] where role(top) == "AXScrollArea" {
-        hit = descend(top, pt, 0)
-        if hit != nil { break }
+    if let finder = finder, win.pid == finder.processIdentifier {
+      let app = AXUIElementCreateApplication(finder.processIdentifier)
+      if win.layer < 0 {
+        // The desktop: Finder's scroll area of icons (not one of its AXWindows).
+        for top in (attr(app, kAXChildrenAttribute) as? [AXUIElement]) ?? [] where role(top) == "AXScrollArea" {
+          hit = descend(top, pt, 0)
+          if hit != nil { break }
+        }
+      } else if let w = windowsAndSheets(app).first(where: { frameOf($0).map { near($0, win.bounds) } ?? false }) {
+        hit = descend(w, pt, 0)
       }
-    } else {
-      let wins = (attr(app, kAXWindowsAttribute) as? [AXUIElement]) ?? []
-      if let w = wins.first(where: { frameOf($0).map { near($0, win.bounds) } ?? false }) { hit = descend(w, pt, 0) }
+    } else if win.layer >= 0, let d = dialogElement(pid: win.pid, bounds: win.bounds) {
+      // Another app asking for a file: its Open/Save dialog lists files much like a Finder window.
+      hit = descend(d, pt, 0)
     }
     if let h = hit {
       var isDir: ObjCBool = false

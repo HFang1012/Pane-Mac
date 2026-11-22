@@ -14,10 +14,11 @@ async function save(patch) {
 // (Away's keys are a shortcut, chosen in away-settings.js; its well has no data-which.)
 const wells = [...document.querySelectorAll('.keywell[data-which]')];
 const wellFor = (which) => wells.find((w) => w.dataset.which === which);
-const KEY_NAMES = { hotkey: 'Wheel key', drawKey: 'Draw key', spinKey: 'Spin key' };
+const KEY_NAMES = { hotkey: 'Wheel key', drawKey: 'Draw key', spinKey: 'Spin key', jotKey: 'Jot key' };
 const DEFAULT_CAPTION = 'Click a key to change it. Hold several to use them together.';
+const JOT_CAPTION = 'Click the key to change it. Tap it twice, quickly.';
 let listening = null; // which key is being chosen
-const keyOf = (which) => (which === 'spinKey' ? S.spin.key : S[which]);
+const keyOf = (which) => (which === 'spinKey' ? S.spin.key : which === 'jotKey' ? S.jot.key : S[which]);
 
 // One keycap per key in the combo. A key that counts on one side only (Spin's right ⌘) says which side.
 function keycaps(keys, { pop = false, held = false } = {}) {
@@ -44,7 +45,7 @@ scrawl.on('bind:progress', ({ which, keys }) => {
   well.querySelector('.keys').innerHTML = keycaps(keys, { pop: true, held: true });
   setCaption(keys.length > 1 ? 'Let go to use these keys together.' : 'Add more keys, or let go to use this one.', false, which);
 });
-const captionFor = (which) => (which === 'spinKey' ? $('spinCaption') : $('keycaption'));
+const captionFor = (which) => (which === 'spinKey' ? $('spinCaption') : which === 'jotKey' ? $('jotCaption') : $('keycaption'));
 function setCaption(text, warn = false, which = listening) {
   const c = captionFor(which);
   c.textContent = text;
@@ -55,6 +56,7 @@ for (const well of wells) {
     well.blur(); // the next key press shouldn't paint a focus ring on the button
     const which = well.dataset.which;
     if (typeof cancelAwayListening === 'function') cancelAwayListening();
+    if (typeof cancelJotListening === 'function') cancelJotListening();
     if (listening) {
       const was = listening;
       stopListening();
@@ -72,7 +74,7 @@ for (const well of wells) {
     listening = which;
     well.classList.add('listening');
     well.querySelector('.keys').innerHTML = '<span class="prompt pop">Hold keys</span>';
-    setCaption('Hold one key, or a few together. Esc cancels.', false, which);
+    setCaption(which === 'jotKey' ? 'Press ⌃, ⌥, ⇧ or ⌘. Esc cancels.' : 'Hold one key, or a few together. Esc cancels.', false, which);
   });
 }
 function stopListening(popWhich = null) {
@@ -81,6 +83,7 @@ function stopListening(popWhich = null) {
   for (const which of Object.keys(KEY_NAMES)) renderKey(which, popWhich === which);
   setCaption(DEFAULT_CAPTION, false, 'hotkey');
   setCaption(DEFAULT_CAPTION, false, 'spinKey');
+  if (S?.jot?.mode !== 'shortcut') setCaption(JOT_CAPTION, false, 'jotKey');
 }
 scrawl.on('bind:done', ({ settings, which, error }) => {
   S = settings;
@@ -414,6 +417,7 @@ function updateStatus() {
       : trusted ? 'Starting up…' : 'Waiting for Accessibility access.');
   if (typeof updateAwayStatus === 'function') updateAwayStatus();
   if (typeof updateSpinStatus === 'function') updateSpinStatus();
+  if (typeof updateJotStatus === 'function') updateJotStatus();
 }
 async function pollStatus() {
   status = await scrawl.invoke('perm:check');
@@ -434,6 +438,7 @@ function update() {
   document.querySelectorAll('.switch.login').forEach((b) => b.setAttribute('aria-checked', S.openAtLogin));
   if (typeof updateAway === 'function') updateAway();
   if (typeof updateSpin === 'function') updateSpin();
+  if (typeof updateJot === 'function') updateJot();
 }
 
 // Wait for every page's script (away-settings.js, spin-settings.js) before the first render: the
@@ -442,7 +447,7 @@ const domReady = new Promise((r) => (document.readyState === 'loading' ? addEven
 domReady.then(() => scrawl.invoke('settings:get')).then(({ settings, version }) => {
   S = settings;
   document.querySelectorAll('.version').forEach((v) => { v.textContent = version ? `Version ${version}` : ''; });
-  ['hotkey', 'drawKey', 'spinKey'].forEach((which, i) => {
+  ['hotkey', 'drawKey', 'spinKey', 'jotKey'].forEach((which, i) => {
     renderKey(which, true);
     wellFor(which).querySelector('.keycap').style.setProperty('--d', `${260 + i * 80}ms`);
   });

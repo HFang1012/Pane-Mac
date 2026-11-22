@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, screen, systemPreferences, shell, globalShortcut, desktopCapturer, clipboard } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, screen, systemPreferences, shell, globalShortcut, desktopCapturer, clipboard, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { uIOhook, UiohookKey } = require('uiohook-napi');
@@ -49,7 +49,18 @@ const DEFAULTS = {
     wheel: [{ id: 'play', on: true }, { id: 'next', on: true }, { id: 'volume', on: true }, { id: 'prev', on: true }, { id: 'lists', on: true }],
     enabled: true,
   },
+  jot: {
+    // Double-tap a key (left ⌃ to start) or press a shortcut, and a note opens at the pointer.
+    mode: 'double', // 'double' | 'shortcut'
+    key: { codes: [UiohookKey.Ctrl], symbol: '⌃', name: 'Left Control', side: 'left' },
+    keys: { accelerator: 'Control+Command+J', symbols: ['⌃', '⌘', 'J'], name: 'Control Command J' },
+    snooze: 10, // minutes
+    last: 15, // the timer the last note was sent with: the next one starts there
+    sound: true,
+    enabled: true,
+  },
 };
+const JOT_SNOOZES = [5, 10, 15, 30, 60];
 const SPIN_COUNTS = [3, 4, 5, 6];
 const WHEEL_SIZES = [60, 76, 96]; // small, medium, large (outer radius, px)
 // Every slice once, in the saved order (new ones go on the end), and at least one on.
@@ -501,13 +512,17 @@ function asCombo(k) {
   const keys = k?.keys?.length ? k.keys : [{ codes: k.codes, symbol: k.symbol, name: k.name, ...(k.side ? { side: k.side } : {}) }];
   return combo(keys.map((key) => (key.codes.length > 1 && MOD_CODES.has(key.codes[0]) ? keyInfo(key.codes[0]) : key)));
 }
-const KEY_LABEL = { hotkey: 'wheel key', drawKey: 'draw key', spinKey: 'Spin key' };
+const KEY_LABEL = { hotkey: 'wheel key', drawKey: 'draw key', spinKey: 'Spin key', jotKey: 'Jot key' };
 // Every held key Pane listens for, by name. Spin's lives inside its own settings.
-const keyOf = (which) => (which === 'spinKey' ? settings.spin.key : settings[which]);
+const keyOf = (which) => (which === 'spinKey' ? settings.spin.key : which === 'jotKey' ? settings.jot.key : settings[which]);
 function setKey(which, info) {
   if (which === 'spinKey') settings = { ...settings, spin: { ...settings.spin, key: info } };
+  else if (which === 'jotKey') settings = { ...settings, jot: { ...settings.jot, key: info } };
   else settings = { ...settings, [which]: info };
 }
+// Jot's double-tap and Scrawl's draw key may be the same key (left ⌃ for both, to start): the draw key
+// only draws with a tool in hand, and Jot never opens then. Every other pair must differ.
+const mayShare = (a, b) => [a, b].sort().join() === 'drawKey,jotKey';
 
 // What's held right now. Modifiers follow the event's own flags, which macOS keeps accurate. Other keys
 // repeat their key-down while held, so one not seen for a second counts as let go (macOS sometimes drops
@@ -557,8 +572,10 @@ function finishBind(cancel) {
   let error = null;
   if (!cancel && keys.length) {
     const next = combo(keys);
-    const other = Object.keys(KEY_LABEL).find((k) => k !== which && sameCombo(next, keyOf(k)));
+    const other = Object.keys(KEY_LABEL).find((k) => k !== which && !mayShare(k, which) && sameCombo(next, keyOf(k)));
     if (other) error = `${next.name} ${keys.length > 1 ? 'are' : 'is'} already your ${KEY_LABEL[other]}. Pick different keys.`;
+    // Double-tapping a letter would happen all the time while typing ("ee"), so Jot takes one modifier.
+    else if (which === 'jotKey' && (keys.length > 1 || !MOD_CODES.has(keys[0].codes[0]))) error = 'Double-tap works with one of ⌃, ⌥, ⇧ or ⌘. Pick just one.';
     else {
       setKey(which, next);
       writeJSON('settings.json', settings);
@@ -607,6 +624,7 @@ function penDownSoon() {
 uIOhook.on('keydown', (e) => {
   noteKey(e, true);
   if (binding) { bindKeyDown(e); return; }
+  jotTap(e, true);
   clearWaits(e, false);
   if (away || awayBinding) return; // the Away screen is up (or its keys are being chosen): Scrawl sits still
   if (spinKeyDown(e)) return; // Spin's key, or any key while Spin's wheel is up or about to open
@@ -641,6 +659,7 @@ uIOhook.on('keydown', (e) => {
 uIOhook.on('keyup', (e) => {
   noteKey(e, false);
   if (binding) { bindKeyUp(e); return; }
+  jotTap(e, false);
   clearWaits(e, true);
   if (inCombo(settings.hotkey, e.keycode)) hotkeyBlocked = false;
   if (inCombo(settings.spin.key, e.keycode)) { spinBlocked = false; spinKeyUp(); }
@@ -652,6 +671,7 @@ uIOhook.on('keyup', (e) => {
 });
 // Mouse button 1 is left, 2 is right. Right-click puts the tool down.
 uIOhook.on('mousedown', (e) => {
+  jotTapReset(); // ⌃-click is a click, not half a double-tap
   if (spin.open || spinTimer) { cancelSpin(); return; } // a click while the music wheel is up: leave it be
   if (away || awayBinding || !settings.enabled || !activeTool || menu.open) return;
   if (e.button === 1) penDown('mouse');
@@ -895,11 +915,19 @@ let away = null; // { since, preview, wins, closing, front }
 let awayBinding = false; // the settings window is listening for new Away keys
 let awayKeyOn = false; // the Away shortcut is registered
 
-function registerAwayKey() {
+// Away's shortcut, and Jot's when it opens from a shortcut rather than a double-tap. Both are set together,
+// because the only way to drop one is to drop them all. Off while either's keys are being chosen.
+function registerShortcuts() {
   globalShortcut.unregisterAll();
   awayKeyOn = false;
-  if (!settings.away.enabled || awayBinding) return;
-  try { awayKeyOn = globalShortcut.register(settings.away.keys.accelerator, toggleAway); } catch { awayKeyOn = false; }
+  jotKeyOn = false;
+  if (awayBinding || jotBinding) return;
+  if (settings.away.enabled) {
+    try { awayKeyOn = globalShortcut.register(settings.away.keys.accelerator, toggleAway); } catch { awayKeyOn = false; }
+  }
+  if (settings.jot.enabled && settings.jot.mode === 'shortcut') {
+    try { jotKeyOn = globalShortcut.register(settings.jot.keys.accelerator, () => { if (!jotBlocked()) openComposer(); }); } catch { jotKeyOn = false; }
+  }
 }
 function toggleAway() {
   if (away) hideAway();
@@ -1020,23 +1048,333 @@ ipcMain.on('away:dismiss', () => { if (away?.preview) hideAway(); });
 ipcMain.on('away:bind', (_e, on) => {
   awayBinding = !!on;
   if (on) { binding = false; if (menu.open) closeMenu(false); }
-  registerAwayKey(); // off while listening, so the current keys reach the settings window too
+  registerShortcuts(); // off while listening, so the current keys reach the settings window too
 });
 ipcMain.handle('away:keys', (_e, keys) => {
   awayBinding = false;
   const before = settings.away.keys;
   settings = { ...settings, away: { ...settings.away, keys } };
-  registerAwayKey();
+  registerShortcuts();
   let error = null;
   if (settings.away.enabled && !awayKeyOn) {
     error = `${keys.symbols.join('')} is taken by another app. Pick other keys.`;
     settings = { ...settings, away: { ...settings.away, keys: before } };
-    registerAwayKey();
+    registerShortcuts();
   }
   writeJSON('settings.json', settings);
   buildMenu();
   return { settings, error };
 });
+
+// ---------- Jot: a quick note that comes back when its time is up ----------
+// Double-tap the Jot key (or press its shortcut) and a note opens at the pointer. Write, maybe add a
+// screenshot or what you copied, pick a timer and send it off. When the time's up it comes back in the
+// top-left corner of the main screen, where you can snooze it or be done with it.
+// Never while Scrawl has a tool in hand, a wheel is up, Away is up or keys are being chosen.
+let notes = []; // { id, text, image (a file in userData/jot), made, due, snoozed, showing }
+let composer = null; // { win, front }
+let jotBinding = false; // the settings window is listening for Jot's shortcut
+let jotKeyOn = false; // Jot's shortcut is registered (shortcut mode only)
+const toasts = new Map(); // note id -> { win, h }
+const JOT_W = 380; // the note's window: its card plus room for the shadow
+const TOAST_W = 352;
+const jotDir = () => path.join(app.getPath('userData'), 'jot');
+const saveNotes = () => writeJSON('jot.json', notes.map(({ showing, ...n }) => n));
+
+function cleanJot(j) {
+  const out = { ...DEFAULTS.jot, ...j };
+  if (!['double', 'shortcut'].includes(out.mode)) out.mode = DEFAULTS.jot.mode;
+  if (!JOT_SNOOZES.includes(out.snooze)) out.snooze = DEFAULTS.jot.snooze;
+  out.last = Math.max(1, Math.min(1440, Math.round(Number(out.last)) || DEFAULTS.jot.last));
+  out.key = asCombo(out.key);
+  return out;
+}
+function jotBlocked() {
+  return !settings.jot.enabled || !!activeTool || !!pen || menu.open || spin.open || !!spinTimer || !!away ||
+    !!binding || awayBinding || jotBinding;
+}
+
+// ---------- double-tap ----------
+// Two quick taps of the key with nothing else pressed: each down and up within TAP_HOLD, the second
+// pressed within TAP_GAP of the first being let go. Any other key (⌃C), a click, or a long hold starts over.
+const TAP_HOLD = 280, TAP_GAP = 400;
+const tap = { downAt: 0, lastUp: 0 };
+function jotTapReset() { tap.downAt = 0; tap.lastUp = 0; }
+function jotTap(e, isDown) {
+  if (settings.jot.mode !== 'double' || !settings.jot.enabled) return;
+  const k = settings.jot.key;
+  const mine = inCombo(k, e.keycode);
+  if (isDown) {
+    if (!mine) { jotTapReset(); return; }
+    if (tap.downAt) return; // still held
+    if (othersHeld(k)) { jotTapReset(); return; }
+    tap.downAt = Date.now();
+    return;
+  }
+  if (!mine || !tap.downAt) return;
+  const now = Date.now(), began = tap.downAt, quick = now - began < TAP_HOLD;
+  tap.downAt = 0;
+  if (!quick) { tap.lastUp = 0; return; }
+  if (tap.lastUp && began - tap.lastUp < TAP_GAP) {
+    tap.lastUp = 0;
+    if (!jotBlocked()) openComposer();
+  } else tap.lastUp = now;
+}
+
+// ---------- the note you write ----------
+function jotPanel(opts) {
+  const w = new BrowserWindow({
+    frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false, resizable: false,
+    minimizable: false, maximizable: false, fullscreenable: false, skipTaskbar: true, alwaysOnTop: true,
+    type: 'panel', show: false, acceptFirstMouse: true,
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false },
+    ...opts,
+  });
+  w.setHiddenInMissionControl(true); // a background window, like Scrawl's layers (see createOverlays)
+  w.setAlwaysOnTop(true, OVERLAY_LEVEL, 1); // over Scrawl's layers, under Away's
+  w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+  return w;
+}
+
+function openComposer(at) {
+  if (composer) { // already writing one: bring it back
+    if (!composer.win.isDestroyed()) { composer.win.show(); composer.win.focus(); app.focus({ steal: true }); }
+    return;
+  }
+  const p = at || screen.getCursorScreenPoint();
+  const d = screen.getDisplayNearestPoint(p);
+  const wa = d.workArea, H = 360;
+  // The card's top-left corner lands just by the pointer (it grows out of there), kept on the screen.
+  const x = Math.round(Math.min(Math.max(p.x - 34, wa.x + 4), wa.x + wa.width - JOT_W - 4));
+  const y = Math.round(Math.min(Math.max(p.y - 26, wa.y + 4), wa.y + wa.height - H - 4));
+  const c = { win: null, front: null };
+  composer = c;
+  frontApp().then((id) => { if (id && id !== 'com.pane.app' && !id.startsWith('com.github.Electron')) c.front = id; });
+  // Like Away: a settings window on another Space would pull macOS over there when the note takes focus.
+  if (settingsWin?.isVisible() && !settingsWin.isFocused()) settingsWin.hide();
+  const w = jotPanel({ x, y, width: JOT_W, height: H });
+  c.win = w;
+  w.loadFile(path.join(__dirname, 'jot.html'), { query: { mode: 'compose' } });
+  w.once('ready-to-show', () => {
+    if (composer !== c || w.isDestroyed()) return;
+    w.show(); w.focus(); app.focus({ steal: true });
+  });
+  w.on('closed', () => { if (composer === c) composer = null; });
+}
+// Close the note and hand the keyboard back to the app you were in.
+function closeComposer() {
+  const c = composer;
+  if (!c) return;
+  composer = null;
+  const w = c.win;
+  const bye = () => { if (!w.isDestroyed()) w.destroy(); };
+  if (c.front) execFile('osascript', ['-e', `tell application id "${c.front.replace(/"/g, '')}" to activate`], () => setTimeout(bye, 40));
+  else bye();
+}
+const fromComposer = (e) => composer && !composer.win.isDestroyed() && e.sender === composer.win.webContents;
+
+ipcMain.handle('jot:init', () => ({ last: settings.jot.last }));
+ipcMain.on('jot:fit', (e, h) => {
+  if (!fromComposer(e) || !(h > 100 && h < 900)) return;
+  const w = composer.win, b = w.getBounds();
+  const wa = screen.getDisplayMatching(b).workArea;
+  const height = Math.ceil(h);
+  const y = Math.max(wa.y + 4, Math.min(b.y, wa.y + wa.height - height - 4)); // grow upward if it would leave the screen
+  w.setBounds({ x: b.x, y, width: JOT_W, height });
+});
+ipcMain.on('jot:cancel', (e) => { if (fromComposer(e)) closeComposer(); });
+ipcMain.handle('jot:send', (e, { text, minutes, image }) => {
+  if (!fromComposer(e)) return false;
+  const m = Math.max(1, Math.min(1440, Math.round(Number(minutes)) || 15));
+  const shot = typeof image === 'string' && path.dirname(image) === jotDir() && fs.existsSync(image) ? image : null;
+  const now = Date.now();
+  notes.push({ id: `${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`, text: String(text || '').slice(0, 1000), image: shot, made: now, due: now + m * 60000, minutes: m });
+  saveNotes();
+  if (settings.jot.last !== m) { settings = { ...settings, jot: { ...settings.jot, last: m } }; writeJSON('settings.json', settings); }
+  closeComposer();
+  jotChanged();
+  return true;
+});
+
+// A picture for the note, saved beside Pane's settings. The page gets a small copy to show.
+function keepImage(img) {
+  fs.mkdirSync(jotDir(), { recursive: true });
+  const file = path.join(jotDir(), `${Date.now().toString(36)}.png`);
+  fs.writeFileSync(file, img.toPNG());
+  return { path: file, url: thumb(img, 640) };
+}
+const thumb = (img, w) => (img.getSize().width > w ? img.resize({ width: w, quality: 'good' }) : img).toDataURL();
+
+// A screenshot with macOS's own tool: drag over part of the screen, or press Space and click a window.
+// The note steps aside while you choose, and comes back with the picture.
+ipcMain.handle('jot:shot', async (e) => {
+  if (!fromComposer(e)) return null;
+  const w = composer.win;
+  if (systemPreferences.getMediaAccessStatus('screen') === 'denied') {
+    shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+    return { denied: true };
+  }
+  fs.mkdirSync(jotDir(), { recursive: true });
+  const file = path.join(jotDir(), `${Date.now().toString(36)}.png`);
+  w.setOpacity(0);
+  w.hide();
+  await new Promise((r) => setTimeout(r, 120));
+  await new Promise((r) => execFile('screencapture', ['-i', '-x', '-o', file], () => r()));
+  if (w.isDestroyed()) return null;
+  w.show(); w.setOpacity(1); w.focus(); app.focus({ steal: true });
+  if (!fs.existsSync(file)) return null; // Esc: nothing taken
+  const img = nativeImage.createFromPath(file);
+  if (img.isEmpty()) return null;
+  return { image: { path: file, url: thumb(img, 640) } };
+});
+// A copied picture, written out by macOS itself (this Electron's clipboard only reads text): PNG if the
+// clipboard has it, else TIFF (what most apps copy), turned into a PNG.
+function clipboardImage() {
+  fs.mkdirSync(jotDir(), { recursive: true });
+  const base = path.join(jotDir(), `${Date.now().toString(36)}`);
+  const dump = (cls, file) => new Promise((resolve) => execFile('osascript', [
+    '-e', `set f to open for access (POSIX file "${file}") with write permission`,
+    '-e', 'set eof f to 0',
+    '-e', `try\nwrite (the clipboard as «class ${cls}») to f\non error\nclose access f\nerror "none"\nend try`,
+    '-e', 'close access f',
+  ], (err) => resolve(!err && fs.existsSync(file) && fs.statSync(file).size > 0)));
+  return (async () => {
+    for (const [cls, ext] of [['PNGf', 'png'], ['TIFF', 'tiff']]) {
+      const file = `${base}.${ext}`;
+      const ok = await dump(cls, file);
+      if (!ok) { fs.rm(file, { force: true }, () => {}); continue; }
+      const img = nativeImage.createFromPath(file);
+      fs.rm(file, { force: true }, () => {});
+      if (!img.isEmpty()) return img;
+    }
+    return null;
+  })();
+}
+// What you copied: a picture becomes the note's picture, text goes into the note.
+ipcMain.handle('jot:clip', async (e) => {
+  if (!fromComposer(e)) return null;
+  const img = await clipboardImage();
+  if (img) return { image: keepImage(img) };
+  const text = clipboard.readText().trim();
+  return text ? { text: text.slice(0, 1000) } : {};
+});
+
+// ---------- reminders ----------
+function checkNotes() {
+  const now = Date.now();
+  for (const n of notes) if (!n.showing && n.due <= now) showToast(n);
+}
+function showToast(n) {
+  n.showing = true;
+  const w = jotPanel({ width: TOAST_W, height: 200, focusable: false });
+  toasts.set(n.id, { win: w, h: 200 });
+  layoutToasts(false);
+  w.loadFile(path.join(__dirname, 'jot.html'), { query: { mode: 'toast', id: n.id } });
+  w.once('ready-to-show', () => { if (!w.isDestroyed()) { layoutToasts(false); w.showInactive(); } });
+  w.on('closed', () => { toasts.delete(n.id); layoutToasts(true); });
+  if (settings.jot.sound) execFile('afplay', ['-v', '0.6', '/System/Library/Sounds/Glass.aiff'], () => {});
+  jotChanged();
+}
+// Top left of the main screen, newest at the bottom of the stack. Closing one slides the rest up.
+function layoutToasts(animate) {
+  const wa = screen.getPrimaryDisplay().workArea;
+  let y = wa.y + 2;
+  for (const t of toasts.values()) {
+    if (t.win.isDestroyed()) continue;
+    const b = { x: wa.x + 2, y, width: TOAST_W, height: t.h };
+    if (y + t.h > wa.y + wa.height) b.y = Math.max(wa.y, wa.y + wa.height - t.h); // pile up at the bottom
+    t.win.setBounds(b, animate && t.win.isVisible());
+    y += t.h - 22; // the windows overlap by their shadow room
+  }
+}
+const toastFor = (e) => [...toasts].find(([, t]) => !t.win.isDestroyed() && t.win.webContents === e.sender)?.[0];
+const noteFor = (e) => notes.find((n) => n.id === toastFor(e));
+function dropToast(id) {
+  const t = toasts.get(id);
+  if (t && !t.win.isDestroyed()) t.win.destroy();
+}
+function forget(n) {
+  notes = notes.filter((x) => x !== n);
+  if (n.image && !notes.some((x) => x.image === n.image)) fs.rm(n.image, { force: true }, () => {});
+  saveNotes();
+  jotChanged();
+}
+
+ipcMain.handle('jot:note', (e, id) => {
+  const n = notes.find((x) => x.id === id);
+  if (!n) return null;
+  let image = null;
+  if (n.image) { const img = nativeImage.createFromPath(n.image); if (!img.isEmpty()) image = thumb(img, 640); }
+  return { text: n.text, made: n.made, minutes: n.minutes, snoozed: !!n.snoozed, image, snoozeFor: settings.jot.snooze };
+});
+ipcMain.on('jot:toastFit', (e, h) => {
+  const id = toastFor(e);
+  if (!id || !(h > 60 && h < 700)) return;
+  toasts.get(id).h = Math.ceil(h);
+  layoutToasts(false);
+});
+ipcMain.on('jot:done', (e) => { const n = noteFor(e); if (n) { dropToast(n.id); forget(n); } });
+ipcMain.on('jot:gone', (e) => { const id = toastFor(e); if (id) dropToast(id); });
+ipcMain.on('jot:snooze', (e) => {
+  const n = noteFor(e);
+  if (!n) return;
+  dropToast(n.id);
+  Object.assign(n, { showing: false, snoozed: true, due: Date.now() + settings.jot.snooze * 60000 });
+  saveNotes();
+  jotChanged();
+});
+ipcMain.on('jot:copy', (e) => { const n = noteFor(e); if (n?.text) clipboard.writeText(n.text); });
+ipcMain.on('jot:openShot', (e) => { const n = noteFor(e); if (n?.image) shell.openPath(n.image); });
+
+// ---------- the settings page ----------
+function jotList() {
+  return notes.map((n) => ({ id: n.id, text: n.text, due: n.due, image: !!n.image, showing: !!n.showing, snoozed: !!n.snoozed }))
+    .sort((a, b) => a.due - b.due);
+}
+function jotChanged() { settingsWin?.webContents.send('jot:changed', jotList()); }
+ipcMain.handle('jot:list', () => jotList());
+ipcMain.on('jot:cancel-note', (_e, id) => {
+  const n = notes.find((x) => x.id === id);
+  if (!n) return;
+  dropToast(n.id);
+  forget(n);
+});
+// Try it: a note opens in the middle of the settings window.
+ipcMain.on('jot:try', () => {
+  if (!settings.jot.enabled) return;
+  const b = settingsWin?.getBounds();
+  openComposer(b ? { x: Math.round(b.x + b.width / 2 - 150), y: Math.round(b.y + b.height / 2 - 150) } : undefined);
+});
+ipcMain.on('jot:bind', (_e, on) => {
+  jotBinding = !!on;
+  if (on) { binding = false; if (menu.open) closeMenu(false); }
+  registerShortcuts(); // off while listening, so the keys reach the settings window
+});
+ipcMain.handle('jot:keys', (_e, keys) => {
+  jotBinding = false;
+  const before = settings.jot.keys;
+  let error = null;
+  if (keys.accelerator === settings.away.keys.accelerator) error = `${keys.symbols.join('')} is already your Away keys. Pick other keys.`;
+  else {
+    settings = { ...settings, jot: { ...settings.jot, keys } };
+    registerShortcuts();
+    if (settings.jot.enabled && settings.jot.mode === 'shortcut' && !jotKeyOn) {
+      error = `${keys.symbols.join('')} is taken by another app. Pick other keys.`;
+      settings = { ...settings, jot: { ...settings.jot, keys: before } };
+    }
+  }
+  registerShortcuts();
+  writeJSON('settings.json', settings);
+  return { settings, error };
+});
+function setJotEnabled(on) {
+  settings = { ...settings, jot: { ...settings.jot, enabled: !!on } };
+  if (!on) closeComposer();
+  writeJSON('settings.json', settings);
+  registerShortcuts();
+  buildMenu();
+  settingsWin?.webContents.send('settings:changed', settings);
+}
 
 // ---------- settings window ----------
 function createSettings() {
@@ -1071,7 +1409,7 @@ ipcMain.handle('settings:set', (_e, patch) => {
   settings = { ...settings, ...patch };
   writeJSON('settings.json', settings);
   if ('openAtLogin' in patch) app.setLoginItemSettings({ openAtLogin: settings.openAtLogin });
-  if ('away' in patch) { registerAwayKey(); buildMenu(); }
+  if ('away' in patch) { registerShortcuts(); buildMenu(); }
   if ('spin' in patch) {
     if (!settings.spin.enabled) cancelSpin();
     if (!SPIN_COUNTS.includes(settings.spin.count)) settings.spin.count = DEFAULTS.spin.count;
@@ -1079,6 +1417,13 @@ ipcMain.handle('settings:set', (_e, patch) => {
     settings.spin.wheel = cleanSpinWheel(settings.spin.wheel);
     buildMenu();
   }
+  if ('jot' in patch) {
+    settings.jot = cleanJot(settings.jot);
+    if (!settings.jot.enabled) closeComposer();
+    registerShortcuts();
+    buildMenu();
+  }
+  writeJSON('settings.json', settings);
   broadcast();
   return settings;
 });
@@ -1131,7 +1476,7 @@ ipcMain.on('update:later', () => Updater.later());
 ipcMain.on('update:skip', () => Updater.skip());
 ipcMain.on('update:install', () => Updater.install());
 ipcMain.on('update:check', () => Updater.check({ manual: true }));
-ipcMain.handle('perm:check', () => ({ trusted: trusted(), listening: hookOn, awayKey: awayKeyOn }));
+ipcMain.handle('perm:check', () => ({ trusted: trusted(), listening: hookOn, awayKey: awayKeyOn, jotKey: jotKeyOn }));
 ipcMain.on('perm:open', () => {
   systemPreferences.isTrustedAccessibilityClient(true);
   shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
@@ -1167,6 +1512,7 @@ app.whenReady().then(() => {
   settings.hotkey = asCombo(settings.hotkey);
   settings.drawKey = asCombo(settings.drawKey);
   settings.spin.key = asCombo(settings.spin.key);
+  settings.jot = cleanJot({ ...DEFAULTS.jot, ...settings.jot });
   // Spin's key can't be exactly one of Scrawl's (sharing some keys is fine): take a free right-hand modifier.
   if (sameCombo(settings.spin.key, settings.hotkey) || sameCombo(settings.spin.key, settings.drawKey)) {
     const free = [UiohookKey.MetaRight, UiohookKey.AltRight, UiohookKey.CtrlRight, UiohookKey.ShiftRight]
@@ -1182,13 +1528,15 @@ app.whenReady().then(() => {
   settings.tools = [...known, ...TOOL_IDS.filter((id) => !known.some((t) => t.id === id)).map((id) => ({ id, on: true }))];
   writeJSON('settings.json', settings); // save the migrated list (e.g. show/hide moved to the middle, undo/redo added)
   drawings = readJSON('drawings.json', {});
+  notes = (readJSON('jot.json', []) || []).filter((n) => n && n.id && n.due);
+  setInterval(checkNotes, 1000); // cheap, and right after sleep too
 
   createOverlays();
   createSettings();
   for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) {
     screen.on(ev, refreshOverlays);
   }
-  registerAwayKey();
+  registerShortcuts();
   buildMenu();
   askForAccess();
   // Without Accessibility access the hook can't start. Keep trying, so granting access
@@ -1246,6 +1594,8 @@ function buildMenu() {
         { label: 'Settings…', accelerator: 'Cmd+,', click: show },
         { label: settings.enabled ? 'Turn Scrawl Off' : 'Turn Scrawl On', click: () => setEnabled(!settings.enabled) },
         { label: settings.spin.enabled ? 'Turn Spin Off' : 'Turn Spin On', click: () => setSpinEnabled(!settings.spin.enabled) },
+        { label: settings.jot.enabled ? 'Turn Jot Off' : 'Turn Jot On', click: () => setJotEnabled(!settings.jot.enabled) },
+        { label: 'New Note', enabled: settings.jot.enabled, click: () => openComposer() },
         away
           ? { label: 'Come Back', click: hideAway }
           : { label: 'Step Away', accelerator: settings.away.keys.accelerator, registerAccelerator: false, click: () => showAway(false) },
@@ -1276,9 +1626,10 @@ app.on('before-quit', () => {
   if (drawings) writeJSON('drawings.json', drawings);
   globalShortcut.unregisterAll();
   uIOhook.stop();
+  if (notes) saveNotes();
 });
 
 // Test hook: only present when SCRAWL_TEST is set (used by automated checks, never in normal runs).
 if (process.env.SCRAWL_TEST) {
-  global.__scrawlTest = { startBind: (w) => { binding = w; bindKeys = []; }, settings: () => settings, spin, openSpin, closeSpin, spinHover, spinView, Music, applyTool, step, setEnabled, overlays, menu, showAway, hideAway, awayWins: () => away?.wins ?? [], peek: () => ({ away: !!away, awayKey: awayKeyOn, activeTool, visible, menuOpen: menu.open, pencilColor: settings.pencilColor, enabled: settings.enabled, drawings, undo: history.undo.length, redo: history.redo.length }) };
+  global.__scrawlTest = { startBind: (w) => { binding = w; bindKeys = []; }, settings: () => settings, spin, openSpin, closeSpin, spinHover, spinView, Music, applyTool, step, setEnabled, overlays, menu, showAway, hideAway, awayWins: () => away?.wins ?? [], jot: { open: openComposer, composer: () => composer, notes: () => notes, toasts, check: checkNotes, tap: jotTap, blocked: jotBlocked }, peek: () => ({ away: !!away, awayKey: awayKeyOn, activeTool, visible, menuOpen: menu.open, pencilColor: settings.pencilColor, enabled: settings.enabled, drawings, undo: history.undo.length, redo: history.redo.length }) };
 }

@@ -58,6 +58,24 @@
   --peach-lip: #4DB283;
 }
 
+/* Jot's theme: airmail. Pale aqua paper, deep teal ink, a coral stamp with sky blue. Rounder than the rest. */
+[data-theme="jot"] {
+  --paper: #DFEDF0;
+  --paper-deep: #CBE0E5;
+  --card: #F7FBFC;
+  --card-lip: #D2E3E7;
+  --well: #E8F2F4;
+  --edge: #BCD3D9;
+  --ink: #17303A;
+  --ink-2: #587079;
+  --accent: #FF9B7A;
+  --accent-lip: #E26F4E;
+  --accent-soft: #FFE4DA;
+  --accent-ink: #B4472A;
+  --peach: #9FD4EE;     /* sky */
+  --peach-lip: #68AFD3;
+}
+
 /* ---------- the wheel ---------- */
 .wheel { overflow: visible; display: block; }
 .wheel .slice, .wheel .wheel-body { transform-box: view-box; transform-origin: var(--cx) var(--cy); }

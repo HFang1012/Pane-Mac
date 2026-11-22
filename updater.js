@@ -2,13 +2,17 @@
 // (which needs an Apple Developer signature) can't be used. Instead:
 //   1. ask GitHub for the newest release; if it's newer, the settings window shows Pane's own update
 //      sheet with what changed since this version
-//   2. on "Update and Restart": download Pane.dmg, copy Pane.app out of it, check it's the version we expect
+//   2. on "Update and Restart": if the release has a small patch from this version (Pane-<this>-to-<new>.patch,
+//      see app-patch.js), download that and rebuild the new Pane.app from this one; otherwise (or if that
+//      goes wrong) download the whole Pane.dmg and copy Pane.app out of it. Either way, check it's the
+//      version we expect and properly signed
 //   3. put it where this Pane.app is (or in /Applications, if Pane is running from the disk image) and reopen
 const { app, net, BrowserWindow } = require('electron');
 const { execFile, spawn } = require('child_process');
-const fs = require('fs');
+const fs = require('original-fs'); // plain fs treats app.asar as a folder, which breaks copying and removing apps
 const os = require('os');
 const path = require('path');
+const AppPatch = require('./app-patch.js');
 
 const REPO = 'HFang1012/Pane-Mac';
 const API = `https://api.github.com/repos/${REPO}/releases?per_page=20`;
@@ -20,6 +24,7 @@ let onState = () => {};
 let reveal = () => {};
 let timer = null;
 let latestAsset = null;
+let latestAssets = [];
 
 // What the settings window shows. status: idle | checking | current | available | downloading | installing | error
 let state = { status: 'idle', version: '', notes: [], progress: 0, error: '', open: false };
@@ -97,7 +102,8 @@ async function check({ manual = false } = {}) {
       return;
     }
     const version = latest.tag_name.replace(/^v/, '');
-    latestAsset = (latest.assets || []).find((a) => a.name.endsWith('.dmg')) || null;
+    latestAssets = latest.assets || [];
+    latestAsset = latestAssets.find((a) => a.name.endsWith('.dmg')) || null;
     // Pops up by itself once per version, unless skipped; the update button in the corner always offers it.
     const seen = was.version === version;
     const popUp = manual || (!seen && store.get().skipped !== version);
@@ -143,22 +149,48 @@ async function download(url, size, to) {
   if (size && got !== size) throw new Error('The download was cut short.');
 }
 
-// Downloads the release and unpacks Pane.app into a private folder. Returns where it put it.
-async function prepare(asset, version) {
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'pane-update-'));
+// The small way: download the patch from this version and rebuild the new Pane.app next to it.
+async function fromPatch(asset, staged, work) {
+  const file = path.join(work, 'update.patch');
+  await download(asset.browser_download_url, asset.size, file);
+  AppPatch.apply(file, bundlePath(), staged);
+  fs.rmSync(file, { force: true });
+}
+
+// The whole way: download Pane.dmg and copy Pane.app out of it.
+async function fromDmg(asset, staged, work) {
   const dmgFile = path.join(work, 'Pane.dmg');
   const mount = path.join(work, 'mnt');
+  await download(asset.browser_download_url, asset.size, dmgFile);
+  fs.mkdirSync(mount);
+  await run('hdiutil', ['attach', dmgFile, '-nobrowse', '-readonly', '-noautoopen', '-mountpoint', mount]);
+  try {
+    await run('ditto', [path.join(mount, 'Pane.app'), staged]);
+  } finally {
+    await run('hdiutil', ['detach', mount, '-force']).catch(() => {});
+  }
+  fs.rmSync(dmgFile, { force: true });
+}
+
+// Downloads the release and puts the new Pane.app in a private folder. Returns where it put it.
+// `patch` is the release's patch from this version, if it has one.
+async function prepare(asset, version, patch = null) {
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'pane-update-'));
   const staged = path.join(work, 'Pane.app');
   try {
-    await download(asset.browser_download_url, asset.size, dmgFile);
-    fs.mkdirSync(mount);
-    await run('hdiutil', ['attach', dmgFile, '-nobrowse', '-readonly', '-noautoopen', '-mountpoint', mount]);
-    try {
-      await run('ditto', [path.join(mount, 'Pane.app'), staged]);
-    } finally {
-      await run('hdiutil', ['detach', mount, '-force']).catch(() => {});
+    let done = false;
+    if (patch && canInstall()) {
+      try {
+        await fromPatch(patch, staged, work);
+        await run('codesign', ['--verify', '--deep', '--strict', staged]);
+        done = true;
+      } catch (err) {
+        console.warn('Small update failed, downloading the whole app instead:', err.message);
+        fs.rmSync(staged, { recursive: true, force: true });
+        progress(0);
+      }
     }
-    fs.rmSync(dmgFile, { force: true });
+    if (!done) await fromDmg(asset, staged, work);
     const built = (await run('/usr/libexec/PlistBuddy', ['-c', 'Print CFBundleShortVersionString', path.join(staged, 'Contents', 'Info.plist')])).trim();
     if (built !== version) throw new Error(`The download is version ${built}, not ${version}.`);
     await run('xattr', ['-dr', 'com.apple.quarantine', staged]).catch(() => {});
@@ -206,7 +238,8 @@ async function install() {
   const target = installTarget();
   try {
     set({ status: 'downloading', progress: 0, error: '', open: true });
-    ready = await prepare(latestAsset, state.version);
+    const patch = latestAssets.find((a) => a.name === `Pane-${currentVersion()}-to-${state.version}.patch`) || null;
+    ready = await prepare(latestAsset, state.version, patch);
     set({ status: 'installing' });
     progress(2); // the Dock's bar spins while it's put in place
     // Swapping a running app's bundle is safe on macOS: this process keeps its files open until it quits.

@@ -594,6 +594,99 @@
   .pl-note { font-size: 12px; font-weight: 600; color: var(--ink-2); margin: 0; }
   .pl-note:empty, .pl-note[hidden] { display: none; }
 
+
+  /* ---------- Jot page: rounder all over ---------- */
+  [data-theme="jot"] .card { --r: 36px; }
+  [data-theme="jot"] .tips { --r: 30px; }
+  [data-theme="jot"] .callout { --r: 26px; }
+  [data-theme="jot"] .keywell { border-radius: 30px; }
+  [data-theme="jot"] .keywell .ants rect { rx: 29px; }
+  [data-theme="jot"] .keycap { border-radius: 24px; min-width: 56px; }
+  [data-theme="jot"] .tips .ic { border-radius: 15px; }
+  [data-theme="jot"] .screen-wrap .try { border-radius: 999px; }
+  [data-theme="jot"] .brand .mark svg .plane { transform-box: fill-box; transform-origin: 30% 70%; transition: transform 500ms var(--bouncy); }
+  [data-theme="jot"] .brand:hover .mark svg .plane { transform: translate(3px, -3px) rotate(-12deg); }
+
+  /* Double-tap or a shortcut: two pills with a coral thumb that slides between them. */
+  .seg { position: relative; display: inline-flex; gap: 2px; padding: 4px; margin-top: 16px; border-radius: 999px; background: var(--well); -webkit-app-region: no-drag; }
+  .seg button { position: relative; z-index: 1; height: 30px; padding: 0 16px; border-radius: 999px; font-size: 13px; font-weight: 800; color: var(--ink-2); transition: color 160ms ease, transform 220ms var(--bouncy); }
+  .seg button:hover { color: var(--ink); }
+  .seg button:active { transform: scale(0.94); }
+  .seg button[aria-checked="true"] { color: var(--ink); }
+  .seg-thumb { position: absolute; top: 4px; left: 0; height: 30px; border-radius: 999px; background: var(--card); box-shadow: 0 3px 0 var(--accent); transition: translate 440ms var(--bouncy), width 440ms var(--bouncy); }
+  .seg + .keyrow { margin-top: 12px; }
+  .keyslot[hidden] { display: none; }
+  .keyslot.swap-in { animation: pop 520ms var(--bouncy); }
+
+  /* A little desk: a note being written, and one coming back in the corner. Plays on its own. */
+  .jdesk {
+    position: relative; height: 196px; margin-top: 14px; border-radius: 28px; overflow: hidden; isolation: isolate;
+    background: radial-gradient(120% 120% at 0% 0%, #CFE6EC, #E4F0F2 55%, #D7E4EE); box-shadow: 0 5px 0 var(--card-lip);
+  }
+  .jdesk .jn {
+    position: absolute; left: 96px; top: 24px; width: 196px; padding: 6px 12px 10px; border-radius: 22px; background: var(--card);
+    box-shadow: 0 5px 0 var(--card-lip), 0 14px 26px -8px rgba(10, 26, 32, 0.3); transform-origin: 18px 14px;
+    animation: jn 7s var(--smooth) infinite;
+  }
+  @keyframes jn {
+    0%, 4% { opacity: 0; transform: scale(0.2) rotate(-8deg); }
+    10%, 58% { opacity: 1; transform: none; }
+    66%, 100% { opacity: 0; transform: scale(0.15) rotate(18deg) translate(80px, 30px); }
+  }
+  .jn-grip { height: 16px; display: flex; justify-content: space-between; align-items: center; }
+  .jn-grip > span:first-child { width: 34px; height: 6px; border-radius: 3px; background: var(--edge); }
+  .jn-grip .dots { display: flex; gap: 2px; }
+  .jn-grip .dots i { width: 3px; height: 3px; border-radius: 2px; background: var(--edge); }
+  .jn-text { margin-top: 4px; padding: 8px 10px; height: 46px; border-radius: 14px; background: var(--well); font-size: 12px; font-weight: 800; overflow: hidden; white-space: nowrap; }
+  .jn-text span:first-child { display: inline-block; overflow: hidden; vertical-align: bottom; animation: type 7s steps(21) infinite; }
+  @keyframes type { 0%, 12% { width: 0; } 36%, 100% { width: 21ch; } }
+  .jn-text .caret { display: inline-block; width: 2px; height: 13px; margin-left: 1px; vertical-align: -2px; background: var(--peach-lip); animation: blink 0.9s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .jn-pills { display: flex; gap: 3px; margin-top: 8px; padding: 2px; border-radius: 10px; background: var(--well); }
+  .jn-pills i { flex: 1; height: 12px; border-radius: 6px; }
+  .jn-pills i.on { background: var(--accent); box-shadow: 0 2px 0 var(--accent-lip); animation: pill 7s var(--bouncy) infinite; }
+  @keyframes pill { 0%, 40% { transform: translateX(-26px); } 46%, 100% { transform: none; } }
+  .jn-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+  .jn-foot > span:first-child { width: 60px; height: 6px; border-radius: 3px; background: var(--well); }
+  .jn-send { width: 30px; height: 30px; border-radius: 15px; display: grid; place-items: center; background: var(--accent); box-shadow: 0 3px 0 var(--accent-lip); animation: press 7s ease infinite; }
+  .jn-send svg { width: 15px; height: 15px; }
+  @keyframes press { 0%, 54% { transform: none; } 56% { transform: translateY(3px); box-shadow: 0 0 0 var(--accent-lip); } 59%, 100% { transform: none; } }
+  .jplane { position: absolute; left: 264px; top: 118px; width: 22px; height: 22px; opacity: 0; animation: plane 7s cubic-bezier(.45, .05, .4, 1) infinite; filter: drop-shadow(0 3px 3px rgba(10, 26, 32, 0.25)); }
+  @keyframes plane {
+    0%, 57% { opacity: 0; transform: none; }
+    59% { opacity: 1; transform: translate(-16px, 4px) rotate(-14deg); }
+    66% { transform: translate(-2px, -60px) rotate(-30deg); }
+    74%, 100% { opacity: 0; transform: translate(130px, -170px) rotate(-20deg); }
+  }
+  .jdesk .jt {
+    position: absolute; left: 12px; top: 12px; width: 150px; display: grid; grid-template-columns: 24px 1fr; gap: 8px; align-items: center;
+    padding: 8px 10px; border-radius: 18px; background: var(--card); box-shadow: 0 4px 0 var(--card-lip), 0 10px 20px -8px rgba(10, 26, 32, 0.28);
+    animation: jt 7s var(--bouncy) infinite;
+  }
+  @keyframes jt { 0%, 76% { transform: translateX(-190px) rotate(-8deg); } 84%, 96% { transform: none; } 100% { transform: translateX(-190px); } }
+  .jt .jb { width: 24px; height: 24px; border-radius: 12px; background: var(--accent); box-shadow: 0 2px 0 var(--accent-lip); }
+  .jt b { display: block; font-size: 11px; font-weight: 800; }
+  .jt i { display: block; width: 80px; height: 5px; margin-top: 4px; border-radius: 3px; background: var(--well); }
+
+  /* Coming up: each note on its way back, with the time and a way to cancel it. */
+  .jlist { display: grid; gap: 4px; max-height: 136px; overflow-y: auto; padding: 4px; margin: 0 -4px; border-radius: 18px; -webkit-app-region: no-drag; overscroll-behavior: contain; }
+  .jitem {
+    display: grid; grid-template-columns: 1fr auto 24px; gap: 8px; align-items: center; padding: 6px 6px 6px 14px; border-radius: 999px;
+    background: var(--well); animation: pop 520ms var(--bouncy) both; animation-delay: var(--d, 0ms);
+    transition: transform 200ms var(--bouncy), background 160ms ease;
+  }
+  .jitem:hover { background: var(--paper); transform: translateX(2px); }
+  .jitem b { font-size: 12.5px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .jitem b i { font-style: normal; color: var(--ink-2); font-weight: 700; }
+  .jitem small { font-size: 11px; font-weight: 800; color: var(--accent-ink); background: var(--accent-soft); border-radius: 999px; padding: 2px 9px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .jitem.now small { background: var(--accent); color: var(--ink); }
+  .jitem button { width: 24px; height: 24px; border-radius: 12px; display: grid; place-items: center; color: var(--ink-2); background: var(--card); transition: transform 260ms var(--bouncy), color 140ms ease; }
+  .jitem button:hover { transform: rotate(90deg); color: var(--accent-ink); }
+  .jitem.out { animation: jout 260ms ease-in forwards; }
+  @keyframes jout { to { opacity: 0; transform: translateX(30px) scale(0.9); } }
+  .jempty { padding: 12px 14px; border-radius: 18px; background: var(--well); font-size: 12px; font-weight: 600; color: var(--ink-2); animation: pop 520ms var(--bouncy) both; }
+  .jempty b { color: var(--ink); }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
   }
@@ -886,6 +979,107 @@
     </div>
   </section>
 </div>
+<div class="page" id="jotPage" data-tool="jot" hidden>
+  <section>
+    <div class="brand rise" style="--d:0ms">
+      <span class="mark" data-glyph="jot"></span>
+      Jot
+      <span class="version"></span>
+    </div>
+    <h1 class="rise" style="--d:60ms">Tap twice.<br>Jot it down.</h1>
+    <p class="lede rise" style="--d:120ms" id="jotLede">Double-tap the Jot key and a note opens at your pointer. Pick a timer, send it off, and it comes back in the top-left corner when it’s time.</p>
+
+    <div class="seg rise" style="--d:150ms" role="radiogroup" aria-label="Open a note with" id="jotMode">
+      <span class="seg-thumb"></span>
+      <button role="radio" data-mode="double">Double-tap</button>
+      <button role="radio" data-mode="shortcut">Shortcut</button>
+    </div>
+    <div class="keyrow rise" style="--d:160ms">
+      <div class="keyslot" id="jotTapSlot">
+        <button class="keywell" data-which="jotKey" aria-describedby="jotCaption">
+          <svg class="ants" aria-hidden="true"><rect rx="21"/></svg>
+          <span class="keys"></span>
+        </button>
+        <span class="keylabel">Tap twice</span>
+      </div>
+      <div class="keyslot" id="jotKeysSlot" hidden>
+        <button class="keywell" id="jotWell" aria-describedby="jotCaption">
+          <svg class="ants" aria-hidden="true"><rect rx="21"/></svg>
+          <span class="keys"></span>
+        </button>
+        <span class="keylabel">Jot keys</span>
+      </div>
+    </div>
+    <p class="caption rise" style="--d:200ms" id="jotCaption">Click the key to change it.</p>
+
+    <div class="collapse access"><div>
+      <div class="callout chunky">
+        <h3>Allow Pane to hear your keys</h3>
+        <p>Double-tap needs it to notice the Jot key. A shortcut works without it. Turn on Pane in Privacy &amp; Security › Accessibility.</p>
+        <button class="pill access-btn">Open Accessibility settings</button>
+      </div>
+    </div></div>
+
+    <div class="power rise" style="--d:240ms">
+      <button class="power-btn" id="jotPower" aria-pressed="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 3.5v8"/><path d="M6.6 6.8a7.5 7.5 0 1 0 10.8 0"/></svg>
+        <span class="swap" id="jotPowerText">Turn off</span>
+      </button>
+      <div class="status" id="jotStatus">
+        <span class="dot"></span><span class="swap" id="jotStatusText">Checking…</span>
+      </div>
+    </div>
+    <label class="login-line rise" style="--d:280ms"><button class="switch login small" role="switch" aria-checked="false" aria-label="Open at login"></button>Open Pane at login</label>
+    <div class="tips chunky rise" style="--d:330ms" aria-label="Good to know">
+      <span class="tips-tag">Good to know</span>
+      <ul>
+        <li><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6H8l1.5-2h5L16 6h1.5A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3.4"/></svg></span><span><b>Screenshot</b> lets you drag over part of the screen. Press Space to pick a window.</span></li>
+        <li><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h8M8 12h8M8 19h8"/><circle cx="4.5" cy="5" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="19" r="1"/></svg></span><span><b>Drag the top</b> of a note to move it. <b>⌘↩</b> sends, <b>Esc</b> throws it away.</span></li>
+        <li><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1.2-4.4L15.6 5.2a2 2 0 0 1 2.8 0l.4.4a2 2 0 0 1 0 2.8L8.4 18.8z"/></svg></span><span>Jot stays shut <b>while you draw</b> with Scrawl, so ⌃ keeps its job there.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="card chunky rise" style="--d:90ms" aria-label="Jot settings">
+    <div class="head solo">
+      <div>
+        <h2>Notes</h2>
+        <p>Write one, send it off, get it back later.</p>
+      </div>
+    </div>
+    <div class="screen-wrap">
+      <div class="jdesk" id="jdesk" aria-hidden="true">
+        <div class="jt"><span class="jb"></span><div><b>Time’s up</b><i></i></div></div>
+        <div class="jn">
+          <div class="jn-grip"><span></span><span class="dots"><i></i><i></i><i></i></span></div>
+          <div class="jn-text"><span id="jdeskText">Call the dentist back</span><span class="caret"></span></div>
+          <div class="jn-pills"><i></i><i class="on"></i><i></i><i></i><i></i></div>
+          <div class="jn-foot"><span></span><span class="jn-send"><svg viewBox="0 0 26 26"><path d="M2.5 12.6 L23 3.5 L18 22.5 L12.6 16.4 Z" fill="#FBF8F3" stroke="#17303A" stroke-width="2" stroke-linejoin="round"/><path d="M12.6 16.4 L23 3.5 L10.8 18.8 Z" fill="#17303A"/></svg></span></div>
+        </div>
+        <svg class="jplane" viewBox="0 0 26 26"><path d="M2.5 12.6 L23 3.5 L18 22.5 L12.6 16.4 Z" fill="#FBF8F3" stroke="#17303A" stroke-width="2" stroke-linejoin="round"/><path d="M12.6 16.4 L23 3.5 L10.8 18.8 Z" fill="#17303A"/></svg>
+      </div>
+      <button class="try" id="tryJot">
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 2.2v7.6L9.8 6z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        Try it
+      </button>
+    </div>
+
+    <div class="rows">
+      <div class="row rise" style="--d:300ms">
+        <div><h3>Snooze for</h3><p>How long Snooze puts a note off.</p></div>
+        <div class="stepper" data-key="jot.snooze" data-values="5,10,15,30,60" data-unit=" min"></div>
+      </div>
+      <div class="row rise" style="--d:340ms">
+        <div><h3>Play a sound</h3><p>A soft chime when a note comes back.</p></div>
+        <button class="switch" id="jotSound" role="switch" aria-checked="true" aria-label="Play a sound"></button>
+      </div>
+      <div class="row stack rise" style="--d:380ms">
+        <div class="pl-head"><div><h3>Coming up</h3><p id="jotCount">Notes on their way back.</p></div></div>
+        <div class="jlist" id="jotList" role="list" aria-label="Notes coming up"></div>
+      </div>
+    </div>
+  </section>
+</div>
 <div class="demo" id="demo" role="dialog" aria-modal="true" aria-labelledby="demoTitle">
   <div class="demo-sheet">
     <div class="demo-head">
@@ -950,6 +1144,7 @@
 <script src="spin.js"></script>
 <script src="away-settings.js"></script>
 <script src="spin-settings.js"></script>
+<script src="jot-settings.js"></script>
 <script src="switcher.js"></script>
 <script src="demo.js"></script>
 <script src="update.js"></script>

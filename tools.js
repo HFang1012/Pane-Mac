@@ -6,6 +6,8 @@
   const SC = { ink: '#262B36', inkLip: '#0F1218', pink: '#F49CB0', pinkLip: '#D96F8A' };
   // Spin: a green-black record with a mustard label, and a mint tone arm.
   const SP = { ink: '#1E2B27', inkLip: '#0B1210', mustard: '#FFC94D', mustardLip: '#DDA21F', mint: '#7ED3A8', mintLip: '#4DB283' };
+  // Jot: airmail. A sky-blue note with deep teal lines, and a coral paper airplane taking off from it.
+  const JT = { ink: '#17303A', inkLip: '#0A1A20', sky: '#9FD4EE', skyLip: '#68AFD3', coral: '#FF9B7A', coralLip: '#E26F4E' };
 
   // Chunky glyphs: a flat shape over a darker copy of itself, nudged down (the "lip").
   const lip = (shape, fill, under, dy) => `<g transform="translate(0 ${dy})" fill="${under}" stroke="${under}">${shape}</g><g fill="${fill}" stroke="${fill}">${shape}</g>`;
@@ -44,6 +46,18 @@
           lip(arm, SP.mint, SP.mintLip, 2.5);
       },
     },
+    // Jot: a rounded note with two lines on it, and a paper airplane leaving it.
+    jot: {
+      viewBox: '0 0 60 44',
+      body: () => {
+        const note = '<rect x="5" y="9" width="32" height="30" rx="8" stroke="none"/>';
+        const lines = `<g stroke="${JT.ink}" stroke-width="3.2" stroke-linecap="round" fill="none"><path d="M12 20h16"/><path d="M12 28h10"/></g>`;
+        const plane = '<path d="M27 24 L56 7 L47 36 L40.5 28.5 Z" stroke="none"/>';
+        const fold = `<path d="M40.5 28.5 L56 7 L37 31 Z" fill="${JT.coralLip}" stroke="none"/>`;
+        return lip(note, JT.sky, JT.skyLip, 3) + lines +
+          `<g class="plane">${lip(plane, JT.coral, JT.coralLip, 2.5)}${fold}</g>`;
+      },
+    },
   };
   function glyph(id, h = 22) {
     const g = GLYPHS[id];
@@ -55,6 +69,7 @@
     { id: 'scrawl', name: 'Scrawl', blurb: 'Draw on your screen.', theme: 'scrawl', bg: '#E3E8EF' },
     { id: 'away', name: 'Away', blurb: 'Blur your screen while you’re away.', theme: 'away', bg: '#ECE6DD' },
     { id: 'spin', name: 'Spin', blurb: 'Run your music from a wheel.', theme: 'spin', bg: '#E4ECE3' },
+    { id: 'jot', name: 'Jot', blurb: 'Quick notes that remind you later.', theme: 'jot', bg: '#DFEDF0' },
   ];
 
   // Away's gradient blobs. Each mood is three soft colors that drift behind the blur.
@@ -69,7 +84,7 @@
 
   const DEFAULT_MESSAGE = 'I’m away from my computer right now.';
 
-  const api = { TOOLS, MOODS, mood, glyph, DEFAULT_MESSAGE, COLORS: C, SPIN_COLORS: SP };
+  const api = { TOOLS, MOODS, mood, glyph, DEFAULT_MESSAGE, COLORS: C, SPIN_COLORS: SP, JOT_COLORS: JT };
   if (typeof window !== 'undefined') window.Tools = api;
   if (typeof module !== 'undefined') module.exports = api;
 })();

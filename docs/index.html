@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pane</title>
 <meta name="author" content="hucklberi">
-<meta name="description" content="Pane for Mac: Scrawl draws on your screen, Away blurs it while you're gone, Spin runs your music from a wheel.">
+<meta name="description" content="Pane for Mac: Scrawl draws on your screen, Away blurs it while you're gone, Spin runs your music from a wheel, Jot reminds you of quick notes.">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="icon.png">
 <meta property="og:title" content="Pane">
-<meta property="og:description" content="Draw on your screen. Blur it while you're away. Spin your music from a wheel.">
+<meta property="og:description" content="Draw on your screen. Blur it while you're away. Spin your music from a wheel. Jot a note for later.">
 <meta property="og:image" content="icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -419,6 +419,104 @@
   @media (max-width: 600px) { .stage .player { width: 44%; padding: 8px; } .stage .player .prec { width: 28px; height: 28px; } }
   @media (prefers-reduced-motion: reduce) { .stage .player .prec, .spin-wheel .hub-now.turning .disc { animation: none; } }
 
+  /* Jot's theme: airmail. Pale aqua paper, deep teal ink, a coral stamp with sky blue. */
+  [data-theme="jot"] {
+    --paper: #DFEDF0; --paper-deep: #CBE0E5; --card: #F7FBFC; --card-lip: #D2E3E7; --well: #E8F2F4; --edge: #BCD3D9;
+    --ink: #17303A; --ink-2: #587079;
+    --accent: #FF9B7A; --accent-lip: #E26F4E; --accent-soft: #FFE4DA; --accent-ink: #B4472A; --sky: #9FD4EE; --sky-lip: #68AFD3;
+    --stage-bg: radial-gradient(120% 120% at 0% 0%, #C6DFE6, #DCEBEE 55%, #CFDDE9); --win: #FDFEFE; --bar: #E5EFF1; --line: #D2E1E5; --dark: #17303A;
+  }
+  /* Rounder than the rest, like the app. */
+  .tool[data-theme="jot"] { border-radius: 40px; }
+  [data-theme="jot"] .demo { border-radius: 32px; }
+  [data-theme="jot"] .stage { border-radius: 24px; }
+  [data-theme="jot"] .key .cap { border-radius: 20px; }
+  [data-theme="jot"] .tool-head svg .plane { transform-box: fill-box; transform-origin: 30% 70%; transition: transform 500ms var(--bouncy); }
+  [data-theme="jot"]:hover .tool-head svg .plane { transform: translate(3px, -3px) rotate(-12deg); }
+
+  /* ---------- Jot's demo: a note at the pointer, a paper airplane, a reminder in the corner ---------- */
+  .stage .jnote {
+    position: absolute; left: 0; top: 0; z-index: 3; width: min(54%, 268px); padding: 4px 12px 12px; border-radius: 24px; background: var(--card);
+    box-shadow: 0 6px 0 var(--card-lip), 0 18px 32px -10px rgba(10, 26, 32, 0.34); transform-origin: 18px 16px;
+    opacity: 0; scale: 0.2; rotate: -8deg; pointer-events: none;
+    transition: opacity 160ms ease, scale 560ms var(--bouncy), rotate 560ms var(--bouncy);
+  }
+  .stage .jnote.open { opacity: 1; scale: 1; rotate: 0deg; }
+  .stage.live .jnote.open { pointer-events: auto; }
+  .stage .jnote.sent { transform-origin: calc(100% - 30px) calc(100% - 30px); animation: jfold 480ms cubic-bezier(.6, 0, .8, .3) forwards; }
+  @keyframes jfold { 30% { transform: scale(1.03, 0.96); } to { transform: scale(0.1) rotate(18deg); opacity: 0; } }
+  .jnote .grip { height: 22px; display: flex; align-items: center; justify-content: space-between; cursor: grab; }
+  .jnote .grip b { font-size: 11px; font-weight: 800; color: var(--ink-2); }
+  .jnote .grip i { display: flex; gap: 3px; }
+  .jnote .grip i::before, .jnote .grip i::after, .jnote .grip i span { content: ""; width: 4px; height: 4px; border-radius: 2px; background: var(--edge); }
+  .jnote textarea {
+    display: block; width: 100%; height: 58px; resize: none; border: 0; outline: none; font: inherit; font-size: 14px; font-weight: 800; line-height: 1.35;
+    color: var(--ink); background: var(--well); border-radius: 16px; padding: 9px 11px; user-select: text; -webkit-user-select: text;
+  }
+  .jnote textarea:focus { background: #FFF; box-shadow: inset 0 0 0 2.5px var(--sky); }
+  .jnote textarea::placeholder { color: var(--ink-2); opacity: 0.7; font-weight: 700; }
+  .jpills { position: relative; display: flex; gap: 2px; margin-top: 8px; padding: 3px; border-radius: 14px; background: var(--well); }
+  .jpills .thumb { position: absolute; top: 3px; left: 0; height: 24px; border-radius: 12px; background: var(--accent); box-shadow: 0 2px 0 var(--accent-lip); transition: translate 420ms var(--bouncy), width 420ms var(--bouncy); }
+  .jpills button { position: relative; flex: 1; height: 24px; border-radius: 12px; font-size: 11.5px; font-weight: 800; color: var(--ink-2); transition: color 140ms ease, transform 200ms var(--bouncy); }
+  .jpills button.on { color: var(--ink); }
+  .jpills button:active { transform: scale(0.9); }
+  .jnote .jfoot { display: flex; align-items: center; justify-content: space-between; margin-top: 9px; }
+  .jnote .jfoot small { font-size: 11px; font-weight: 700; color: var(--ink-2); }
+  .jsend {
+    width: 40px; height: 40px; border-radius: 20px; display: grid; place-items: center; margin: 0 0 4px auto;
+    background: var(--accent); box-shadow: 0 4px 0 var(--accent-lip); transition: transform 220ms var(--bouncy), box-shadow 220ms var(--bouncy);
+  }
+  .jsend svg { width: 20px; height: 20px; overflow: visible; transition: transform 400ms var(--bouncy); }
+  .jsend:hover { transform: translateY(-2px) rotate(-6deg); box-shadow: 0 6px 0 var(--accent-lip); }
+  .jsend:hover svg { transform: translate(2px, -2px) rotate(-8deg); }
+  .jsend.press, .jsend:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--accent-lip); }
+  .stage .jfly { position: absolute; left: 0; top: 0; z-index: 4; width: 22px; height: 22px; pointer-events: none; filter: drop-shadow(0 4px 4px rgba(10, 26, 32, 0.25)); }
+  .stage .jtoast {
+    position: absolute; left: 3%; top: 5%; z-index: 3; width: min(46%, 230px); padding: 9px 10px 10px; border-radius: 20px; background: var(--card);
+    box-shadow: 0 5px 0 var(--card-lip), 0 14px 26px -8px rgba(10, 26, 32, 0.3); pointer-events: none;
+    translate: -130% 0; rotate: -8deg; transition: translate 640ms var(--bouncy), rotate 640ms var(--bouncy);
+  }
+  .stage .jtoast.show { translate: 0 0; rotate: 0deg; }
+  .stage.live .jtoast.show { pointer-events: auto; }
+  .stage .jtoast.leave { translate: -130% 0; rotate: -6deg; transition: translate 360ms cubic-bezier(.6, 0, .9, .4), rotate 360ms ease; }
+  .stage .jtoast.doze { translate: 0 -40px; scale: 0.2; opacity: 0; transition: translate 460ms cubic-bezier(.6, 0, .9, .4), scale 460ms ease, opacity 300ms ease 160ms; }
+  .jtoast .th { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: center; }
+  .jtoast .bell { width: 26px; height: 26px; border-radius: 13px; display: grid; place-items: center; background: var(--accent); box-shadow: 0 2px 0 var(--accent-lip); }
+  .jtoast .bell svg { width: 14px; height: 14px; transform-origin: 50% 10%; }
+  .jtoast.show .bell svg { animation: ring 1000ms ease-in-out 500ms 2; }
+  @keyframes ring { 15% { rotate: 16deg; } 30% { rotate: -14deg; } 45% { rotate: 10deg; } 60% { rotate: -6deg; } 75% { rotate: 3deg; } }
+  .jtoast .th b { display: block; font-size: 12px; font-weight: 800; line-height: 1.2; }
+  .jtoast .th small { display: block; font-size: 10.5px; font-weight: 700; color: var(--ink-2); }
+  .jtoast p { margin: 7px 0 0; padding: 6px 9px; border-radius: 12px; background: var(--well); font-size: 12.5px; font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; max-height: 52px; overflow: hidden; }
+  .jtoast .ta { display: flex; gap: 4px; margin-top: 7px; }
+  .jtoast .ta button { flex: 1; height: 26px; border-radius: 13px; font-size: 11px; font-weight: 800; background: var(--well); box-shadow: 0 2px 0 var(--card-lip); margin-bottom: 2px; transition: transform 180ms var(--bouncy), box-shadow 180ms var(--bouncy); }
+  .jtoast .ta button.go { background: var(--accent); box-shadow: 0 2px 0 var(--accent-lip); }
+  .jtoast .ta button:hover { transform: translateY(-1px); }
+  .jtoast .ta button.press, .jtoast .ta button:active { transform: translateY(2px); box-shadow: 0 0 0 var(--card-lip); }
+  .stage.live .jtoast .ta button, .stage.live .jpills button, .stage.live .jsend { cursor: pointer; }
+  @media (max-width: 600px) {
+    .stage .jnote { width: 62%; padding: 2px 8px 8px; border-radius: 18px; }
+    .jnote textarea { height: 40px; font-size: 12px; padding: 6px 8px; }
+    .jpills button { font-size: 10px; height: 20px; } .jpills .thumb { height: 20px; }
+    .jsend { width: 32px; height: 32px; } .jsend svg { width: 16px; height: 16px; }
+    .jnote .jfoot small { display: none; }
+    .stage .jtoast { width: 54%; }
+  }
+
+  /* Jot's paper airplane: hold to wind up, let go to throw. It does a trick and comes back. */
+  .plane-toy { position: relative; width: 170px; height: 130px; border-radius: 26px; touch-action: none; }
+  .plane-toy .pad { position: absolute; left: 30px; right: 30px; bottom: 12px; height: 16px; border-radius: 999px; background: var(--card-lip); box-shadow: inset 0 -4px 0 color-mix(in srgb, var(--card-lip) 70%, var(--ink) 12%); transition: scale 300ms var(--bouncy); }
+  .plane-toy .meter { position: absolute; left: 34px; bottom: 16px; height: 8px; width: calc((100% - 68px) * var(--p, 0)); border-radius: 999px; background: var(--accent); }
+  .plane-toy .plane { position: absolute; left: 50%; top: 40px; width: 64px; height: 64px; margin-left: -32px; will-change: transform; transition: scale 260ms var(--bouncy); }
+  .plane-toy .plane svg { display: block; width: 64px; height: 64px; overflow: visible; filter: drop-shadow(0 6px 6px rgba(10, 26, 32, 0.22)); }
+  .plane-toy:hover .plane:not(.flying) { animation: hover-bob 1.6s ease-in-out infinite; }
+  @keyframes hover-bob { 50% { transform: translateY(-5px) rotate(-4deg); } }
+  .plane-toy.winding .plane { animation: wind 120ms linear infinite; }
+  @keyframes wind { 50% { translate: 1px 0; } }
+  .plane-toy .trail { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  .plane-toy .trail circle { fill: var(--sky); animation: puff 900ms ease-out forwards; }
+  @keyframes puff { from { opacity: 0.9; } to { opacity: 0; transform: scale(0.3); } }
+
   /* ---------- boxes lift like a key under the pointer ---------- */
   /* Rise by N px and grow the lip by the same N, so the bottom edge stays put, like the buttons. */
   .quick, .demo, .route { transition: translate 260ms var(--bouncy), box-shadow 260ms var(--bouncy); }
@@ -484,7 +582,7 @@
     <img class="icon pop" src="icon.png" alt="" width="128" height="128">
     <h1 class="rise" style="--d:120ms">Pane</h1>
     <p class="byline rise" style="--d:160ms">by hucklberi</p>
-    <p class="lede rise" style="--d:200ms">Three small tools for your Mac. Scrawl draws on your screen. Away blurs it while you’re gone. Spin runs your music from a wheel. Change any shortcut to keys you like.</p>
+    <p class="lede rise" style="--d:200ms">Four small tools for your Mac. Scrawl draws on your screen. Away blurs it while you’re gone. Spin runs your music from a wheel. Jot takes a quick note and reminds you later. Change any shortcut to keys you like.</p>
 
     <div class="quick pop" style="--d:300ms">
       <p class="label">Install with one command <span class="badge">Recommended</span></p>
@@ -593,6 +691,46 @@
       </div>
       <p class="switch-note" style="margin-top:16px">Works with Spotify, Apple Music, or any player through the media keys. Link Spotify once to scroll its queue.</p>
     </article>
+    <article class="tool" data-theme="jot">
+      <div class="tool-head">
+        <svg viewBox="0 0 60 44" aria-hidden="true"><rect x="5" y="12" width="32" height="30" rx="8" fill="#68AFD3"/><rect x="5" y="9" width="32" height="30" rx="8" fill="#9FD4EE"/><g stroke="#17303A" stroke-width="3.2" stroke-linecap="round" fill="none"><path d="M12 20h16"/><path d="M12 28h10"/></g><g class="plane"><path d="M27 24 L56 7 L47 36 L40.5 28.5 Z" fill="#E26F4E" transform="translate(0 2.5)"/><path d="M27 24 L56 7 L47 36 L40.5 28.5 Z" fill="#FF9B7A"/><path d="M40.5 28.5 L56 7 L37 31 Z" fill="#E26F4E"/></g></svg>
+        <h3>Jot</h3>
+        <p>Quick notes that remind you later.</p>
+      </div>
+      <div class="demo" data-demo="jot">
+        <div class="stage" aria-hidden="true">
+          <div class="bg">
+            <div class="win v1"><i style="left:8%;top:28%;width:62%"></i><i style="left:8%;top:41%;width:78%"></i><i style="left:8%;top:54%;width:46%"></i></div>
+            <div class="win v2"><i style="left:8%;top:30%;width:70%"></i><i style="left:8%;top:44%;width:52%"></i><i style="left:8%;top:58%;width:64%"></i></div>
+            <div class="win v3"></div>
+          </div>
+          <div class="jtoast">
+            <div class="th"><span class="bell"><svg viewBox="0 0 24 24" fill="none" stroke="#17303A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg></span><div><b>Time’s up</b><small class="jwhen"></small></div></div>
+            <p class="jtext"></p>
+            <div class="ta"><button type="button" class="jsnooze">Snooze</button><button type="button" class="go jdone">Done</button></div>
+          </div>
+          <div class="jnote">
+            <div class="grip"><b>New note</b><i><span></span></i></div>
+            <textarea maxlength="80" spellcheck="false" placeholder="What do you want to remember?" tabindex="-1"></textarea>
+            <div class="jpills"><span class="thumb"></span><button type="button" data-m="5">5m</button><button type="button" data-m="15">15m</button><button type="button" data-m="30">30m</button><button type="button" data-m="60">1h</button></div>
+            <div class="jfoot"><small class="jat"></small><button type="button" class="jsend" aria-label="Send"><svg viewBox="0 0 26 26"><path d="M2.5 12.6 L23 3.5 L18 22.5 L12.6 16.4 Z" fill="#FBF8F3" stroke="#17303A" stroke-width="2" stroke-linejoin="round"/><path d="M12.6 16.4 L23 3.5 L10.8 18.8 Z" fill="#17303A"/></svg></button></div>
+          </div>
+          <div class="cursor"><svg class="arrow" width="20" height="28" viewBox="0 0 20 28"><path d="M3 3.1C3 2.2 4 1.8 4.6 2.4L17 14.1C17.6 14.7 17.2 15.7 16.4 15.7H11.6L14.2 21.8C14.4 22.4 14.2 23 13.6 23.2L11.9 23.9C11.3 24.1 10.7 23.9 10.5 23.3L7.9 17.2L4.6 20.4C4 21 3 20.6 3 19.7Z" fill="#0E0F12" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke"/></svg></div>
+        </div>
+        <div class="keys"></div>
+        <p class="step" aria-live="polite"></p>
+        <div class="demo-foot"><div class="dots"></div><button class="replay" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v4.5h4.5"/></svg>Replay</button></div>
+      </div>
+      <div class="toy r toy-plane" style="top: 120px">
+        <button class="plane-toy" type="button" aria-label="Throw the paper airplane">
+          <svg class="trail" aria-hidden="true"></svg>
+          <span class="pad"></span><span class="meter"></span>
+          <span class="plane"><svg viewBox="0 0 26 26" aria-hidden="true"><path d="M2.5 12.6 L23 3.5 L18 22.5 L12.6 16.4 Z" fill="#E26F4E" transform="translate(0 1.6)"/><path d="M2.5 12.6 L23 3.5 L18 22.5 L12.6 16.4 Z" fill="#FF9B7A"/><path d="M12.6 16.4 L23 3.5 L10.8 18.8 Z" fill="#E26F4E"/><path d="M12.6 16.4 L23 3.5" stroke="#FFE4DA" stroke-width="0.9" stroke-linecap="round"/></svg></span>
+        </button>
+        <p class="toy-cap" aria-live="polite"><span>Hold, then let go to throw</span></p>
+      </div>
+      <p class="switch-note" style="margin-top:16px">Add a screenshot or what you copied. Drag a note by its top to move it. Snooze a reminder, or mark it done.</p>
+    </article>
     <p class="switch-note">Every shortcut can be changed, in Pane and right here: click a key under any demo and hold new ones. Switch tools from the button in the corner of Pane’s window.</p>
   </section>
 
@@ -664,7 +802,7 @@
 
     <div class="route">
       <h3>Then: allow Accessibility</h3>
-      <p>Scrawl and Spin need this to notice when you hold their keys. Away works without it.</p>
+      <p>Scrawl and Spin need this to notice when you hold their keys, and Jot to notice a double-tap. Away works without it.</p>
       <ol class="steps">
         <li><span>Go to <span class="path"><span>System Settings</span>›<span>Privacy &amp; Security</span>›<span>Accessibility</span></span> and turn on <em>Pane</em>.</span></li>
         <li><span>Already on but Scrawl doesn’t react? Remove Pane with the <em>–</em> button and add it again. macOS treats each new version as a new app.</span></li>
@@ -1569,10 +1707,167 @@
     };
   }
 
+  // ---------- Jot ----------
+  // Double-tap a key and a note opens at the pointer. Pick a timer, send it off, and it comes back top left.
+  const JOT_BINDS = {
+    jot: {
+      label: 'Tap twice',
+      keys: [{ code: 'ControlLeft', sym: '⌃' }],
+      // Double-tapping a letter would happen while typing, so it's one modifier.
+      rule: (keys) => (keys.length === 1 && isMod(keys[0].code) ? null : 'Pick one of ⌃, ⌥, ⇧ or ⌘ on its own.'),
+    },
+  };
+  const JOT_PLANE = '<svg viewBox="0 0 26 26" width="22" height="22" style="overflow:visible"><path d="M2.5 12.6 L23 3.5 L18 22.5 L12.6 16.4 Z" fill="#FBF8F3" stroke="#17303A" stroke-width="2" stroke-linejoin="round"/><path d="M12.6 16.4 L23 3.5 L10.8 18.8 Z" fill="#17303A"/></svg>';
+  const clockAt = (min) => new Date(Date.now() + min * 60000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+  // The pretend note and reminder, shared by Watch and Try it.
+  function jotKit(d) {
+    const { stage } = d;
+    const note = stage.querySelector('.jnote'), text = note.querySelector('textarea'), pills = note.querySelector('.jpills');
+    const thumb = pills.querySelector('.thumb'), send = note.querySelector('.jsend'), at = note.querySelector('.jat');
+    const toast = stage.querySelector('.jtoast');
+    const rel = (el) => { const r = el.getBoundingClientRect(), s = stage.getBoundingClientRect(); return { x: r.left - s.left + r.width / 2, y: r.top - s.top + r.height / 2 }; };
+    let minutes = 15;
+    const k = {
+      note, text, toast, send, rel,
+      get minutes() { return minutes; },
+      pill: (m) => pills.querySelector(`[data-m="${m}"]`),
+      pick(m, animate = true) {
+        minutes = m;
+        const b = k.pill(m);
+        pills.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+        if (!animate) thumb.style.transition = 'none';
+        thumb.style.translate = `${b.offsetLeft - 3}px 0`; thumb.style.left = '3px'; thumb.style.width = `${b.offsetWidth}px`;
+        if (!animate) requestAnimationFrame(() => { thumb.style.transition = ''; });
+        at.textContent = `Back at ${clockAt(m)}`;
+      },
+      // Opens with its corner by the pointer, kept inside the screen.
+      open(x, y) {
+        const { W, H } = d.size();
+        note.classList.remove('sent', 'open');
+        note.style.animation = 'none'; void note.offsetWidth; note.style.animation = '';
+        text.value = '';
+        const w = note.offsetWidth, h = note.offsetHeight;
+        note.style.left = `${Math.max(6, Math.min(x - 14, W - w - 6))}px`;
+        note.style.top = `${Math.max(6, Math.min(y - 10, H - h - 10))}px`;
+        requestAnimationFrame(() => { note.classList.add('open'); k.pick(minutes, false); });
+      },
+      // A paper airplane leaves Send and climbs away while the note folds up.
+      fly() {
+        const p = rel(send), { W } = d.size();
+        const plane = document.createElement('span');
+        plane.className = 'jfly'; plane.innerHTML = JOT_PLANE;
+        stage.append(plane);
+        const x0 = p.x - 11, y0 = p.y - 11;
+        if (!reduce) plane.animate([
+          { transform: `translate(${x0}px, ${y0}px)` },
+          { transform: `translate(${x0 - 30}px, ${y0 + 4}px) rotate(-14deg) scale(1.1)`, offset: 0.22 },
+          { transform: `translate(${x0 - 6}px, ${y0 - 60}px) rotate(-30deg) scale(1.15)`, offset: 0.55 },
+          { transform: `translate(${W + 30}px, -40px) rotate(-20deg) scale(0.8)` },
+        ], { duration: 900, easing: 'cubic-bezier(.45,.05,.4,1)', fill: 'forwards' });
+        setTimeout(() => plane.remove(), 950);
+        note.classList.add('sent');
+        setTimeout(() => note.classList.remove('open', 'sent'), 500);
+      },
+      showToast(msg, sub) {
+        toast.classList.remove('leave', 'doze', 'show');
+        toast.querySelector('.jtext').textContent = msg;
+        toast.querySelector('.jwhen').textContent = sub;
+        void toast.offsetWidth;
+        toast.classList.add('show');
+      },
+      hideToast(how = 'leave') { toast.classList.add(how); setTimeout(() => toast.classList.remove('show', 'leave', 'doze'), 520); },
+      reset() { note.classList.remove('open', 'sent'); toast.classList.remove('show', 'leave', 'doze'); stage.querySelectorAll('.jfly').forEach((x) => x.remove()); },
+    };
+    return k;
+  }
+
+  function jotScript(d) {
+    const { cursor } = d;
+    const { W, H } = d.size();
+    const k = jotKit(d);
+    k.reset();
+    d.keys(['jot']);
+    const key = d.combo('jot');
+    const MSG = 'Send Maya the slides';
+    const c = { x: Math.round(W * 0.4), y: Math.round(H * 0.3) };
+    const total = 4;
+    cursor.classList.remove('gone');
+    d.start(W * 0.8, H * 0.78);
+    d.say(0, total, `Double-tap ${key} anywhere.`);
+    d.later(200, () => d.move(c.x, c.y, 800));
+    [1100, 1400].forEach((t) => { d.later(t, () => d.press(['jot'], true)); d.later(t + 110, () => d.press(['jot'], false)); });
+    d.later(1560, () => k.open(c.x, c.y));
+    d.later(2100, () => d.say(1, total, 'Write what you need to remember.'));
+    for (let i = 1; i <= MSG.length; i++) d.later(2300 + i * 55, () => { k.text.value = MSG.slice(0, i); });
+    d.later(3700, () => { d.say(2, total, 'Pick a timer, then send it off.'); const p = k.rel(k.pill(30)); d.move(p.x, p.y, 600); });
+    d.later(4450, () => k.pick(30));
+    d.later(5000, () => { const p = k.rel(k.send); d.move(p.x + 4, p.y + 4, 550); });
+    d.later(5700, () => k.send.classList.add('press'));
+    d.later(5850, () => { k.send.classList.remove('press'); k.fly(); });
+    d.later(7000, () => { d.say(3, total, '30 minutes later, it’s back, top left.'); d.move(W * 0.62, H * 0.7, 900); });
+    d.later(7600, () => k.showToast(MSG, `Jotted at ${clockAt(-30)}`));
+    d.later(9400, () => { const p = k.rel(k.toast.querySelector('.jdone')); d.move(p.x, p.y, 700); });
+    d.later(10200, () => k.toast.querySelector('.jdone').classList.add('press'));
+    d.later(10350, () => { k.toast.querySelector('.jdone').classList.remove('press'); k.hideToast(); });
+    d.later(12000, () => d.play());
+  }
+
+  // Your turn: double-tap your key (or double-click the screen), write, send. Minutes go by fast in here.
+  function jotTry(d) {
+    const { stage, ptr } = d;
+    const k = jotKit(d);
+    k.reset();
+    d.keys(['jot']);
+    const key = () => d.combo('jot');
+    let downAt = 0, lastUp = 0, lastClick = 0, waiting = null, sent = '';
+    const guide = () => d.tell(k.note.classList.contains('open')
+      ? 'Write something, pick a timer, and press the airplane.'
+      : touchOnly ? 'Double-tap the screen for a note.' : `Double-tap ${key()} (or double-click the screen) for a note.`);
+    const openAt = (x, y) => { if (k.note.classList.contains('open')) return; k.open(x, y); setTimeout(() => { k.text.focus({ preventScroll: true }); guide(); }, 300); };
+    const go = () => {
+      const msg = k.text.value.trim();
+      if (!msg) { k.send.animate([{ translate: '0' }, { translate: '-5px' }, { translate: '4px' }, { translate: '0' }], { duration: 300 }); d.note('Write something first.'); k.text.focus({ preventScroll: true }); return; }
+      sent = msg; k.text.blur(); k.fly();
+      d.tell(`Sent. ${k.minutes} minutes go by in a few seconds here…`);
+      clearTimeout(waiting);
+      waiting = setTimeout(() => { k.showToast(sent, `Jotted at ${clockAt(-k.minutes)}`); d.tell('Back in the corner. Snooze it, or mark it done.'); }, 2600);
+    };
+    const on = (el, ev, fn) => el.addEventListener(ev, fn, { signal: d.signal });
+    on(k.send, 'click', go);
+    k.note.querySelectorAll('.jpills button').forEach((b) => on(b, 'click', () => k.pick(Number(b.dataset.m))));
+    on(k.text, 'keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || !e.shiftKey)) { e.preventDefault(); go(); } if (e.key === 'Escape') { k.text.blur(); k.note.classList.remove('open'); guide(); } });
+    on(k.toast.querySelector('.jdone'), 'click', () => { k.hideToast('leave'); guide(); });
+    on(k.toast.querySelector('.jsnooze'), 'click', () => {
+      k.hideToast('doze'); d.tell('Snoozed. It’ll be back in a moment.');
+      clearTimeout(waiting); waiting = setTimeout(() => { k.showToast(sent, 'Back from snooze'); d.tell('Snooze it again, or mark it done.'); }, 2600);
+    });
+    return {
+      refresh: guide,
+      edge(id, down) {
+        if (id !== 'jot') return;
+        const now = performance.now();
+        if (down) { downAt = now; return; }
+        if (!downAt || now - downAt > 280) { downAt = 0; lastUp = 0; return; }
+        if (lastUp && downAt - lastUp < 400) { lastUp = 0; openAt(ptr.in ? ptr.x : d.size().W * 0.4, ptr.in ? ptr.y : d.size().H * 0.3); }
+        else lastUp = now;
+        downAt = 0;
+      },
+      down(e) {
+        if (e.target.closest('.jnote, .jtoast')) return;
+        const now = performance.now();
+        if (now - lastClick < 380) { lastClick = 0; openAt(ptr.x, ptr.y); } else lastClick = now;
+      },
+      escape() { if (k.note.classList.contains('open')) { k.note.classList.remove('open'); guide(); } },
+      end() { clearTimeout(waiting); k.reset(); },
+    };
+  }
+
   const DEFS = {
     scrawl: { binds: SCRAWL_BINDS, ids: ['wheel', 'draw', 'esc'], watch: scrawlScript, try: scrawlTry },
     away: { binds: AWAY_BINDS, ids: ['away'], watch: awayScript, try: awayTry },
     spin: { binds: SPIN_BINDS, ids: ['spin'], watch: spinScript, try: spinTry },
+    jot: { binds: JOT_BINDS, ids: ['jot'], watch: jotScript, try: jotTry },
   };
   document.querySelectorAll('.demo').forEach((root) => {
     const demo = makeDemo(root, DEFS[root.dataset.demo]);
@@ -1770,6 +2065,77 @@
     deck.addEventListener('pointercancel', release);
     deck.addEventListener('click', (e) => { if (e.detail === 0) { rec = (rec + 1) % RECORDS.length; setRec(); sayTo(cap, `Now playing ${RECORDS[rec][1]}`); } });
     setRec();
+  })();
+
+
+  // Jot's paper airplane. Hold to wind it up, let go and it flies a trick and lands back on its pad.
+  (function () {
+    const toy = document.querySelector('.toy-plane'); if (!toy) return;
+    const btn = toy.querySelector('.plane-toy'), plane = btn.querySelector('.plane'), trail = btn.querySelector('.trail'), cap = toy.querySelector('.toy-cap');
+    // Each trick is a closed path (it starts and ends at the pad), in px, for t from 0 to 1, scaled by power.
+    const TRICKS = [
+      { name: 'A boomerang', f: (t, p) => ({ x: 150 * p * Math.sin(Math.PI * t), y: -95 * p * Math.sin(2 * Math.PI * t) }) },
+      { name: 'Loop the loop', f: (t, p) => {
+        const u = Math.min(1, Math.max(0, (t - 0.3) / 0.34)), r = 34 * p;
+        return { x: 150 * p * Math.sin(Math.PI * t) - r * Math.sin(2 * Math.PI * u), y: -70 * p * Math.sin(Math.PI * t) - r * (1 - Math.cos(2 * Math.PI * u)) };
+      } },
+      { name: 'A swoop', f: (t, p) => ({ x: 160 * p * Math.sin(Math.PI * t), y: 70 * p * Math.sin(2 * Math.PI * t) - 40 * p * Math.sin(Math.PI * t) }) },
+      { name: 'A big circle', f: (t, p) => ({ x: 75 * p * Math.sin(2 * Math.PI * t), y: -75 * p * (1 - Math.cos(2 * Math.PI * t)) }) },
+    ];
+    let flights = 0, held = 0, flying = false, raf = 0;
+    const NOSE = 24; // the drawing points up and to the right; turn it to face along the path
+    const puff = (x, y) => {
+      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('cx', (x + 85).toFixed(1)); c.setAttribute('cy', (y + 72).toFixed(1)); c.setAttribute('r', '2.6');
+      c.style.transformOrigin = `${x + 85}px ${y + 72}px`;
+      trail.append(c); setTimeout(() => c.remove(), 900);
+    };
+    function wind() {
+      if (flying) return;
+      held = performance.now();
+      btn.classList.add('winding');
+      sayTo(cap, 'Winding up… let go to throw');
+      const grow = () => {
+        if (!held) return;
+        const p = Math.min(1, (performance.now() - held) / 900);
+        btn.style.setProperty('--p', p.toFixed(3));
+        plane.style.transform = `translateX(${-10 * p}px) rotate(${8 * p}deg)`;
+        raf = requestAnimationFrame(grow);
+      };
+      grow();
+    }
+    function fly() {
+      if (!held || flying) return;
+      const power = 0.55 + 0.45 * Math.min(1, (performance.now() - held) / 900);
+      held = 0; cancelAnimationFrame(raf);
+      btn.classList.remove('winding'); btn.style.setProperty('--p', 0);
+      const trick = TRICKS[flights % TRICKS.length];
+      flights++;
+      if (reduce) { plane.animate([{ transform: 'none' }, { transform: 'translateY(-12px) rotate(-10deg)' }, { transform: 'none' }], { duration: 500 }); sayTo(cap, `${trick.name}. Flight ${flights}`); return; }
+      flying = true; plane.classList.add('flying');
+      sayTo(cap, `${trick.name}!`);
+      const dur = 1500 + 600 * power, t0 = performance.now();
+      let last = 0;
+      const step = (now) => {
+        const t = Math.min(1, (now - t0) / dur), e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        const a = trick.f(e, power), b = trick.f(Math.min(1, e + 0.01), power);
+        const ang = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI + NOSE;
+        plane.style.transform = `translate(${a.x.toFixed(1)}px, ${a.y.toFixed(1)}px) rotate(${t < 0.98 ? ang.toFixed(1) : 0}deg)`;
+        if (now - last > 45 && t < 0.97) { last = now; puff(a.x, a.y); }
+        if (t < 1) raf = requestAnimationFrame(step);
+        else {
+          flying = false; plane.classList.remove('flying'); plane.style.transform = '';
+          plane.animate([{ transform: 'translateY(-6px) scale(1.08, 0.92)' }, { transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.3,1.6,.5,1)' });
+          sayTo(cap, flights === 1 ? 'Landed. Again?' : `Landed. ${flights} flights so far`);
+        }
+      };
+      raf = requestAnimationFrame(step);
+    }
+    btn.addEventListener('pointerdown', (e) => { if (e.button !== 0) return; try { btn.setPointerCapture(e.pointerId); } catch {} wind(); });
+    btn.addEventListener('pointerup', fly);
+    btn.addEventListener('pointercancel', () => { held = 0; cancelAnimationFrame(raf); btn.classList.remove('winding'); btn.style.setProperty('--p', 0); plane.style.transform = ''; });
+    btn.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); wind(); } });
+    btn.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); fly(); } });
   })();
 
 </script>

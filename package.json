@@ -1,7 +1,7 @@
 {
   "name": "pane",
   "version": "1.4.8",
-  "description": "Small tools that sit on top of your Mac: Scrawl to draw on your screen, Away to blur it while you step away, Spin to run your music from a wheel.",
+  "description": "Small tools that sit on top of your Mac: Scrawl to draw on your screen, Away to blur it while you step away, Spin to run your music from a wheel, Jot to take a quick note that reminds you later.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",

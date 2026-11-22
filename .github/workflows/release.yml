@@ -69,13 +69,37 @@ jobs:
           [ -s notes.md ] || echo '- Small fixes and improvements' > notes.md
           cat notes.md
 
+      # Small updates: a patch from each of the last few releases to this one (about a megabyte instead of
+      # the whole 100 MB+ disk image; see app-patch.js). Pane on any other version downloads Pane.dmg.
+      # A patch that can't be made or doesn't rebuild this app exactly is just left out.
+      - name: Make patches from earlier versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p build/patches
+          for old in $(gh release list --limit 20 --exclude-drafts --exclude-pre-releases --json tagName -q '.[].tagName' \
+                        | grep -E '^v[0-9]+(\.[0-9]+)*$' | grep -vx "$TAG" | head -5); do
+            (
+              set -e
+              work=$(mktemp -d)
+              trap 'hdiutil detach "$work/mnt" -force >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
+              gh release download "$old" --pattern Pane.dmg --dir "$work"
+              mkdir "$work/mnt"
+              hdiutil attach "$work/Pane.dmg" -nobrowse -readonly -noautoopen -mountpoint "$work/mnt" >/dev/null
+              ditto "$work/mnt/Pane.app" "$work/Pane.app"
+              node scripts/make-patch.js "$work/Pane.app" build/Pane.app "build/patches/Pane-${old#v}-to-${TAG#v}.patch"
+            ) || echo "::warning::No patch from $old"
+          done
+          ls -l build/patches
+
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          files="build/Pane.dmg $(ls build/patches/*.patch 2>/dev/null | tr '\n' ' ')"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            # The release already exists (made by hand, or a re-run): replace its download.
-            gh release upload "$TAG" build/Pane.dmg --clobber
+            # The release already exists (made by hand, or a re-run): replace its downloads.
+            gh release upload "$TAG" $files --clobber
           else
-            gh release create "$TAG" build/Pane.dmg --title "Pane ${TAG#v}" --notes-file notes.md --latest
+            gh release create "$TAG" $files --title "Pane ${TAG#v}" --notes-file notes.md --latest
           fi

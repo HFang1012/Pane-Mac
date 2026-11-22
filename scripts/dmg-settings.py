@@ -5,7 +5,7 @@ import os
 application = defines["app"]
 app_name = os.path.basename(application)
 
-format = "UDZO"  # compressed, read-only
+format = "ULMO"  # read-only, LZMA-compressed: about a quarter smaller than zlib (UDZO); opens on macOS 10.15 and newer
 files = [application]
 symlinks = {"Applications": "/Applications"}
 icon = defines["icon"]  # the disk's own icon in Finder and on the desktop

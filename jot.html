@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en" data-theme="jot">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'">
+<title>Jot</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  body {
+    font-family: var(--font); color: var(--ink); font-size: 14px; line-height: 1.4;
+    -webkit-font-smoothing: antialiased; user-select: none; cursor: default;
+  }
+  button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; -webkit-app-region: no-drag; }
+  button:focus { outline: none; }
+  button:focus-visible { box-shadow: 0 0 0 3px var(--accent-soft); }
+  [hidden] { display: none !important; }
+  svg.i { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* The window is a little bigger than the card, so the soft shadow has room. */
+  .wrap { padding: 14px 20px 26px; }
+  .card {
+    position: relative; border-radius: 30px; background: var(--card);
+    box-shadow: 0 7px 0 var(--card-lip), 0 22px 40px -12px rgba(10, 26, 32, 0.34), 0 0 0 1px rgba(23, 48, 58, 0.05);
+  }
+
+  /* ---------- the note you write ---------- */
+  .compose .card { padding: 6px 16px 14px; transform-origin: 26px 22px; animation: open 560ms var(--bouncy) both; }
+  @keyframes open { from { opacity: 0; transform: scale(0.25) rotate(-8deg); } 30% { opacity: 1; } }
+  .compose .card > * { animation: rise 520ms var(--smooth) both; animation-delay: calc(var(--i, 0) * 45ms + 90ms); }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+
+  /* Grab the top to move the note. */
+  .grip { -webkit-app-region: drag; height: 30px; display: flex; align-items: center; justify-content: space-between; margin: 0 -6px 2px; cursor: grab; }
+  .grip .tag { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 800; color: var(--ink-2); padding-left: 4px; }
+  .grip .tag svg { height: 15px; width: auto; }
+  .grip .dots { display: flex; gap: 3px; }
+  .grip .dots i { width: 4px; height: 4px; border-radius: 2px; background: var(--edge); transition: background 160ms ease, transform 260ms var(--bouncy); }
+  .grip:hover .dots i { background: var(--ink-2); }
+  .grip:hover .dots i:nth-child(2) { transform: translateY(-2px); }
+  .x { width: 26px; height: 26px; border-radius: 13px; display: grid; place-items: center; color: var(--ink-2); background: var(--well); transition: transform 280ms var(--bouncy), background 140ms ease, color 140ms ease; }
+  .x:hover { transform: rotate(90deg); background: var(--accent-soft); color: var(--accent-ink); }
+  .x:active { transform: rotate(90deg) scale(0.84); }
+
+  textarea {
+    display: block; width: 100%; min-height: 84px; max-height: 190px; resize: none; border: 0; outline: none;
+    font: inherit; font-size: 16px; font-weight: 700; line-height: 1.4; color: var(--ink); background: var(--well);
+    border-radius: 20px; padding: 12px 14px; user-select: text; cursor: text;
+    transition: background 160ms ease, box-shadow 220ms ease;
+  }
+  textarea::placeholder { color: var(--ink-2); opacity: 0.65; font-weight: 600; }
+  textarea:focus { background: #FFFFFF; box-shadow: inset 0 0 0 2.5px var(--peach); }
+
+  /* A screenshot, once taken: a rounded thumbnail that pops in. */
+  .shot { position: relative; margin-top: 10px; border-radius: 18px; overflow: hidden; background: var(--well); box-shadow: 0 4px 0 var(--card-lip); animation: shot-in 520ms var(--bouncy) both; }
+  @keyframes shot-in { from { opacity: 0; transform: scale(0.6) rotate(-3deg); } }
+  .shot img { display: block; width: 100%; max-height: 150px; object-fit: cover; border-radius: 18px; }
+  .shot .x { position: absolute; top: 8px; right: 8px; background: rgba(247, 251, 252, 0.92); }
+  .shot.flash::after { content: ""; position: absolute; inset: 0; background: #FFF; animation: flash 420ms ease-out forwards; }
+  @keyframes flash { to { opacity: 0; } }
+
+  .tools { display: flex; gap: 6px; margin-top: 10px; }
+  .chipbtn {
+    height: 30px; padding: 0 12px 0 10px; border-radius: 15px; display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 800; background: var(--well); color: var(--ink);
+    transition: transform 220ms var(--bouncy), background 140ms ease, box-shadow 220ms var(--bouncy);
+  }
+  .chipbtn svg { color: var(--peach-lip); transition: transform 360ms var(--bouncy); }
+  .chipbtn:hover { background: var(--paper); transform: translateY(-1px); box-shadow: 0 3px 0 var(--card-lip); }
+  .chipbtn:hover svg { transform: rotate(-10deg) scale(1.15); }
+  .chipbtn:active { transform: translateY(1px) scale(0.96); box-shadow: none; }
+  .chipbtn.busy { opacity: 0.6; pointer-events: none; }
+  .chipbtn.done svg { animation: nod 480ms var(--bouncy); }
+  @keyframes nod { 40% { transform: scale(1.4) rotate(12deg); } }
+
+  /* ---------- the timer: pills with a highlight that slides between them ---------- */
+  .timer { margin-top: 12px; }
+  .timer .label { display: flex; justify-content: space-between; align-items: baseline; font-size: 11.5px; font-weight: 800; color: var(--ink-2); margin: 0 4px 6px; }
+  .timer .label span { color: var(--accent-ink); font-variant-numeric: tabular-nums; }
+  .pills { position: relative; display: flex; gap: 2px; padding: 3px; border-radius: 18px; background: var(--well); }
+  .pills .thumb {
+    position: absolute; top: 3px; left: 0; height: 30px; width: 40px; border-radius: 15px;
+    background: var(--accent); box-shadow: 0 3px 0 var(--accent-lip);
+    transition: translate 420ms var(--bouncy), width 420ms var(--bouncy);
+  }
+  .pill {
+    position: relative; flex: 1 1 0; height: 30px; border-radius: 15px; font-size: 12px; font-weight: 800; color: var(--ink-2);
+    white-space: nowrap; transition: color 160ms ease, transform 220ms var(--bouncy);
+  }
+  .pill:hover { color: var(--ink); }
+  .pill:active { transform: scale(0.92); }
+  .pill[aria-checked="true"] { color: var(--ink); }
+  .pill.custom { flex: 1.25 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 2px; }
+  .pill.custom input {
+    width: 30px; border: 0; outline: none; background: transparent; font: inherit; color: inherit; text-align: right; padding: 0;
+    user-select: text; -webkit-app-region: no-drag; cursor: text;
+  }
+  .pill.custom input::-webkit-inner-spin-button { display: none; }
+
+  /* ---------- send: a round coral stamp with a paper airplane ---------- */
+  .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
+  .hint { font-size: 11.5px; font-weight: 700; color: var(--ink-2); display: flex; gap: 6px; align-items: center; transition: color 160ms ease; }
+  .hint kbd { font: inherit; font-weight: 800; color: var(--ink); background: var(--well); border-radius: 7px; padding: 1px 6px; box-shadow: 0 2px 0 var(--card-lip); }
+  .hint.warn { color: var(--accent-ink); }
+  .send {
+    width: 52px; height: 52px; border-radius: 26px; display: grid; place-items: center; margin-bottom: 5px;
+    background: var(--accent); box-shadow: 0 5px 0 var(--accent-lip); color: var(--ink);
+    transition: transform 240ms var(--bouncy), box-shadow 240ms var(--bouncy);
+  }
+  .send svg { width: 26px; height: 26px; overflow: visible; transition: transform 420ms var(--bouncy); }
+  .send:hover { transform: translateY(-2px) rotate(-6deg); box-shadow: 0 7px 0 var(--accent-lip); }
+  .send:hover svg { transform: translate(2px, -2px) rotate(-8deg); }
+  .send:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--accent-lip); }
+  .send:focus-visible { box-shadow: 0 5px 0 var(--accent-lip), 0 0 0 4px var(--accent-soft); }
+  .send.empty { filter: saturate(0.4); opacity: 0.75; }
+  .send.empty:hover { transform: none; }
+
+  /* Sent: the card folds away toward the corner while the plane takes off. */
+  .compose.sent .card { animation: fold 520ms cubic-bezier(.6, 0, .8, .3) forwards; transform-origin: calc(100% - 40px) calc(100% - 40px); }
+  @keyframes fold { 30% { transform: scale(1.03, 0.96); } to { transform: scale(0.12) rotate(18deg); opacity: 0; } }
+  .flyer { position: fixed; left: 0; top: 0; width: 30px; height: 30px; pointer-events: none; z-index: 5; }
+  .flyer svg { width: 30px; height: 30px; overflow: visible; filter: drop-shadow(0 4px 4px rgba(10, 26, 32, 0.25)); }
+  .compose.gone .card { animation: toss 300ms cubic-bezier(.5, 0, .9, .4) forwards; transform-origin: 50% 50%; }
+  @keyframes toss { to { transform: scale(0.7) rotate(-6deg) translateY(10px); opacity: 0; } }
+
+  /* ---------- the reminder that comes back, top left ---------- */
+  .toast .wrap { padding: 12px 18px 24px 14px; }
+  .toast .card { padding: 12px 14px 12px; animation: land 700ms var(--bouncy) both; transform-origin: 0 0; }
+  @keyframes land { from { transform: translate(-120%, -10px) rotate(-10deg); opacity: 0; } 25% { opacity: 1; } }
+  .toast .card > * { animation: rise 480ms var(--smooth) both; animation-delay: calc(var(--i, 0) * 50ms + 180ms); }
+  .toast.leave .card { animation: away 380ms cubic-bezier(.6, 0, .9, .4) forwards; }
+  @keyframes away { 25% { transform: translateX(10px) scale(1.02); } to { transform: translateX(-115%) rotate(-6deg); opacity: 0.3; } }
+  .toast.snooze .card { animation: doze 520ms cubic-bezier(.6, 0, .9, .4) forwards; transform-origin: 30px 30px; }
+  @keyframes doze { 30% { transform: scale(1.03) rotate(2deg); } to { transform: scale(0.15) translateY(-40px); opacity: 0; } }
+  .t-head { display: grid; grid-template-columns: 38px 1fr 26px; gap: 10px; align-items: center; }
+  .badge {
+    position: relative; width: 38px; height: 38px; border-radius: 19px; display: grid; place-items: center; background: var(--accent);
+    box-shadow: 0 3px 0 var(--accent-lip); color: var(--ink);
+  }
+  .badge svg { width: 20px; height: 20px; animation: ring 1100ms ease-in-out 600ms 2; transform-origin: 50% 10%; }
+  @keyframes ring { 0%, 100% { rotate: 0deg; } 15% { rotate: 16deg; } 30% { rotate: -14deg; } 45% { rotate: 10deg; } 60% { rotate: -6deg; } 75% { rotate: 3deg; } }
+  .badge::after { content: ""; position: absolute; inset: 0; width: 38px; height: 38px; border-radius: 19px; border: 2px solid var(--accent); animation: ping 1.8s ease-out 400ms 3; opacity: 0; }
+  @keyframes ping { from { opacity: 0.9; transform: scale(0.9); } to { opacity: 0; transform: scale(1.6); } }
+  .t-head b { display: block; font-size: 14px; font-weight: 800; }
+  .t-head small { display: block; font-size: 11.5px; font-weight: 700; color: var(--ink-2); }
+  .t-text {
+    margin: 10px 0 0; padding: 10px 12px; border-radius: 16px; background: var(--well); font-size: 15px; font-weight: 700;
+    line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 132px; overflow-y: auto; user-select: text; cursor: text;
+  }
+  .t-text:empty { display: none; }
+  .t-shot { display: block; width: 100%; margin-top: 8px; border-radius: 14px; overflow: hidden; box-shadow: 0 3px 0 var(--card-lip); transition: transform 260ms var(--bouncy); }
+  .t-shot:hover { transform: scale(1.02) rotate(-0.5deg); }
+  .t-shot img { display: block; width: 100%; max-height: 130px; object-fit: cover; border-radius: 14px; }
+  .acts { display: flex; gap: 6px; margin-top: 10px; }
+  .act {
+    flex: 1 1 0; height: 34px; border-radius: 17px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    font-size: 12.5px; font-weight: 800; background: var(--well); margin-bottom: 4px; box-shadow: 0 3px 0 var(--card-lip);
+    transition: transform 200ms var(--bouncy), box-shadow 200ms var(--bouncy), background 140ms ease;
+  }
+  .act:hover { transform: translateY(-1px); box-shadow: 0 4px 0 var(--card-lip); background: var(--paper); }
+  .act:active { transform: translateY(3px); box-shadow: 0 0 0 var(--card-lip); }
+  .act.go { background: var(--accent); box-shadow: 0 3px 0 var(--accent-lip); }
+  .act.go:hover { background: var(--accent); box-shadow: 0 4px 0 var(--accent-lip); }
+  .act.copy { flex: 0 0 auto; padding: 0 12px; }
+  .act .swap { display: inline-block; transition: opacity 140ms ease, transform 300ms var(--bouncy); }
+  .act .swap.out { opacity: 0; transform: translateY(5px); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+  }
+</style>
+</head>
+<body>
+<template id="composeTpl">
+  <div class="wrap"><div class="card" id="card">
+    <div class="grip" style="--i:0" title="Drag to move">
+      <span class="tag" id="tag"></span>
+      <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      <button class="x" id="close" aria-label="Throw this note away"><svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <textarea id="text" style="--i:1" rows="3" maxlength="1000" spellcheck="true" placeholder="What do you want to remember?" aria-label="Note"></textarea>
+    <div class="shot" id="shot" hidden><img id="shotImg" alt="Screenshot"><button class="x" id="shotX" aria-label="Remove screenshot"><svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="tools" style="--i:2">
+      <button class="chipbtn" id="shotBtn" title="Drag over part of the screen. Press Space to pick a window."><svg class="i" viewBox="0 0 24 24"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6H8l1.5-2h5L16 6h1.5A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3.4"/></svg><span>Screenshot</span></button>
+      <button class="chipbtn" id="clipBtn" title="Add the text or picture you copied"><svg class="i" viewBox="0 0 24 24"><rect x="6" y="4.5" width="12" height="16" rx="3"/><path d="M9.5 4.5V3.8a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v.7"/><path d="M9.5 11h5M9.5 15h3"/></svg><span>Paste copied</span></button>
+    </div>
+    <div class="timer" style="--i:3">
+      <div class="label">Remind me in <span id="when"></span></div>
+      <div class="pills" id="pills" role="radiogroup" aria-label="Remind me in"><span class="thumb" id="thumb"></span></div>
+    </div>
+    <div class="foot" style="--i:4">
+      <span class="hint" id="hint"><kbd>⌘</kbd><kbd>↩</kbd> to send</span>
+      <button class="send" id="send" aria-label="Send">
+        <svg viewBox="0 0 26 26" aria-hidden="true"><path d="M2.5 12.6 L23 3.5 L18 22.5 L12.6 16.4 Z" fill="#FBF8F3" stroke="#17303A" stroke-width="2" stroke-linejoin="round"/><path d="M12.6 16.4 L23 3.5 L10.8 18.8 Z" fill="#17303A"/></svg>
+      </button>
+    </div>
+  </div></div>
+</template>
+
+<template id="toastTpl">
+  <div class="wrap"><div class="card" id="card">
+    <div class="t-head" style="--i:0">
+      <span class="badge"><svg class="i" viewBox="0 0 24 24"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg></span>
+      <div><b id="tTitle">Reminder</b><small id="tSub"></small></div>
+      <button class="x" id="tClose" aria-label="Done"><svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <p class="t-text" id="tText" style="--i:1"></p>
+    <button class="t-shot" id="tShot" style="--i:2" hidden title="Open the screenshot"><img id="tShotImg" alt="Screenshot"></button>
+    <div class="acts" style="--i:3">
+      <button class="act copy" id="tCopy" title="Copy the note’s text"><svg class="i" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="3"/><path d="M16 8V6.5A2.5 2.5 0 0 0 13.5 4h-7A2.5 2.5 0 0 0 4 6.5v7A2.5 2.5 0 0 0 6.5 16H8"/></svg><span class="swap">Copy</span></button>
+      <button class="act" id="tSnooze"><svg class="i" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><span id="tSnoozeText">Snooze</span></button>
+      <button class="act go" id="tDone"><svg class="i" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Done</button>
+    </div>
+  </div></div>
+</template>
+
+<script src="tools.js"></script>
+<script src="jot.js"></script>
+</body>
+</html>

@@ -41,7 +41,9 @@ scrawl.invoke('away:init').then((a) => {
     const hint = $('hint');
     hint.innerHTML = a.preview
       ? 'This is a preview. Click or press any key to close it.'
-      : `Press <kbd>${a.keys.symbols.join('</kbd><kbd>')}</kbd> when you’re back.`;
+      : a.mode === 'double'
+        ? `Tap <kbd>${(a.key.keys || [a.key]).map((k) => k.symbol).join('</kbd><kbd>')}</kbd> twice when you’re back.`
+        : `Press <kbd>${a.keys.symbols.join('</kbd><kbd>')}</kbd> when you’re back.`;
     setTimeout(() => hint.classList.add('show'), 700);
     if (!a.preview) setTimeout(() => hint.classList.remove('show'), 4200);
   }

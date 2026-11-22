@@ -23,6 +23,8 @@ if (process.env.PANE_USER_DATA) app.setPath('userData', process.env.PANE_USER_DA
 const TOOL_IDS = ['pencil', 'eraser', 'clear', 'undo', 'redo', 'toggle'];
 const DEFAULTS = {
   hotkey: { codes: [UiohookKey.Alt], symbol: '⌥', name: 'Left Option', side: 'left' },
+  // 'hold': hold the wheel key. 'double': tap it, then tap again and keep holding.
+  wheelMode: 'hold',
   // Held while a tool is in hand, it puts the pen down without clicking.
   drawKey: { codes: [UiohookKey.Ctrl], symbol: '⌃', name: 'Left Control', side: 'left' },
   tools: TOOL_IDS.map((id) => ({ id, on: true })),
@@ -35,7 +37,10 @@ const DEFAULTS = {
   page: 'scrawl', // which tool the settings window shows
   away: {
     // A shortcut, not a held key: it toggles the Away screen. ⌃⌘A stays clear of Scrawl's ⌥ and of most apps.
+    // Or double-tap a key (right ⇧ to start) instead.
+    mode: 'shortcut', // 'shortcut' | 'double'
     keys: { accelerator: 'Control+Command+A', symbols: ['⌃', '⌘', 'A'], name: 'Control Command A' },
+    key: { codes: [UiohookKey.ShiftRight], symbol: '⇧', name: 'Right Shift', side: 'right' },
     message: Tools.DEFAULT_MESSAGE,
     mood: 'dusk',
     showTime: true,
@@ -45,6 +50,7 @@ const DEFAULTS = {
   spin: {
     // Held like Scrawl's wheel key. The right ⌘ alone, so it stays clear of ⌘-shortcuts made with the left one.
     key: { codes: [UiohookKey.MetaRight], symbol: '⌘', name: 'Right Command', side: 'right' },
+    mode: 'hold', // 'hold' | 'double' (tap, then tap again and keep holding)
     app: 'spotify', // 'spotify' | 'music' | 'other' (any player, through the media keys)
     count: 5, // songs shown each way
     size: 76, // the music wheel's own size, apart from Scrawl's (one of WHEEL_SIZES)
@@ -64,7 +70,10 @@ const DEFAULTS = {
   },
   tweak: {
     // Double-tap right ⌥ and the pointer picks out files on the desktop and in Finder. Click one to edit it.
+    // Or press a shortcut instead.
+    mode: 'double', // 'double' | 'shortcut'
     key: { codes: [UiohookKey.AltRight], symbol: '⌥', name: 'Right Option', side: 'right' },
+    keys: { accelerator: 'Control+Command+E', symbols: ['⌃', '⌘', 'E'], name: 'Control Command E' },
     copy: false, // save as a copy, keeping the original, unless you say otherwise in the editor
     trash: true, // the version you replaced goes to the Trash instead of being gone for good
     enabled: true,
@@ -522,9 +531,9 @@ function asCombo(k) {
   const keys = k?.keys?.length ? k.keys : [{ codes: k.codes, symbol: k.symbol, name: k.name, ...(k.side ? { side: k.side } : {}) }];
   return combo(keys.map((key) => (key.codes.length > 1 && MOD_CODES.has(key.codes[0]) ? keyInfo(key.codes[0]) : key)));
 }
-const KEY_LABEL = { hotkey: 'wheel key', drawKey: 'draw key', spinKey: 'Spin key', jotKey: 'Jot key', tweakKey: 'Tweak key' };
-// Every held key Pane listens for, by name. Spin's, Jot's and Tweak's live inside their own settings.
-const OWN_KEY = { spinKey: 'spin', jotKey: 'jot', tweakKey: 'tweak' };
+const KEY_LABEL = { hotkey: 'wheel key', drawKey: 'draw key', spinKey: 'Spin key', jotKey: 'Jot key', tweakKey: 'Tweak key', awayKey: 'Away key' };
+// Every held key Pane listens for, by name. Spin's, Jot's, Tweak's and Away's live inside their own settings.
+const OWN_KEY = { spinKey: 'spin', jotKey: 'jot', tweakKey: 'tweak', awayKey: 'away' };
 const keyOf = (which) => (OWN_KEY[which] ? settings[OWN_KEY[which]].key : settings[which]);
 function setKey(which, info) {
   if (OWN_KEY[which]) settings = { ...settings, [OWN_KEY[which]]: { ...settings[OWN_KEY[which]], key: info } };
@@ -533,7 +542,21 @@ function setKey(which, info) {
 // A double-tap key (Jot's, Tweak's) may be the same key as Scrawl's draw key (left ⌃ for Jot, to start): the
 // draw key only draws with a tool in hand, and neither opens then. Every other pair must differ.
 const mayShare = (a, b) => ['drawKey,jotKey', 'drawKey,tweakKey'].includes([a, b].sort().join());
-const DOUBLE_TAP = new Set(['jotKey', 'tweakKey']);
+// Keys that are tapped twice: Jot's, Tweak's and Away's always, and Scrawl's wheel key and Spin's key when
+// they're set to double-tap and hold. A tapped key is one modifier on its own.
+const tapped = (which) => ['jotKey', 'tweakKey', 'awayKey'].includes(which) ||
+  (which === 'hotkey' && settings.wheelMode === 'double') || (which === 'spinKey' && settings.spin.mode === 'double');
+const oneModifier = (k) => k.keys.length === 1 && MOD_CODES.has(k.keys[0].codes[0]);
+// Switching a held key over to double-tap: keep one of its modifiers if it has one, else find a free one.
+function fitTapKey(which) {
+  const k = keyOf(which);
+  if (!tapped(which) || oneModifier(k)) return;
+  const clash = (c) => Object.keys(KEY_LABEL).some((o) => o !== which && !mayShare(o, which) && sameCombo(c, keyOf(o)));
+  const mine = k.keys.filter((x) => MOD_CODES.has(x.codes[0])).map((x) => x.codes[0]);
+  const all = [UiohookKey.Alt, UiohookKey.AltRight, UiohookKey.Ctrl, UiohookKey.CtrlRight, UiohookKey.Shift, UiohookKey.ShiftRight, UiohookKey.Meta, UiohookKey.MetaRight];
+  const pick = [...mine, ...all].map((c) => combo([keyInfo(c)])).find((c) => !clash(c));
+  if (pick) setKey(which, pick);
+}
 
 // What's held right now. Modifiers follow the event's own flags, which macOS keeps accurate. Other keys
 // repeat their key-down while held, so one not seen for a second counts as let go (macOS sometimes drops
@@ -586,7 +609,7 @@ function finishBind(cancel) {
     const other = Object.keys(KEY_LABEL).find((k) => k !== which && !mayShare(k, which) && sameCombo(next, keyOf(k)));
     if (other) error = `${next.name} ${keys.length > 1 ? 'are' : 'is'} already your ${KEY_LABEL[other]}. Pick different keys.`;
     // Double-tapping a letter would happen all the time while typing ("ee"), so Jot takes one modifier.
-    else if (DOUBLE_TAP.has(which) && (keys.length > 1 || !MOD_CODES.has(keys[0].codes[0]))) error = 'Double-tap works with one of ⌃, ⌥, ⇧ or ⌘. Pick just one.';
+    else if (tapped(which) && !oneModifier(next)) error = 'Double-tap works with one of ⌃, ⌥, ⇧ or ⌘. Pick just one.';
     else {
       setKey(which, next);
       writeJSON('settings.json', settings);
@@ -637,8 +660,7 @@ uIOhook.on('keydown', (e) => {
   noteKey(e, true);
   if (binding) { bindKeyDown(e); return; }
   if (target && e.keycode === UiohookKey.Escape) { endTarget(); return; } // Esc puts Tweak's pointer away
-  jotTap(e, true);
-  tweakTap.feed(e, true);
+  for (const t of tappers()) t.feed(e, true);
   clearWaits(e, false);
   if (away || awayBinding) return; // the Away screen is up (or its keys are being chosen): Scrawl sits still
   if (spinKeyDown(e)) return; // Spin's key, or any key while Spin's wheel is up or about to open
@@ -656,6 +678,7 @@ uIOhook.on('keydown', (e) => {
     return;
   }
   if (inCombo(wheel, e.keycode)) {
+    if (settings.wheelMode === 'double') return; // opened by its double-tap (wheelTap)
     // Open whenever the wheel isn't already up. Don't trust `holding` here: tapping fast can make macOS
     // drop a key-up, which used to leave `holding` stuck on and the wheel never opening again.
     if (menu.open) return;
@@ -673,8 +696,7 @@ uIOhook.on('keydown', (e) => {
 uIOhook.on('keyup', (e) => {
   noteKey(e, false);
   if (binding) { bindKeyUp(e); return; }
-  jotTap(e, false);
-  tweakTap.feed(e, false);
+  for (const t of tappers()) t.feed(e, false);
   clearWaits(e, true);
   if (inCombo(settings.hotkey, e.keycode)) hotkeyBlocked = false;
   if (inCombo(settings.spin.key, e.keycode)) { spinBlocked = false; spinKeyUp(); }
@@ -686,8 +708,7 @@ uIOhook.on('keyup', (e) => {
 });
 // Mouse button 1 is left, 2 is right. Right-click puts the tool down.
 uIOhook.on('mousedown', (e) => {
-  jotTapReset(); // ⌃-click is a click, not half a double-tap
-  tweakTap.reset();
+  for (const t of tappers()) t.reset(); // ⌃-click is a click, not half a double-tap
   if (target) { targetClick(e.button); return; }
   if (spin.open || spinTimer) { cancelSpin(); return; } // a click while the music wheel is up: leave it be
   if (away || awayBinding || !settings.enabled || !activeTool || menu.open) return;
@@ -710,6 +731,7 @@ function spinKeyDown(e) {
   const key = settings.spin.key;
   if (inCombo(key, e.keycode)) {
     if (!settings.spin.enabled || binding) return false;
+    if (settings.spin.mode === 'double') return spin.open; // opened by its double-tap (spinTap)
     if (spin.open || spinTimer || spinBlocked) return true; // a held key repeats
     if (!comboHeld(key)) return false; // the rest of the combo is on its way (and Scrawl may want this key)
     if (othersHeld(key)) { spinBlocked = true; return true; }
@@ -727,6 +749,30 @@ function spinKeyUp() {
   if (!spin.open) return;
   closeSpin(true);
 }
+// Double-tap and hold: tap the Spin key, then press it again and keep holding. Letting go picks, as above.
+const spinTap = doubleTap({
+  key: () => settings.spin.key,
+  on: () => settings.spin.enabled && settings.spin.mode === 'double',
+  hold: () => {
+    if (away || awayBinding || binding || spin.open || target) return;
+    if (menu.open) closeMenu(false);
+    Music.refresh(settings.spin.app);
+    openSpin();
+  },
+});
+// Scrawl's wheel the same way, when it's set to double-tap and hold.
+const wheelTap = doubleTap({
+  key: () => settings.hotkey,
+  on: () => settings.enabled && settings.wheelMode === 'double',
+  hold: () => {
+    if (away || awayBinding || binding || menu.open || spin.open || spinTimer || target) return;
+    holding = true;
+    openMenu();
+  },
+});
+// Every double-tap Pane listens for. Jot's, Tweak's and Away's are made further down.
+const tappers = () => [jotTapper, tweakTap, awayTap, spinTap, wheelTap];
+
 function cancelSpin() {
   if (spinTimer) { clearTimeout(spinTimer); spinTimer = null; }
   closeSpin(false);
@@ -932,24 +978,64 @@ let away = null; // { since, preview, wins, closing, front }
 let awayBinding = false; // the settings window is listening for new Away keys
 let awayKeyOn = false; // the Away shortcut is registered
 
-// Away's shortcut, and Jot's when it opens from a shortcut rather than a double-tap. Both are set together,
-// because the only way to drop one is to drop them all. Off while either's keys are being chosen.
+// ---------- shortcuts: Away's, Jot's and Tweak's, each when it's set to a shortcut rather than a double-tap ----------
+// All set together, because the only way to drop one is to drop them all. Off while any are being chosen.
+const SHORTCUT_NAME = { away: 'Away', jot: 'Jot', tweak: 'Tweak' };
+const shortcutOn = { away: false, jot: false, tweak: false };
+const shortcutBinding = { away: false, jot: false, tweak: false };
+const usesShortcut = (tool) => settings[tool].enabled && settings[tool].mode === 'shortcut';
 function registerShortcuts() {
   globalShortcut.unregisterAll();
-  awayKeyOn = false;
-  jotKeyOn = false;
-  if (awayBinding || jotBinding) return;
-  if (settings.away.enabled) {
-    try { awayKeyOn = globalShortcut.register(settings.away.keys.accelerator, toggleAway); } catch { awayKeyOn = false; }
+  for (const t in shortcutOn) shortcutOn[t] = false;
+  awayBinding = shortcutBinding.away;
+  jotBinding = shortcutBinding.jot;
+  tweakBinding = shortcutBinding.tweak;
+  if (awayBinding || jotBinding || tweakBinding) { awayKeyOn = jotKeyOn = false; return; }
+  const acts = { away: toggleAway, jot: () => { toggleComposer(); }, tweak: toggleTarget };
+  for (const t in acts) {
+    if (!usesShortcut(t)) continue;
+    try { shortcutOn[t] = globalShortcut.register(settings[t].keys.accelerator, acts[t]); } catch { shortcutOn[t] = false; }
   }
-  if (settings.jot.enabled && settings.jot.mode === 'shortcut') {
-    try { jotKeyOn = globalShortcut.register(settings.jot.keys.accelerator, () => { toggleComposer(); }); } catch { jotKeyOn = false; }
-  }
+  awayKeyOn = shortcutOn.away;
+  jotKeyOn = shortcutOn.jot;
 }
+ipcMain.on('shortcut:bind', (_e, tool, on) => {
+  if (!(tool in shortcutBinding)) return;
+  shortcutBinding[tool] = !!on;
+  if (on) { binding = false; if (menu.open) closeMenu(false); }
+  registerShortcuts(); // off while listening, so the current keys reach the settings window too
+});
+ipcMain.handle('shortcut:keys', (_e, tool, keys) => {
+  if (!(tool in shortcutBinding)) return { settings, error: null };
+  shortcutBinding[tool] = false;
+  const before = settings[tool].keys;
+  const taken = Object.keys(SHORTCUT_NAME).find((t) => t !== tool && usesShortcut(t) && settings[t].keys.accelerator === keys.accelerator);
+  let error = null;
+  if (taken) error = `${keys.symbols.join('')} is already your ${SHORTCUT_NAME[taken]} keys. Pick other keys.`;
+  else {
+    settings = { ...settings, [tool]: { ...settings[tool], keys } };
+    registerShortcuts();
+    if (usesShortcut(tool) && !shortcutOn[tool]) {
+      error = `${keys.symbols.join('')} is taken by another app. Pick other keys.`;
+      settings = { ...settings, [tool]: { ...settings[tool], keys: before } };
+    }
+  }
+  registerShortcuts();
+  writeJSON('settings.json', settings);
+  buildMenu();
+  return { settings, error };
+});
+
 function toggleAway() {
   if (away) hideAway();
   else showAway(false);
 }
+// Or double-tap the Away key, when Away is set to that. It works while Away is up, to come back.
+const awayTap = doubleTap({
+  key: () => settings.away.key,
+  on: () => settings.away.enabled && settings.away.mode === 'double' && !awayBinding && !binding,
+  fire: () => { if (away?.preview) return; toggleAway(); },
+});
 
 // Step a window's opacity (vibrancy can't be faded with CSS, so the whole window fades).
 function fadeWindow(w, from, to, ms, done) {
@@ -1066,27 +1152,6 @@ ipcMain.handle('away:init', () => ({
 ipcMain.on('away:show', () => showAway(true));
 // The page asks to close only for a preview: the real thing ends with the shortcut.
 ipcMain.on('away:dismiss', () => { if (away?.preview) hideAway(); });
-ipcMain.on('away:bind', (_e, on) => {
-  awayBinding = !!on;
-  if (on) { binding = false; if (menu.open) closeMenu(false); }
-  registerShortcuts(); // off while listening, so the current keys reach the settings window too
-});
-ipcMain.handle('away:keys', (_e, keys) => {
-  awayBinding = false;
-  const before = settings.away.keys;
-  settings = { ...settings, away: { ...settings.away, keys } };
-  registerShortcuts();
-  let error = null;
-  if (settings.away.enabled && !awayKeyOn) {
-    error = `${keys.symbols.join('')} is taken by another app. Pick other keys.`;
-    settings = { ...settings, away: { ...settings.away, keys: before } };
-    registerShortcuts();
-  }
-  writeJSON('settings.json', settings);
-  buildMenu();
-  return { settings, error };
-});
-
 // ---------- Jot: a quick note that comes back when its time is up ----------
 // Double-tap the Jot key (or press its shortcut) and a note opens at the pointer. Write, maybe add a
 // screenshot (and take it off again), pick a timer and send it off. When the time's up it comes back in the
@@ -1102,6 +1167,12 @@ const TOAST_W = 352;
 const jotDir = () => path.join(app.getPath('userData'), 'jot');
 const saveNotes = () => writeJSON('jot.json', notes.map(({ showing, ...n }) => n));
 
+function cleanAway(a) {
+  const out = { ...DEFAULTS.away, ...a };
+  if (!['shortcut', 'double'].includes(out.mode)) out.mode = DEFAULTS.away.mode;
+  out.key = asCombo(out.key);
+  return out;
+}
 function cleanJot(j) {
   const out = { ...DEFAULTS.jot, ...j };
   if (!['double', 'shortcut'].includes(out.mode)) out.mode = DEFAULTS.jot.mode;
@@ -1112,15 +1183,16 @@ function cleanJot(j) {
 }
 function jotBlocked() {
   return !settings.jot.enabled || !!activeTool || !!pen || menu.open || spin.open || !!spinTimer || !!away ||
-    !!binding || awayBinding || jotBinding;
+    !!binding || awayBinding || jotBinding || tweakBinding;
 }
 
 // ---------- double-tap ----------
 // Two quick taps of the key with nothing else pressed: each down and up within TAP_HOLD, the second
 // pressed within TAP_GAP of the first being let go. Any other key (⌃C), a click, or a long hold starts over.
-// Jot and Tweak each have one, on their own key.
+// Jot, Tweak and Away each have one, on their own key. With `hold` instead of `fire`, the second press
+// acts the moment it goes down and the key stays held (Scrawl's and Spin's wheels): letting go is up to them.
 const TAP_HOLD = 280, TAP_GAP = 400;
-function doubleTap({ key, on, fire }) {
+function doubleTap({ key, on, fire, hold }) {
   const tap = { downAt: 0, lastUp: 0 };
   const reset = () => { tap.downAt = 0; tap.lastUp = 0; };
   function feed(e, isDown) {
@@ -1133,6 +1205,7 @@ function doubleTap({ key, on, fire }) {
       if (tap.downAt) return; // still held
       if (othersHeld(k)) { reset(); return; }
       tap.downAt = Date.now();
+      if (hold && tap.lastUp && tap.downAt - tap.lastUp < TAP_GAP) { tap.downAt = 0; tap.lastUp = 0; hold(); }
       return;
     }
     if (!mine || !tap.downAt) return;
@@ -1148,8 +1221,6 @@ const jotTapper = doubleTap({
   on: () => settings.jot.mode === 'double' && settings.jot.enabled,
   fire: () => { if (!jotBlocked()) openComposer(); },
 });
-const jotTap = jotTapper.feed;
-const jotTapReset = jotTapper.reset;
 
 // ---------- the note you write ----------
 function jotPanel(opts) {
@@ -1367,28 +1438,6 @@ ipcMain.on('jot:try', () => {
   const b = settingsWin?.getBounds();
   openComposer(b ? { x: Math.round(b.x + b.width / 2 - 150), y: Math.round(b.y + b.height / 2 - 150) } : undefined);
 });
-ipcMain.on('jot:bind', (_e, on) => {
-  jotBinding = !!on;
-  if (on) { binding = false; if (menu.open) closeMenu(false); }
-  registerShortcuts(); // off while listening, so the keys reach the settings window
-});
-ipcMain.handle('jot:keys', (_e, keys) => {
-  jotBinding = false;
-  const before = settings.jot.keys;
-  let error = null;
-  if (keys.accelerator === settings.away.keys.accelerator) error = `${keys.symbols.join('')} is already your Away keys. Pick other keys.`;
-  else {
-    settings = { ...settings, jot: { ...settings.jot, keys } };
-    registerShortcuts();
-    if (settings.jot.enabled && settings.jot.mode === 'shortcut' && !jotKeyOn) {
-      error = `${keys.symbols.join('')} is taken by another app. Pick other keys.`;
-      settings = { ...settings, jot: { ...settings.jot, keys: before } };
-    }
-  }
-  registerShortcuts();
-  writeJSON('settings.json', settings);
-  return { settings, error };
-});
 function setJotEnabled(on) {
   settings = { ...settings, jot: { ...settings.jot, enabled: !!on } };
   if (!on) closeComposer();
@@ -1409,19 +1458,25 @@ const editors = new Set(); // Tweak's editor windows
 
 function cleanTweak(t) {
   const out = { ...DEFAULTS.tweak, ...t };
+  if (!['double', 'shortcut'].includes(out.mode)) out.mode = DEFAULTS.tweak.mode;
   out.key = asCombo(out.key);
   out.copy = !!out.copy;
   out.trash = out.trash !== false;
   return out;
 }
+let tweakBinding = false; // the settings window is listening for Tweak's shortcut
 function tweakBlocked() {
   return !settings.tweak.enabled || !!activeTool || !!pen || menu.open || spin.open || !!spinTimer || !!away ||
-    !!binding || awayBinding || jotBinding;
+    !!binding || awayBinding || jotBinding || tweakBinding;
+}
+function toggleTarget() {
+  debug('tweak', { target: !!target, blocked: tweakBlocked() });
+  if (target) endTarget(); else if (!tweakBlocked()) startTarget();
 }
 const tweakTap = doubleTap({
   key: () => settings.tweak.key,
-  on: () => settings.tweak.enabled,
-  fire: () => { debug('tweak double-tap', { target: !!target, blocked: tweakBlocked() }); if (target) endTarget(); else if (!tweakBlocked()) startTarget(); },
+  on: () => settings.tweak.enabled && settings.tweak.mode === 'double',
+  fire: toggleTarget,
 });
 
 // The helper sits inside app.asar's unpacked twin in the built app. While working on Pane it's built on first use.
@@ -1769,12 +1824,19 @@ ipcMain.handle('settings:set', (_e, patch) => {
   settings = { ...settings, ...patch };
   writeJSON('settings.json', settings);
   if ('openAtLogin' in patch) app.setLoginItemSettings({ openAtLogin: settings.openAtLogin });
-  if ('away' in patch) { registerShortcuts(); buildMenu(); }
+  if ('away' in patch) { settings.away = cleanAway(settings.away); fitTapKey('awayKey'); registerShortcuts(); buildMenu(); }
+  if ('wheelMode' in patch) {
+    if (!['hold', 'double'].includes(settings.wheelMode)) settings.wheelMode = DEFAULTS.wheelMode;
+    if (menu.open) closeMenu(false);
+    fitTapKey('hotkey');
+  }
   if ('spin' in patch) {
     if (!settings.spin.enabled) cancelSpin();
     if (!SPIN_COUNTS.includes(settings.spin.count)) settings.spin.count = DEFAULTS.spin.count;
     if (!WHEEL_SIZES.includes(settings.spin.size)) settings.spin.size = DEFAULTS.spin.size;
     settings.spin.wheel = cleanSpinWheel(settings.spin.wheel);
+    if (!['hold', 'double'].includes(settings.spin.mode)) settings.spin.mode = DEFAULTS.spin.mode;
+    fitTapKey('spinKey');
     buildMenu();
   }
   if ('jot' in patch) {
@@ -1786,6 +1848,7 @@ ipcMain.handle('settings:set', (_e, patch) => {
   if ('tweak' in patch) {
     settings.tweak = cleanTweak(settings.tweak);
     if (!settings.tweak.enabled) endTarget();
+    registerShortcuts();
     buildMenu();
   }
   writeJSON('settings.json', settings);
@@ -1868,7 +1931,7 @@ ipcMain.on('update:later', () => Updater.later());
 ipcMain.on('update:skip', () => Updater.skip());
 ipcMain.on('update:install', () => Updater.install());
 ipcMain.on('update:check', () => Updater.check({ manual: true }));
-ipcMain.handle('perm:check', () => ({ trusted: trusted(), listening: hookOn, awayKey: awayKeyOn, jotKey: jotKeyOn }));
+ipcMain.handle('perm:check', () => ({ trusted: trusted(), listening: hookOn, awayKey: shortcutOn.away, jotKey: shortcutOn.jot, tweakKey: shortcutOn.tweak }));
 ipcMain.on('perm:open', () => {
   systemPreferences.isTrustedAccessibilityClient(true);
   shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
@@ -1888,7 +1951,8 @@ ipcMain.on('tool:drop', dropTool);
 app.whenReady().then(() => {
   migrateFromScrawl();
   settings = { ...DEFAULTS, ...readJSON('settings.json', {}) };
-  settings.away = { ...DEFAULTS.away, ...settings.away };
+  settings.away = cleanAway(settings.away);
+  if (!['hold', 'double'].includes(settings.wheelMode)) settings.wheelMode = DEFAULTS.wheelMode;
   const firstSpin = !settings.spin;
   // Spin's wheel used to share Scrawl's size: start it at that size, then they're set apart.
   const spinSize = settings.spin?.size ?? settings.wheelSize;
@@ -1904,6 +1968,7 @@ app.whenReady().then(() => {
   settings.hotkey = asCombo(settings.hotkey);
   settings.drawKey = asCombo(settings.drawKey);
   settings.spin.key = asCombo(settings.spin.key);
+  if (!['hold', 'double'].includes(settings.spin.mode)) settings.spin.mode = DEFAULTS.spin.mode;
   settings.jot = cleanJot({ ...DEFAULTS.jot, ...settings.jot });
   settings.tweak = cleanTweak(settings.tweak);
   // Spin's key can't be exactly one of Scrawl's (sharing some keys is fine): take a free right-hand modifier.
@@ -1916,6 +1981,7 @@ app.whenReady().then(() => {
   if (!WHEEL_SIZES.includes(settings.wheelSize)) settings.wheelSize = DEFAULTS.wheelSize;
   if (!WHEEL_SIZES.includes(settings.spin.size)) settings.spin.size = DEFAULTS.spin.size;
   settings.spin.wheel = cleanSpinWheel(settings.spin.wheel);
+  for (const which of ['hotkey', 'spinKey', 'awayKey']) fitTapKey(which);
   // Keep the saved order, but make sure every built-in tool is present exactly once.
   const known = settings.tools.filter((t) => TOOL_IDS.includes(t.id));
   settings.tools = [...known, ...TOOL_IDS.filter((id) => !known.some((t) => t.id === id)).map((id) => ({ id, on: true }))];
@@ -1999,7 +2065,7 @@ function buildMenu() {
         { label: 'Tweak a File…', accelerator: 'Cmd+O', click: () => chooseAndEdit(BrowserWindow.getFocusedWindow()) },
         away
           ? { label: 'Come Back', click: hideAway }
-          : { label: 'Step Away', accelerator: settings.away.keys.accelerator, registerAccelerator: false, click: () => showAway(false) },
+          : { label: 'Step Away', ...(settings.away.mode === 'shortcut' ? { accelerator: settings.away.keys.accelerator, registerAccelerator: false } : {}), click: () => showAway(false) },
         { type: 'separator' },
         { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' },
         { type: 'separator' },
@@ -2033,5 +2099,5 @@ app.on('before-quit', () => {
 
 // Test hook: only present when SCRAWL_TEST is set (used by automated checks, never in normal runs).
 if (process.env.SCRAWL_TEST) {
-  global.__scrawlTest = { startBind: (w) => { binding = w; bindKeys = []; }, settings: () => settings, spin, openSpin, closeSpin, spinHover, spinView, Music, applyTool, step, setEnabled, overlays, menu, showAway, hideAway, awayWins: () => away?.wins ?? [], jot: { open: openComposer, composer: () => composer, notes: () => notes, toasts, check: checkNotes, tap: jotTap, blocked: jotBlocked }, tweak: { start: startTarget, end: endTarget, target: () => target, open: openEditor, editors, tap: tweakTap, files: TweakFiles }, peek: () => ({ away: !!away, awayKey: awayKeyOn, activeTool, visible, menuOpen: menu.open, pencilColor: settings.pencilColor, enabled: settings.enabled, drawings, undo: history.undo.length, redo: history.redo.length }) };
+  global.__scrawlTest = { startBind: (w) => { binding = w; bindKeys = []; }, settings: () => settings, spin, openSpin, closeSpin, spinHover, spinView, Music, applyTool, step, setEnabled, overlays, menu, showAway, hideAway, awayWins: () => away?.wins ?? [], jot: { open: openComposer, composer: () => composer, notes: () => notes, toasts, check: checkNotes, tap: jotTapper.feed, blocked: jotBlocked }, tweak: { start: startTarget, end: endTarget, target: () => target, open: openEditor, editors, tap: tweakTap, files: TweakFiles }, peek: () => ({ away: !!away, awayKey: awayKeyOn, activeTool, visible, menuOpen: menu.open, pencilColor: settings.pencilColor, enabled: settings.enabled, drawings, undo: history.undo.length, redo: history.redo.length }) };
 }

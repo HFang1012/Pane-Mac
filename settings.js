@@ -10,17 +10,29 @@ async function save(patch) {
   update();
 }
 
-// ---------- held keys: Scrawl's wheel key and draw key, and Spin's key ----------
-// (Away's keys are a shortcut, chosen in away-settings.js; its well has no data-which.)
+// ---------- held keys: Scrawl's wheel key and draw key, Spin's key, and the double-tap keys ----------
+// (Shortcuts like ⌃⌘A are chosen by shortcutWell, below; their wells have no data-which.)
 const wells = [...document.querySelectorAll('.keywell[data-which]')];
 const wellFor = (which) => wells.find((w) => w.dataset.which === which);
-const KEY_NAMES = { hotkey: 'Wheel key', drawKey: 'Draw key', spinKey: 'Spin key', jotKey: 'Jot key', tweakKey: 'Tweak key' };
+const KEY_NAMES = { hotkey: 'Wheel key', drawKey: 'Draw key', spinKey: 'Spin key', jotKey: 'Jot key', tweakKey: 'Tweak key', awayKey: 'Away key' };
 const DEFAULT_CAPTION = 'Click a key to change it. Hold several to use them together.';
 const JOT_CAPTION = 'Click the key to change it. Tap it twice, quickly.';
+const TAP_HOLD_CAPTION = 'Click the key to change it. Tap it, then tap again and hold.';
 let listening = null; // which key is being chosen
-const OWN_KEY = { spinKey: 'spin', jotKey: 'jot', tweakKey: 'tweak' };
+const OWN_KEY = { spinKey: 'spin', jotKey: 'jot', tweakKey: 'tweak', awayKey: 'away' };
 const keyOf = (which) => (OWN_KEY[which] ? S[OWN_KEY[which]]?.key : S[which]);
-const TWEAK_CAPTION = 'Click the key to change it. Tap it twice, quickly.';
+const TWEAK_CAPTION = JOT_CAPTION;
+// Keys that are tapped rather than held take one modifier (the main process says the same).
+const tapped = (which) => ['jotKey', 'tweakKey', 'awayKey'].includes(which) ||
+  (which === 'hotkey' && S?.wheelMode === 'double') || (which === 'spinKey' && S?.spin?.mode === 'double');
+// Each page's caption, as it reads when nothing is being chosen. Pages set to a shortcut leave theirs to it.
+const CAPTIONS = {
+  hotkey: () => (S?.wheelMode === 'double' ? 'Click a key to change it. Tap the wheel key, then tap again and hold.' : DEFAULT_CAPTION),
+  spinKey: () => (S?.spin?.mode === 'double' ? TAP_HOLD_CAPTION : DEFAULT_CAPTION),
+  jotKey: () => (S?.jot?.mode === 'shortcut' ? null : JOT_CAPTION),
+  tweakKey: () => (S?.tweak?.mode === 'shortcut' ? null : TWEAK_CAPTION),
+  awayKey: () => (S?.away?.mode === 'double' ? JOT_CAPTION : null),
+};
 
 // One keycap per key in the combo. A key that counts on one side only (Spin's right ⌘) says which side.
 function keycaps(keys, { pop = false, held = false } = {}) {
@@ -47,7 +59,7 @@ scrawl.on('bind:progress', ({ which, keys }) => {
   well.querySelector('.keys').innerHTML = keycaps(keys, { pop: true, held: true });
   setCaption(keys.length > 1 ? 'Let go to use these keys together.' : 'Add more keys, or let go to use this one.', false, which);
 });
-const captionFor = (which) => $({ spinKey: 'spinCaption', jotKey: 'jotCaption', tweakKey: 'tweakCaption' }[which] || 'keycaption');
+const captionFor = (which) => $({ spinKey: 'spinCaption', jotKey: 'jotCaption', tweakKey: 'tweakCaption', awayKey: 'awayCaption' }[which] || 'keycaption');
 function setCaption(text, warn = false, which = listening) {
   const c = captionFor(which);
   c.textContent = text;
@@ -57,8 +69,7 @@ for (const well of wells) {
   well.addEventListener('click', async () => {
     well.blur(); // the next key press shouldn't paint a focus ring on the button
     const which = well.dataset.which;
-    if (typeof cancelAwayListening === 'function') cancelAwayListening();
-    if (typeof cancelJotListening === 'function') cancelJotListening();
+    cancelShortcuts();
     if (listening) {
       const was = listening;
       stopListening();
@@ -76,17 +87,17 @@ for (const well of wells) {
     listening = which;
     well.classList.add('listening');
     well.querySelector('.keys').innerHTML = '<span class="prompt pop">Hold keys</span>';
-    setCaption(which === 'jotKey' || which === 'tweakKey' ? 'Press ⌃, ⌥, ⇧ or ⌘. Esc cancels.' : 'Hold one key, or a few together. Esc cancels.', false, which);
+    setCaption(tapped(which) ? 'Press ⌃, ⌥, ⇧ or ⌘. Esc cancels.' : 'Hold one key, or a few together. Esc cancels.', false, which);
   });
 }
 function stopListening(popWhich = null) {
   for (const w of wells) w.classList.remove('listening');
   listening = null;
   for (const which of Object.keys(KEY_NAMES)) renderKey(which, popWhich === which);
-  setCaption(DEFAULT_CAPTION, false, 'hotkey');
-  setCaption(DEFAULT_CAPTION, false, 'spinKey');
-  if (S?.jot?.mode !== 'shortcut') setCaption(JOT_CAPTION, false, 'jotKey');
-  setCaption(TWEAK_CAPTION, false, 'tweakKey');
+  resetCaptions();
+}
+function resetCaptions() {
+  for (const [which, text] of Object.entries(CAPTIONS)) { const t = text(); if (t) setCaption(t, false, which); }
 }
 scrawl.on('bind:done', ({ settings, which, error }) => {
   S = settings;
@@ -94,6 +105,142 @@ scrawl.on('bind:done', ({ settings, which, error }) => {
   if (error) { setCaption(error, true, which); shake(wellFor(which)); }
   updateStatus();
 });
+
+// ---------- shortcuts: keys pressed together, like ⌃⌘A (Away's, Jot's, Tweak's), chosen by pressing them ----------
+const MOD_ORDER = [ // macOS writes modifiers in this order
+  { prop: 'ctrlKey', acc: 'Control', sym: '⌃', name: 'Control' },
+  { prop: 'altKey', acc: 'Alt', sym: '⌥', name: 'Option' },
+  { prop: 'shiftKey', acc: 'Shift', sym: '⇧', name: 'Shift' },
+  { prop: 'metaKey', acc: 'Command', sym: '⌘', name: 'Command' },
+];
+const NAMED = {
+  Space: ['Space', '␣'], Enter: ['Return', '↩'], Tab: ['Tab', '⇥'], Backspace: ['Backspace', '⌫'], Delete: ['Delete', '⌦'],
+  Escape: ['Escape', '⎋'], ArrowUp: ['Up', '↑'], ArrowDown: ['Down', '↓'], ArrowLeft: ['Left', '←'], ArrowRight: ['Right', '→'],
+  Minus: ['-', '-'], Equal: ['=', '='], BracketLeft: ['[', '['], BracketRight: [']', ']'], Semicolon: [';', ';'], Quote: ["'", "'"],
+  Comma: [',', ','], Period: ['.', '.'], Slash: ['/', '/'], Backslash: ['\\', '\\'], Backquote: ['`', '`'],
+};
+// The key itself, from its position on the keyboard (so ⌥ turning A into å doesn't matter).
+function mainKey(code) {
+  let m = /^Key([A-Z])$/.exec(code) || /^Digit(\d)$/.exec(code);
+  if (m) return [m[1], m[1]];
+  if (/^F\d{1,2}$/.test(code)) return [code, code];
+  return NAMED[code] || null;
+}
+const held = (e) => MOD_ORDER.filter((m) => e[m.prop]);
+
+const shortcutWells = [];
+const cancelShortcuts = () => shortcutWells.forEach((w) => w.cancel());
+// One well per tool. `idle` is the caption when nothing is being chosen; `done` runs after new keys are saved.
+function shortcutWell({ tool, well, caption, label, idle = () => 'Click the keys to change them.', done = () => {} }) {
+  let on = false;
+  const setCap = (text, warn = false) => { const c = $(caption); c.textContent = text; c.classList.toggle('warn', warn); };
+  function render(symbols, { pop = false, partial = false } = {}) {
+    well.querySelector('.keys').innerHTML = symbols.map((s, i) =>
+      `<span class="keycap${s.length > 1 ? ' word' : ''}${pop ? ' pop' : ''}${partial ? ' held' : ''}" style="--d:${i * 50}ms" aria-hidden="true">${s}</span>`).join('');
+    well.setAttribute('aria-label', `${label}: ${S[tool].keys.name}. Click to change.`);
+  }
+  function cancel() {
+    if (!on) return;
+    on = false;
+    well.classList.remove('listening');
+    scrawl.send('shortcut:bind', tool, false);
+    render(S[tool].keys.symbols);
+    setCap(idle());
+  }
+  well.addEventListener('click', () => {
+    well.blur();
+    if (on) { cancel(); return; }
+    if (listening) { stopListening(); scrawl.send('bind:cancel'); }
+    cancelShortcuts();
+    on = true;
+    well.classList.add('listening');
+    scrawl.send('shortcut:bind', tool, true);
+    well.querySelector('.keys').innerHTML = '<span class="prompt pop">Press keys</span>';
+    setCap('Hold ⌘, ⌃ or ⌥ and press a key.');
+  });
+  addEventListener('keydown', async (e) => {
+    if (!on) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const mods = held(e);
+    if (e.code === 'Escape' && !mods.length) { cancel(); return; }
+    const key = mainKey(e.code);
+    if (!key) { // only modifiers so far: show them as they're held
+      if (mods.length) render(mods.map((m) => m.sym), { partial: true });
+      return;
+    }
+    if (!mods.some((m) => m.prop !== 'shiftKey')) { setCap('Add ⌘, ⌃ or ⌥ too.', true); shake(well); return; }
+    const keys = {
+      accelerator: [...mods.map((m) => m.acc), key[0]].join('+'),
+      symbols: [...mods.map((m) => m.sym), key[1]],
+      name: [...mods.map((m) => m.name), key[0]].join(' '),
+    };
+    on = false;
+    well.classList.remove('listening');
+    const { settings, error } = await scrawl.invoke('shortcut:keys', tool, keys);
+    S = settings;
+    render(S[tool].keys.symbols, { pop: !error });
+    if (error) { setCap(error, true); shake(well); } else setCap(idle());
+    done();
+    pollStatus();
+  }, true);
+  addEventListener('keyup', (e) => {
+    if (!on) return;
+    const mods = held(e);
+    well.querySelector('.keys').innerHTML = mods.length
+      ? mods.map((m) => `<span class="keycap held" aria-hidden="true">${m.sym}</span>`).join('')
+      : '<span class="prompt">Press keys</span>';
+  });
+  addEventListener('blur', cancel);
+  const api = { cancel, render, get listening() { return on; } };
+  shortcutWells.push(api);
+  return api;
+}
+
+// ---------- how a tool opens: two ways, side by side (hold or double-tap, a shortcut or double-tap) ----------
+// `get` reads the mode, `set` saves a new one. The key slots below it show or hide by their data-mode.
+const segs = [];
+function placeSeg(seg, mode, animate = true) {
+  const on = seg.querySelector(`[data-mode="${mode}"]`);
+  const thumb = seg.querySelector('.seg-thumb');
+  if (!on || !on.offsetWidth) return; // the page is hidden: placed when it shows
+  if (!animate) thumb.style.transition = 'none';
+  thumb.style.translate = `${on.offsetLeft - 4}px 0`;
+  thumb.style.width = `${on.offsetWidth}px`;
+  thumb.style.left = '4px';
+  if (!animate) requestAnimationFrame(() => { thumb.style.transition = ''; });
+}
+function modeSeg(seg, get, set) {
+  const s = { seg, get, placed: false };
+  segs.push(s);
+  new ResizeObserver(() => { if (S) placeSeg(seg, get(), false); }).observe(seg);
+  seg.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-mode]');
+    if (!b || b.dataset.mode === get()) return;
+    b.blur();
+    cancelShortcuts();
+    if (listening) { stopListening(); scrawl.send('bind:cancel'); }
+    set(b.dataset.mode).then(() => {
+      resetCaptions();
+      const row = seg.parentElement.querySelector(`.keyrow[data-for="${seg.id}"]`);
+      for (const slot of row?.querySelectorAll('.keyslot:not([hidden])') || []) {
+        slot.classList.remove('swap-in'); void slot.offsetWidth; slot.classList.add('swap-in');
+      }
+      pollStatus();
+    });
+  });
+}
+function renderSegs() {
+  for (const s of segs) {
+    const mode = s.get();
+    placeSeg(s.seg, mode, s.placed);
+    s.placed ||= !!s.seg.offsetWidth;
+    for (const b of s.seg.querySelectorAll('button')) b.setAttribute('aria-checked', b.dataset.mode === mode);
+    const row = s.seg.parentElement.querySelector(`.keyrow[data-for="${s.seg.id}"]`);
+    for (const slot of row?.querySelectorAll('.keyslot[data-mode]') || []) slot.hidden = !slot.dataset.mode.split(' ').includes(mode);
+  }
+}
+modeSeg($('wheelMode'), () => S.wheelMode, (mode) => save({ wheelMode: mode }));
 
 function shake(el) {
   el.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-6px)' }, { transform: 'translateX(5px)' },
@@ -416,7 +563,7 @@ function updateStatus() {
   swapText($('statusText'), !enabled
     ? 'Off. Your keys work as normal.'
     : on
-      ? `On. Hold ${keyText(S.hotkey)} for the wheel, ${keyText(S.drawKey)} to draw.`
+      ? `On. ${S.wheelMode === 'double' ? `Tap ${keyText(S.hotkey)}, then tap and hold it` : `Hold ${keyText(S.hotkey)}`} for the wheel, ${keyText(S.drawKey)} to draw.`
       : trusted ? 'Starting up…' : 'Waiting for Accessibility access.');
   if (typeof updateAwayStatus === 'function') updateAwayStatus();
   if (typeof updateSpinStatus === 'function') updateSpinStatus();
@@ -435,6 +582,11 @@ document.addEventListener('animationend', (e) => {
 
 // ---------- go ----------
 function update() {
+  renderSegs();
+  for (const which of Object.keys(KEY_NAMES)) if (listening !== which) renderKey(which);
+  $('scrawlLede').textContent = S.wheelMode === 'double'
+    ? 'Tap the wheel key, then tap it again and hold. Slide to a tool and let go. Drag to draw. Press Esc when you’re done.'
+    : 'Hold the wheel key, slide to a tool and let go. Drag to draw. Press Esc when you’re done.';
   renderPreview();
   renderTiles();
   renderSwatches();
@@ -452,11 +604,12 @@ const domReady = new Promise((r) => (document.readyState === 'loading' ? addEven
 domReady.then(() => scrawl.invoke('settings:get')).then(({ settings, version }) => {
   S = settings;
   document.querySelectorAll('.version').forEach((v) => { v.textContent = version ? `Version ${version}` : ''; });
-  ['hotkey', 'drawKey', 'spinKey', 'jotKey', 'tweakKey'].forEach((which, i) => {
+  ['hotkey', 'drawKey', 'spinKey', 'jotKey', 'tweakKey', 'awayKey'].forEach((which, i) => {
     renderKey(which, true);
     wellFor(which).querySelector('.keycap').style.setProperty('--d', `${260 + i * 80}ms`);
   });
   update();
+  resetCaptions();
   if (typeof startSwitcher === 'function') startSwitcher();
   pollStatus();
   setInterval(pollStatus, 1500);

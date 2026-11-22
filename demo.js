@@ -90,8 +90,10 @@ function playScrawl() {
   const total = 4;
 
   placeCursor(W * 0.8, H * 0.82);
-  say(0, total, `Hold ${wk.symbol} to open the wheel.`);
+  const tapFirst = S.wheelMode === 'double';
+  say(0, total, tapFirst ? `Tap ${wk.symbol}, then tap again and hold.` : `Hold ${wk.symbol} to open the wheel.`);
   later(250, () => moveCursor(c.x, c.y, 700));
+  if (tapFirst) { later(700, () => press(['wheel'], true)); later(830, () => press(['wheel'], false)); }
   later(1050, () => {
     press(['wheel'], true);
     wheelBox.innerHTML = Wheel.build({ items, size, pencilColor: color, colors: false });
@@ -146,8 +148,10 @@ function playScrawl() {
 function playAway() {
   const { W, H } = resetStage();
   const a = S.away;
-  const syms = a.keys.symbols;
-  const names = a.keys.name.split(' ');
+  const tap = a.mode === 'double';
+  const tapKeys = a.key.keys || [a.key];
+  const syms = tap ? tapKeys.map((k) => k.symbol) : a.keys.symbols;
+  const names = tap ? tapKeys.map((k) => k.name) : a.keys.name.split(' ');
   setKeys(syms.map((sym, i) => ({ id: `k${i}`, sym, label: names[i] || '' })));
   const all = syms.map((_, i) => `k${i}`);
   const combo = syms.join('');
@@ -159,9 +163,11 @@ function playAway() {
   const total = 3;
 
   placeCursor(W * 0.22, H * 0.7);
-  say(0, total, `Press ${combo} to step away.`);
+  // A double-tap presses the key twice; a shortcut presses its keys once.
+  const twice = (at) => { if (tap) { later(at - 300, () => press(all, true)); later(at - 180, () => press(all, false)); } later(at, () => press(all, true)); };
+  say(0, total, tap ? `Tap ${combo} twice to step away.` : `Press ${combo} to step away.`);
   later(200, () => moveCursor(W * 0.6, H * 0.62, 800));
-  later(1300, () => press(all, true));
+  twice(1300);
   later(1400, () => stage.classList.add('away'));
   later(1750, () => press(all, false));
 
@@ -170,7 +176,8 @@ function playAway() {
     if (a.hidePointer) cursorEl.classList.add('gone');
   });
 
-  later(6000, () => { say(2, total, `Press ${combo} again to come back.`); press(all, true); });
+  later(5700, () => say(2, total, tap ? `Tap ${combo} twice again to come back.` : `Press ${combo} again to come back.`));
+  twice(6000);
   later(6150, () => { stage.classList.remove('away'); cursorEl.classList.remove('gone'); });
   later(6500, () => press(all, false));
   later(9000, () => play());

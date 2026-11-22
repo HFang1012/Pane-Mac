@@ -369,16 +369,21 @@ function updateSpinStatus() {
   document.getElementById('spinStatus').classList.toggle('ready', on && status.listening);
   swapText(document.getElementById('spinStatusText'), !on
     ? 'Off.'
-    : status.listening ? `On. Hold ${keyText(S.spin.key)} for the music wheel.` : status.trusted ? 'Starting up…' : 'Waiting for Accessibility access.');
+    : status.listening ? `On. ${S.spin.mode === 'double' ? `Tap ${keyText(S.spin.key)}, then tap and hold it` : `Hold ${keyText(S.spin.key)}`} for the music wheel.` : status.trusted ? 'Starting up…' : 'Waiting for Accessibility access.');
 }
 
 function saveSpin(patch) {
   return save({ spin: { ...S.spin, ...patch } });
 }
+// Hold the Spin key, or tap it and then tap and hold.
+modeSeg(document.getElementById('spinMode'), () => S.spin.mode, (mode) => saveSpin({ mode }));
 
 let spinStarted = false;
 function updateSpin() {
   if (!S?.spin) return;
+  document.getElementById('spinLede').textContent = S.spin.mode === 'double'
+    ? 'Tap the Spin key, then tap it again and hold. Slide to a slice or a song, and let go. Back to the middle cancels.'
+    : 'Hold the Spin key, slide to a slice or a song, and let go. Back to the middle cancels.';
   renderApps();
   renderSlices();
   if (spinStarted) renderSpinPreview();

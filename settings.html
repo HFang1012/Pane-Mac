@@ -610,7 +610,7 @@
   [data-theme="jot"] .brand:hover .mark svg .plane { transform: translate(3px, -3px) rotate(-12deg); }
 
   /* Double-tap or a shortcut: two pills with a coral thumb that slides between them. */
-  .seg { position: relative; display: inline-flex; gap: 2px; padding: 4px; margin-top: 16px; border-radius: 999px; background: var(--well); -webkit-app-region: no-drag; }
+  .seg { position: relative; display: flex; width: fit-content; gap: 2px; padding: 4px; margin-top: 16px; border-radius: 999px; background: var(--well); -webkit-app-region: no-drag; }
   .seg button { position: relative; z-index: 1; height: 30px; padding: 0 16px; border-radius: 999px; font-size: 13px; font-weight: 800; color: var(--ink-2); transition: color 160ms ease, transform 220ms var(--bouncy); }
   .seg button { display: inline-flex; align-items: center; gap: 7px; padding-left: 13px; }
   .seg button svg { width: 15px; height: 15px; flex: none; transition: transform 320ms var(--smooth); }
@@ -763,10 +763,15 @@
       <span class="version"></span>
     </div>
     <h1 class="rise" style="--d:60ms">Hold a key.<br>Draw on anything.</h1>
-    <p class="lede rise" style="--d:120ms" >Hold the wheel key, slide to a tool and let go. Drag to draw. Press Esc when you’re done.</p>
+    <p class="lede rise" style="--d:120ms" id="scrawlLede">Hold the wheel key, slide to a tool and let go. Drag to draw. Press Esc when you’re done.</p>
     <button class="demo-btn rise" style="--d:150ms" data-demo="scrawl"><svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 2.2v7.6L9.8 6z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>Show me how</button>
 
-    <div class="keyrow rise" style="--d:160ms">
+    <div class="seg rise" style="--d:150ms" role="radiogroup" aria-label="Open the wheel with" id="wheelMode">
+      <span class="seg-thumb"></span>
+      <button role="radio" data-mode="hold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="13" width="14" height="8" rx="3"/><path d="M12 3v6.5M9 6.8l3 3 3-3"/></svg>Hold</button>
+      <button role="radio" data-mode="double"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="3"/><path d="M9 6.5 8 4M12 5.5V3M15 6.5 16 4"/></svg>Double-tap &amp; hold</button>
+    </div>
+    <div class="keyrow rise" style="--d:160ms" data-for="wheelMode">
       <div class="keyslot">
         <button class="keywell" data-which="hotkey" aria-describedby="keycaption">
           <svg class="ants" aria-hidden="true"><rect rx="21"/></svg>
@@ -851,16 +856,28 @@
       <span class="version"></span>
     </div>
     <h1 class="rise" style="--d:60ms">Step away.<br>Leave a note.</h1>
-    <p class="lede rise" style="--d:120ms" >Press the away keys to blur your screen and hide the pointer. Press them again to come back.</p>
+    <p class="lede rise" style="--d:120ms" id="awayLede">Press the away keys to blur your screen and hide the pointer. Press them again to come back.</p>
     <button class="demo-btn rise" style="--d:150ms" data-demo="away"><svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 2.2v7.6L9.8 6z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>Show me how</button>
 
-    <div class="keyrow rise" style="--d:160ms">
-      <div class="keyslot">
+    <div class="seg rise" style="--d:150ms" role="radiogroup" aria-label="Step away with" id="awayMode">
+      <span class="seg-thumb"></span>
+      <button role="radio" data-mode="shortcut"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg>Shortcut</button>
+      <button role="radio" data-mode="double"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="3"/><path d="M9 6.5 8 4M12 5.5V3M15 6.5 16 4"/></svg>Double-tap</button>
+    </div>
+    <div class="keyrow rise" style="--d:160ms" data-for="awayMode">
+      <div class="keyslot" data-mode="shortcut">
         <button class="keywell" id="awayWell" aria-describedby="awayCaption">
           <svg class="ants" aria-hidden="true"><rect rx="21"/></svg>
           <span class="keys"></span>
         </button>
         <span class="keylabel">Away keys</span>
+      </div>
+      <div class="keyslot" data-mode="double" hidden>
+        <button class="keywell" data-which="awayKey" aria-describedby="awayCaption">
+          <svg class="ants" aria-hidden="true"><rect rx="21"/></svg>
+          <span class="keys"></span>
+        </button>
+        <span class="keylabel">Tap twice</span>
       </div>
     </div>
     <p class="caption rise" style="--d:200ms" id="awayCaption">Click the keys to change them.</p>
@@ -948,9 +965,14 @@
       <span class="version"></span>
     </div>
     <h1 class="rise" style="--d:60ms">Hold a key.<br>Spin the music.</h1>
-    <p class="lede rise" style="--d:120ms">Hold the Spin key, slide to a slice or a song, and let go. Back to the middle cancels.</p>
+    <p class="lede rise" style="--d:120ms" id="spinLede">Hold the Spin key, slide to a slice or a song, and let go. Back to the middle cancels.</p>
 
-    <div class="keyrow rise" style="--d:160ms">
+    <div class="seg rise" style="--d:150ms" role="radiogroup" aria-label="Open the music wheel with" id="spinMode">
+      <span class="seg-thumb"></span>
+      <button role="radio" data-mode="hold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="13" width="14" height="8" rx="3"/><path d="M12 3v6.5M9 6.8l3 3 3-3"/></svg>Hold</button>
+      <button role="radio" data-mode="double"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="3"/><path d="M9 6.5 8 4M12 5.5V3M15 6.5 16 4"/></svg>Double-tap &amp; hold</button>
+    </div>
+    <div class="keyrow rise" style="--d:160ms" data-for="spinMode">
       <div class="keyslot">
         <button class="keywell" data-which="spinKey" aria-describedby="spinCaption">
           <svg class="ants" aria-hidden="true"><rect rx="21"/></svg>
@@ -1056,15 +1078,15 @@
       <button role="radio" data-mode="double"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="3"/><path d="M9 6.5 8 4M12 5.5V3M15 6.5 16 4"/></svg>Double-tap</button>
       <button role="radio" data-mode="shortcut"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg>Shortcut</button>
     </div>
-    <div class="keyrow rise" style="--d:160ms">
-      <div class="keyslot" id="jotTapSlot">
+    <div class="keyrow rise" style="--d:160ms" data-for="jotMode">
+      <div class="keyslot" data-mode="double">
         <button class="keywell" data-which="jotKey" aria-describedby="jotCaption">
           <svg class="ants" aria-hidden="true"><rect rx="21"/></svg>
           <span class="keys"></span>
         </button>
         <span class="keylabel">Tap twice</span>
       </div>
-      <div class="keyslot" id="jotKeysSlot" hidden>
+      <div class="keyslot" data-mode="shortcut" hidden>
         <button class="keywell" id="jotWell" aria-describedby="jotCaption">
           <svg class="ants" aria-hidden="true"><rect rx="21"/></svg>
           <span class="keys"></span>
@@ -1150,14 +1172,26 @@
       <span class="version"></span>
     </div>
     <h1 class="rise" style="--d:60ms">Point at a file.<br>Fix it right there.</h1>
-    <p class="lede rise" style="--d:120ms">Double-tap the Tweak key and point at a file on your desktop or in Finder. Click it to crop, trim, cut or rewrite it, change its type, and save it back.</p>
-    <div class="keyrow rise" style="--d:160ms">
-      <div class="keyslot">
+    <p class="lede rise" style="--d:120ms" id="tweakLede">Double-tap the Tweak key and point at a file on your desktop or in Finder. Click it to crop, trim, cut or rewrite it, change its type, and save it back.</p>
+    <div class="seg rise" style="--d:150ms" role="radiogroup" aria-label="Start pointing with" id="tweakMode">
+      <span class="seg-thumb"></span>
+      <button role="radio" data-mode="double"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="3"/><path d="M9 6.5 8 4M12 5.5V3M15 6.5 16 4"/></svg>Double-tap</button>
+      <button role="radio" data-mode="shortcut"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg>Shortcut</button>
+    </div>
+    <div class="keyrow rise" style="--d:160ms" data-for="tweakMode">
+      <div class="keyslot" data-mode="double">
         <button class="keywell" data-which="tweakKey" aria-describedby="tweakCaption">
           <svg class="ants" aria-hidden="true"><rect rx="15"/></svg>
           <span class="keys"></span>
         </button>
         <span class="keylabel">Tap twice</span>
+      </div>
+      <div class="keyslot" data-mode="shortcut" hidden>
+        <button class="keywell" id="tweakWell" aria-describedby="tweakCaption">
+          <svg class="ants" aria-hidden="true"><rect rx="15"/></svg>
+          <span class="keys"></span>
+        </button>
+        <span class="keylabel">Tweak keys</span>
       </div>
     </div>
     <p class="caption rise" style="--d:200ms" id="tweakCaption">Click the key to change it. Tap it twice, quickly.</p>

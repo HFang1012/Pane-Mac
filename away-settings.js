@@ -1,97 +1,13 @@
 // The Away page of the settings window. Shares S, save(), shake(), swapText() and status with settings.js.
 
-// ---------- keys: a shortcut like ⌃⌘A, chosen by pressing it ----------
+// ---------- keys: a shortcut like ⌃⌘A, or a key tapped twice ----------
 const awayWell = document.getElementById('awayWell');
 const AWAY_CAPTION = 'Click the keys to change them.';
-let awayListening = false;
-
-const MOD_ORDER = [ // macOS writes modifiers in this order
-  { prop: 'ctrlKey', acc: 'Control', sym: '⌃', name: 'Control' },
-  { prop: 'altKey', acc: 'Alt', sym: '⌥', name: 'Option' },
-  { prop: 'shiftKey', acc: 'Shift', sym: '⇧', name: 'Shift' },
-  { prop: 'metaKey', acc: 'Command', sym: '⌘', name: 'Command' },
-];
-const NAMED = {
-  Space: ['Space', '␣'], Enter: ['Return', '↩'], Tab: ['Tab', '⇥'], Backspace: ['Backspace', '⌫'], Delete: ['Delete', '⌦'],
-  Escape: ['Escape', '⎋'], ArrowUp: ['Up', '↑'], ArrowDown: ['Down', '↓'], ArrowLeft: ['Left', '←'], ArrowRight: ['Right', '→'],
-  Minus: ['-', '-'], Equal: ['=', '='], BracketLeft: ['[', '['], BracketRight: [']', ']'], Semicolon: [';', ';'], Quote: ["'", "'"],
-  Comma: [',', ','], Period: ['.', '.'], Slash: ['/', '/'], Backslash: ['\\', '\\'], Backquote: ['`', '`'],
-};
-// The key itself, from its position on the keyboard (so ⌥ turning A into å doesn't matter).
-function mainKey(code) {
-  let m = /^Key([A-Z])$/.exec(code) || /^Digit(\d)$/.exec(code);
-  if (m) return [m[1], m[1]];
-  if (/^F\d{1,2}$/.test(code)) return [code, code];
-  return NAMED[code] || null;
-}
-const held = (e) => MOD_ORDER.filter((m) => e[m.prop]);
-
-function renderAwayKeys(symbols, { pop = false, partial = false } = {}) {
-  awayWell.querySelector('.keys').innerHTML = symbols.map((s, i) =>
-    `<span class="keycap${s.length > 1 ? ' word' : ''}${pop ? ' pop' : ''}${partial ? ' held' : ''}" style="--d:${i * 50}ms" aria-hidden="true">${s}</span>`).join('');
-  awayWell.setAttribute('aria-label', `Away keys: ${S.away.keys.name}. Click to change.`);
-}
-function setAwayCaption(text, warn = false) {
-  const c = document.getElementById('awayCaption');
-  c.textContent = text;
-  c.classList.toggle('warn', warn);
-}
-function cancelAwayListening() {
-  if (!awayListening) return;
-  awayListening = false;
-  awayWell.classList.remove('listening');
-  scrawl.send('away:bind', false);
-  renderAwayKeys(S.away.keys.symbols);
-  setAwayCaption(AWAY_CAPTION);
-}
-awayWell.addEventListener('click', () => {
-  awayWell.blur();
-  if (awayListening) { cancelAwayListening(); return; }
-  if (listening) { stopListening(); scrawl.send('bind:cancel'); } // Scrawl's key chooser, from settings.js
-  awayListening = true;
-  awayWell.classList.add('listening');
-  scrawl.send('away:bind', true);
-  awayWell.querySelector('.keys').innerHTML = '<span class="prompt pop">Press keys</span>';
-  setAwayCaption('Hold ⌘, ⌃ or ⌥ and press a key.');
-});
-
-addEventListener('keydown', async (e) => {
-  if (!awayListening) return;
-  e.preventDefault();
-  e.stopPropagation();
-  const mods = held(e);
-  if (e.code === 'Escape' && !mods.length) { cancelAwayListening(); return; }
-  const key = mainKey(e.code);
-  if (!key) { // only modifiers so far: show them as they're held
-    if (mods.length) renderAwayKeys([...mods.map((m) => m.sym)], { partial: true });
-    return;
-  }
-  if (!mods.some((m) => m.prop !== 'shiftKey')) {
-    setAwayCaption('Add ⌘, ⌃ or ⌥ too.', true);
-    shake(awayWell);
-    return;
-  }
-  const keys = {
-    accelerator: [...mods.map((m) => m.acc), key[0]].join('+'),
-    symbols: [...mods.map((m) => m.sym), key[1]],
-    name: [...mods.map((m) => m.name), key[0]].join(' '),
-  };
-  awayListening = false;
-  awayWell.classList.remove('listening');
-  const { settings, error } = await scrawl.invoke('away:keys', keys);
-  S = settings;
-  renderAwayKeys(S.away.keys.symbols, { pop: !error });
-  if (error) { setAwayCaption(error, true); shake(awayWell); } else setAwayCaption(AWAY_CAPTION);
-  updateAwayStatus();
-}, true);
-addEventListener('keyup', (e) => {
-  if (!awayListening) return;
-  const mods = held(e);
-  awayWell.querySelector('.keys').innerHTML = mods.length
-    ? mods.map((m) => `<span class="keycap held" aria-hidden="true">${m.sym}</span>`).join('')
-    : '<span class="prompt">Press keys</span>';
-});
-addEventListener('blur', cancelAwayListening);
+const awayShortcut = shortcutWell({ tool: 'away', well: awayWell, caption: 'awayCaption', label: 'Away keys', idle: () => AWAY_CAPTION, done: updateAwayStatus });
+const cancelAwayListening = awayShortcut.cancel;
+modeSeg(document.getElementById('awayMode'), () => S.away.mode, (mode) => saveAway({ mode }).then(() => {
+  if (mode === 'shortcut') document.getElementById('awayCaption').textContent = AWAY_CAPTION;
+}));
 
 // ---------- on / off ----------
 document.getElementById('awayPower').addEventListener('click', (e) => {
@@ -103,16 +19,24 @@ function updateAwayStatus() {
   if (!S) return;
   const on = S.away.enabled !== false;
   const keys = S.away.keys.symbols.join('');
+  const tap = S.away.mode === 'double';
   const power = document.getElementById('awayPower');
   power.classList.toggle('off', !on);
   power.setAttribute('aria-pressed', on);
   swapText(document.getElementById('awayPowerText'), on ? 'Turn off' : 'Turn on');
   document.getElementById('awayPage').classList.toggle('off', !on);
-  const ready = on && status.awayKey;
+  const ready = on && (tap ? status.listening : status.awayKey);
   document.getElementById('awayStatus').classList.toggle('ready', ready);
   swapText(document.getElementById('awayStatusText'), !on
     ? 'Off.'
-    : ready ? `On. Press ${keys} to step away.` : `${keys} is taken by another app. Pick other keys.`);
+    : ready ? (tap ? `On. Tap ${keyText(S.away.key)} twice to step away.` : `On. Press ${keys} to step away.`)
+      : tap ? (status.trusted ? 'Starting up…' : 'Waiting for Accessibility access.')
+        : `${keys} is taken by another app. Pick other keys.`);
+  // A shortcut doesn't need Accessibility, so the ask only shows for double-tap.
+  if (!tap) document.querySelector('#awayPage .access')?.classList.remove('open');
+  document.getElementById('awayLede').textContent = tap
+    ? 'Tap the Away key twice to blur your screen and hide the pointer. Tap it twice again to come back.'
+    : 'Press the away keys to blur your screen and hide the pointer. Press them again to come back.';
 }
 
 // ---------- the little screen ----------
@@ -187,7 +111,7 @@ function updateAway() {
   if (!S?.away) return;
   if (!awayStarted) {
     awayStarted = true;
-    renderAwayKeys(S.away.keys.symbols, { pop: true });
+    awayShortcut.render(S.away.keys.symbols, { pop: true });
     awayWell.querySelectorAll('.keycap').forEach((k, i) => k.style.setProperty('--d', `${260 + i * 60}ms`));
   }
   if (document.activeElement !== msgEl && msgEl.value !== S.away.message) msgEl.value = S.away.message;

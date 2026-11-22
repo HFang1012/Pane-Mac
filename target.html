@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en" data-theme="tweak">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
+<title>Tweak</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  /* Tweak's pointer. The layer is faintly tinted (so it takes the click instead of Finder), and the file under
+     the pointer gets four crop marks that spring to its edges, with its name and type in a tag beside it. */
+  html, body { margin: 0; height: 100%; overflow: hidden; user-select: none; cursor: default; font-family: var(--font); color: var(--ink); }
+  body { background: rgba(27, 29, 58, 0.045); transition: background 260ms ease; }
+  body.in { animation: tint 260ms ease both; }
+  @keyframes tint { from { background: rgba(27, 29, 58, 0); } }
+  body.leave { background: rgba(27, 29, 58, 0); }
+
+  /* The marked file: four chunky crop corners, like Tweak's glyph and the editor's crop handles. A flat
+     chartreuse stroke over a darker copy nudged down (Pane's "lip"), with a small shadow so they sit above
+     any wallpaper. One color for every file. Drawn by target.js each frame as they spring between files. */
+  #mark { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; opacity: 0; transition: opacity 160ms ease; }
+  #mark.on { opacity: 1; }
+  #mark path { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 5.5; }
+  #mark .lip { stroke: var(--accent-lip); transform: translateY(2.4px); }
+  #mark .line { stroke: var(--accent); }
+  #mark g { transform-box: fill-box; transform-origin: center; filter: drop-shadow(0 2px 3px rgba(12, 13, 31, 0.35)); }
+  #mark.shake g { animation: shake 380ms ease-out; }
+  @keyframes shake { 20% { translate: -6px 0; } 45% { translate: 5px 0; } 70% { translate: -3px 0; } }
+
+  /* The tag: what the file is, and what a click does. */
+  #tag {
+    position: absolute; left: 0; top: 0; display: grid; grid-template-columns: 30px auto; gap: 9px; align-items: center;
+    padding: 7px 14px 7px 7px; border-radius: 14px; background: var(--card); box-shadow: 0 4px 0 var(--card-lip), 0 14px 30px -10px rgba(12, 13, 31, 0.45);
+    max-width: 340px; opacity: 0; scale: 0.9; transform-origin: 20px 0; pointer-events: none;
+    transition: opacity 160ms ease, scale 300ms var(--smooth);
+  }
+  #tag.on { opacity: 1; scale: 1; }
+  #tag .ic { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--accent); box-shadow: inset 0 -3px 0 var(--accent-lip); color: var(--ink); }
+  #tag .ic svg { width: 17px; height: 17px; margin-top: -2px; }
+  #tag b { display: block; font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #tag small { display: block; font-size: 11.5px; font-weight: 700; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Up top: what this is, and how to leave. */
+  #hint {
+    position: absolute; left: 50%; top: 46px; translate: -50% 0; display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px 8px 10px; border-radius: 16px; background: var(--ink); color: #ECEDFB; font-size: 13px; font-weight: 700;
+    box-shadow: 0 4px 0 #0C0D1F, 0 16px 30px -12px rgba(12, 13, 31, 0.6); animation: drop 520ms var(--bouncy) both;
+  }
+  #hint kbd { font: inherit; font-size: 11.5px; font-weight: 800; padding: 1px 7px; border-radius: 6px; background: rgba(255, 255, 255, 0.12); }
+  #hint .g { display: inline-flex; }
+  #hint .dim { color: #A6A9CF; font-weight: 600; }
+  @keyframes drop { from { opacity: 0; transform: translateY(-16px) scale(0.9); } }
+  /* Leaving: the hint lifts away, the tag drops, and the marks move (into the file you opened, or out and
+     away) while they fade. target.js moves them; the fade waits a beat so the move reads. */
+  body.leave #hint { opacity: 0; transform: translateY(-10px) scale(0.96); transition: opacity 200ms ease, transform 280ms var(--smooth); }
+  body.leave #tag { opacity: 0; scale: 0.94; translate: 0 6px; transition: opacity 180ms ease, scale 240ms ease, translate 240ms ease; }
+  body.leave #mark { opacity: 0; transition: opacity 200ms ease 110ms; }
+  body:not(.primary) #hint { display: none; }
+
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; } }
+</style>
+</head>
+<body class="in">
+<div id="hint"><span class="g" id="hintGlyph"></span><span>Click a file to edit it</span><span class="dim">or</span><kbd>esc</kbd></div>
+<svg id="mark" aria-hidden="true"><g><path class="lip"/><path class="line"/></g></svg>
+<div id="tag"><span class="ic" id="tagIcon"></span><span><b id="tagName"></b><small id="tagSub"></small></span></div>
+<script src="tools.js"></script>
+<script src="target.js"></script>
+</body>
+</html>

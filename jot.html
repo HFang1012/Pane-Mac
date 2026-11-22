@@ -35,10 +35,6 @@
   .grip { -webkit-app-region: drag; height: 30px; display: flex; align-items: center; justify-content: space-between; margin: 0 -6px 2px; cursor: grab; }
   .grip .tag { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 800; color: var(--ink-2); padding-left: 4px; }
   .grip .tag svg { height: 15px; width: auto; }
-  .grip .dots { display: flex; gap: 3px; }
-  .grip .dots i { width: 4px; height: 4px; border-radius: 2px; background: var(--edge); transition: background 160ms ease, transform 260ms var(--bouncy); }
-  .grip:hover .dots i { background: var(--ink-2); }
-  .grip:hover .dots i:nth-child(2) { transform: translateY(-2px); }
   .x { width: 26px; height: 26px; border-radius: 13px; display: grid; place-items: center; color: var(--ink-2); background: var(--well); transition: transform 280ms var(--bouncy), background 140ms ease, color 140ms ease; }
   .x:hover { transform: rotate(90deg); background: var(--accent-soft); color: var(--accent-ink); }
   .x:active { transform: rotate(90deg) scale(0.84); }
@@ -105,16 +101,18 @@
   .hint.warn { color: var(--accent-ink); }
   .send {
     position: relative; width: 46px; height: 46px; border-radius: 23px; display: grid; place-items: center; margin-bottom: 4px;
-    background: var(--accent); box-shadow: 0 4px 0 var(--accent-lip); color: var(--ink);
+    padding-bottom: 4px; background: var(--accent); color: var(--ink);
+    /* The lip is drawn inside the circle so the button stays a true circle; the soft blur below is round too. */
+    box-shadow: inset 0 -4px 0 var(--accent-lip), 0 4px 10px -3px rgba(10, 26, 32, 0.32);
     transition: transform 320ms var(--smooth), box-shadow 320ms var(--smooth), filter 240ms ease, opacity 240ms ease;
   }
   .send svg.i { width: 20px; height: 20px; stroke-width: 2.4; overflow: visible; transition: transform 380ms var(--smooth); }
-  .send:hover { transform: translateY(-2px); box-shadow: 0 6px 0 var(--accent-lip); }
+  .send:hover { transform: translateY(-2px); box-shadow: inset 0 -5px 0 var(--accent-lip), 0 7px 14px -4px rgba(10, 26, 32, 0.34); }
   .send:hover svg.i { transform: translate(1.5px, -1.5px); }
-  .send:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--accent-lip); transition-duration: 120ms; }
-  .send:focus-visible { box-shadow: 0 4px 0 var(--accent-lip), 0 0 0 4px var(--accent-soft); }
+  .send:active { transform: translateY(2px); padding-bottom: 1px; box-shadow: inset 0 -1px 0 var(--accent-lip), 0 1px 4px -1px rgba(10, 26, 32, 0.26); transition-duration: 120ms; }
+  .send:focus-visible { box-shadow: inset 0 -4px 0 var(--accent-lip), 0 4px 10px -3px rgba(10, 26, 32, 0.32), 0 0 0 4px var(--accent-soft); }
   .send.empty { filter: saturate(0.4); opacity: 0.75; }
-  .send.empty:hover { transform: none; box-shadow: 0 4px 0 var(--accent-lip); }
+  .send.empty:hover { transform: none; box-shadow: inset 0 -4px 0 var(--accent-lip), 0 4px 10px -3px rgba(10, 26, 32, 0.32); }
   .send.empty:hover svg.i { transform: none; }
 
   /* Sent: the plane glides out of the button, then the card eases away toward the corner. */
@@ -137,11 +135,12 @@
   .t-head { display: grid; grid-template-columns: 38px 1fr 26px; gap: 10px; align-items: center; }
   .badge {
     position: relative; width: 38px; height: 38px; border-radius: 19px; display: grid; place-items: center; background: var(--accent);
-    box-shadow: 0 3px 0 var(--accent-lip); color: var(--ink);
+    padding-bottom: 3px; color: var(--ink);
+    box-shadow: inset 0 -3px 0 var(--accent-lip), 0 3px 8px -2px rgba(10, 26, 32, 0.28);
   }
   .badge svg { width: 20px; height: 20px; animation: ring 1100ms ease-in-out 600ms 2; transform-origin: 50% 10%; }
   @keyframes ring { 0%, 100% { rotate: 0deg; } 15% { rotate: 16deg; } 30% { rotate: -14deg; } 45% { rotate: 10deg; } 60% { rotate: -6deg; } 75% { rotate: 3deg; } }
-  .badge::after { content: ""; position: absolute; inset: 0; width: 38px; height: 38px; border-radius: 19px; border: 2px solid var(--accent); animation: ping 1.8s ease-out 400ms 3; opacity: 0; }
+  .badge::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--accent); pointer-events: none; animation: ping 1.8s ease-out 400ms 3; opacity: 0; }
   @keyframes ping { from { opacity: 0.9; transform: scale(0.9); } to { opacity: 0; transform: scale(1.6); } }
   .t-head b { display: block; font-size: 14px; font-weight: 800; }
   .t-head small { display: block; font-size: 11.5px; font-weight: 700; color: var(--ink-2); }
@@ -179,7 +178,6 @@
   <div class="wrap"><div class="card" id="card">
     <div class="grip" style="--i:0" title="Drag to move">
       <span class="tag" id="tag"></span>
-      <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
       <button class="x" id="close" aria-label="Throw this note away"><svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
     <textarea id="text" style="--i:1" rows="3" maxlength="1000" spellcheck="true" placeholder="What do you want to remember?" aria-label="Note"></textarea>

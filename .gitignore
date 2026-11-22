@@ -11,3 +11,6 @@ build/
 
 # Local editor/tool settings
 .claude/
+
+# Tweak's helper: built from native/pane-files.swift by scripts/native.js
+native/pane-files

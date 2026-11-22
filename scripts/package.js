@@ -104,6 +104,8 @@ function sign(app) {
   fs.rmSync(path.join(build, 'Pane.app'), { recursive: true, force: true });
   fs.rmSync(path.join(build, '.tmp'), { recursive: true, force: true });
 
+  require('./native.js').build({ force: true }); // Tweak's helper (native/pane-files)
+
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
   const [appDir] = await packager({
     dir: root,
@@ -118,7 +120,9 @@ function sign(app) {
     extendInfo: { NSAppleEventsUsageDescription: 'Spin plays, skips and sets the volume in your music app.' },
     appVersion: version, // Finder's "Version" and the About window (CFBundleShortVersionString)
     buildVersion: version, // CFBundleVersion
-    ignore: [/^\/(build|assets|scripts|docs|\.claude|\.github)(\/|$)/, /\/prebuilds\/(linux|win32)\//],
+    ignore: [/^\/(build|assets|scripts|docs|\.claude|\.github)(\/|$)/, /\/prebuilds\/(linux|win32)\//, /^\/native\/.*\.swift$/],
+    // Native code can't run from inside app.asar: the key hook's .node files and Tweak's helper sit beside it.
+    asar: { unpack: '{**/*.node,**/native/pane-files}' },
     // The running app reports its version from its own package.json, so stamp the same number there.
     afterCopy: [({ buildPath }) => {
       const file = path.join(buildPath, 'package.json');

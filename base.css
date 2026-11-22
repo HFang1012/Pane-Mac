@@ -76,6 +76,24 @@
   --peach-lip: #68AFD3;
 }
 
+/* Tweak's theme: a workbench. Periwinkle paper, indigo ink, chartreuse crop marks with cobalt. Squarer than the rest. */
+[data-theme="tweak"] {
+  --paper: #E4E5F3;
+  --paper-deep: #D3D5EA;
+  --card: #FAFAFE;
+  --card-lip: #D9DBEE;
+  --well: #ECEDF7;
+  --edge: #C4C7E0;
+  --ink: #1B1D3A;
+  --ink-2: #5F6386;
+  --accent: #CDEB5A;
+  --accent-lip: #9CBD27;
+  --accent-soft: #EEF8C9;
+  --accent-ink: #5A7600;
+  --peach: #8192FF;     /* cobalt */
+  --peach-lip: #5567E3;
+}
+
 /* ---------- the wheel ---------- */
 .wheel { overflow: visible; display: block; }
 .wheel .slice, .wheel .wheel-body { transform-box: view-box; transform-origin: var(--cx) var(--cy); }

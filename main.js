@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, screen, systemPreferences, shell, globalShortcut, desktopCapturer, clipboard, nativeImage } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, screen, systemPreferences, shell, globalShortcut, desktopCapturer, clipboard, nativeImage, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { uIOhook, UiohookKey } = require('uiohook-napi');
@@ -7,12 +7,15 @@ const Tools = require('./tools.js'); // Pane's tools and Away's moods
 const Spin = require('./spin.js'); // Spin's music wheel: same geometry for drawing and hit-testing
 const Music = require('./music.js'); // Spin's link to Spotify, Music or the media keys
 const Updater = require('./updater.js'); // checks GitHub for a newer Pane and offers to install it
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
+const { pathToFileURL } = require('url');
 
 // Keep Chromium off the Keychain. It keeps its own "Pane Safe Storage" key there for cookies, and since Pane
 // is signed locally each build looks like a stranger to it, so macOS asked for your password at every launch.
 // Pane keeps nothing secret in cookies, so a stand-in key is fine.
 app.commandLine.appendSwitch('use-mock-keychain');
+// A separate settings folder, for running a working copy beside the installed Pane.
+if (process.env.PANE_USER_DATA) app.setPath('userData', process.env.PANE_USER_DATA);
 
 // ---------- persistence ----------
 // Ring tools. Undo and redo are half-size and start out side by side, so together they fill one slot.
@@ -57,6 +60,13 @@ const DEFAULTS = {
     snooze: 10, // minutes
     last: 15, // the timer the last note was sent with: the next one starts there
     sound: true,
+    enabled: true,
+  },
+  tweak: {
+    // Double-tap right ⌥ and the pointer picks out files on the desktop and in Finder. Click one to edit it.
+    key: { codes: [UiohookKey.AltRight], symbol: '⌥', name: 'Right Option', side: 'right' },
+    copy: false, // save as a copy, keeping the original, unless you say otherwise in the editor
+    trash: true, // the version you replaced goes to the Trash instead of being gone for good
     enabled: true,
   },
 };
@@ -512,17 +522,18 @@ function asCombo(k) {
   const keys = k?.keys?.length ? k.keys : [{ codes: k.codes, symbol: k.symbol, name: k.name, ...(k.side ? { side: k.side } : {}) }];
   return combo(keys.map((key) => (key.codes.length > 1 && MOD_CODES.has(key.codes[0]) ? keyInfo(key.codes[0]) : key)));
 }
-const KEY_LABEL = { hotkey: 'wheel key', drawKey: 'draw key', spinKey: 'Spin key', jotKey: 'Jot key' };
-// Every held key Pane listens for, by name. Spin's lives inside its own settings.
-const keyOf = (which) => (which === 'spinKey' ? settings.spin.key : which === 'jotKey' ? settings.jot.key : settings[which]);
+const KEY_LABEL = { hotkey: 'wheel key', drawKey: 'draw key', spinKey: 'Spin key', jotKey: 'Jot key', tweakKey: 'Tweak key' };
+// Every held key Pane listens for, by name. Spin's, Jot's and Tweak's live inside their own settings.
+const OWN_KEY = { spinKey: 'spin', jotKey: 'jot', tweakKey: 'tweak' };
+const keyOf = (which) => (OWN_KEY[which] ? settings[OWN_KEY[which]].key : settings[which]);
 function setKey(which, info) {
-  if (which === 'spinKey') settings = { ...settings, spin: { ...settings.spin, key: info } };
-  else if (which === 'jotKey') settings = { ...settings, jot: { ...settings.jot, key: info } };
+  if (OWN_KEY[which]) settings = { ...settings, [OWN_KEY[which]]: { ...settings[OWN_KEY[which]], key: info } };
   else settings = { ...settings, [which]: info };
 }
-// Jot's double-tap and Scrawl's draw key may be the same key (left ⌃ for both, to start): the draw key
-// only draws with a tool in hand, and Jot never opens then. Every other pair must differ.
-const mayShare = (a, b) => [a, b].sort().join() === 'drawKey,jotKey';
+// A double-tap key (Jot's, Tweak's) may be the same key as Scrawl's draw key (left ⌃ for Jot, to start): the
+// draw key only draws with a tool in hand, and neither opens then. Every other pair must differ.
+const mayShare = (a, b) => ['drawKey,jotKey', 'drawKey,tweakKey'].includes([a, b].sort().join());
+const DOUBLE_TAP = new Set(['jotKey', 'tweakKey']);
 
 // What's held right now. Modifiers follow the event's own flags, which macOS keeps accurate. Other keys
 // repeat their key-down while held, so one not seen for a second counts as let go (macOS sometimes drops
@@ -575,7 +586,7 @@ function finishBind(cancel) {
     const other = Object.keys(KEY_LABEL).find((k) => k !== which && !mayShare(k, which) && sameCombo(next, keyOf(k)));
     if (other) error = `${next.name} ${keys.length > 1 ? 'are' : 'is'} already your ${KEY_LABEL[other]}. Pick different keys.`;
     // Double-tapping a letter would happen all the time while typing ("ee"), so Jot takes one modifier.
-    else if (which === 'jotKey' && (keys.length > 1 || !MOD_CODES.has(keys[0].codes[0]))) error = 'Double-tap works with one of ⌃, ⌥, ⇧ or ⌘. Pick just one.';
+    else if (DOUBLE_TAP.has(which) && (keys.length > 1 || !MOD_CODES.has(keys[0].codes[0]))) error = 'Double-tap works with one of ⌃, ⌥, ⇧ or ⌘. Pick just one.';
     else {
       setKey(which, next);
       writeJSON('settings.json', settings);
@@ -621,10 +632,13 @@ function penDownSoon() {
   }, COMBO_WAIT);
 }
 
+const debug = process.env.PANE_DEBUG ? (...a) => console.log('[pane]', ...a) : () => {};
 uIOhook.on('keydown', (e) => {
   noteKey(e, true);
   if (binding) { bindKeyDown(e); return; }
+  if (target && e.keycode === UiohookKey.Escape) { endTarget(); return; } // Esc puts Tweak's pointer away
   jotTap(e, true);
+  tweakTap.feed(e, true);
   clearWaits(e, false);
   if (away || awayBinding) return; // the Away screen is up (or its keys are being chosen): Scrawl sits still
   if (spinKeyDown(e)) return; // Spin's key, or any key while Spin's wheel is up or about to open
@@ -660,6 +674,7 @@ uIOhook.on('keyup', (e) => {
   noteKey(e, false);
   if (binding) { bindKeyUp(e); return; }
   jotTap(e, false);
+  tweakTap.feed(e, false);
   clearWaits(e, true);
   if (inCombo(settings.hotkey, e.keycode)) hotkeyBlocked = false;
   if (inCombo(settings.spin.key, e.keycode)) { spinBlocked = false; spinKeyUp(); }
@@ -672,6 +687,8 @@ uIOhook.on('keyup', (e) => {
 // Mouse button 1 is left, 2 is right. Right-click puts the tool down.
 uIOhook.on('mousedown', (e) => {
   jotTapReset(); // ⌃-click is a click, not half a double-tap
+  tweakTap.reset();
+  if (target) { targetClick(e.button); return; }
   if (spin.open || spinTimer) { cancelSpin(); return; } // a click while the music wheel is up: leave it be
   if (away || awayBinding || !settings.enabled || !activeTool || menu.open) return;
   if (e.button === 1) penDown('mouse');
@@ -926,7 +943,7 @@ function registerShortcuts() {
     try { awayKeyOn = globalShortcut.register(settings.away.keys.accelerator, toggleAway); } catch { awayKeyOn = false; }
   }
   if (settings.jot.enabled && settings.jot.mode === 'shortcut') {
-    try { jotKeyOn = globalShortcut.register(settings.jot.keys.accelerator, () => { if (!jotBlocked()) openComposer(); }); } catch { jotKeyOn = false; }
+    try { jotKeyOn = globalShortcut.register(settings.jot.keys.accelerator, () => { toggleComposer(); }); } catch { jotKeyOn = false; }
   }
 }
 function toggleAway() {
@@ -965,6 +982,7 @@ function showAway(preview = false) {
   if (away) return;
   if (menu.open) closeMenu(false);
   cancelSpin();
+  endTarget();
   penUp();
   if (activeTool) { activeTool = null; broadcast(); }
   binding = false;
@@ -1097,29 +1115,38 @@ function jotBlocked() {
 // ---------- double-tap ----------
 // Two quick taps of the key with nothing else pressed: each down and up within TAP_HOLD, the second
 // pressed within TAP_GAP of the first being let go. Any other key (⌃C), a click, or a long hold starts over.
+// Jot and Tweak each have one, on their own key.
 const TAP_HOLD = 280, TAP_GAP = 400;
-const tap = { downAt: 0, lastUp: 0 };
-function jotTapReset() { tap.downAt = 0; tap.lastUp = 0; }
-function jotTap(e, isDown) {
-  if (settings.jot.mode !== 'double' || !settings.jot.enabled) return;
-  const k = settings.jot.key;
-  const mine = inCombo(k, e.keycode);
-  if (isDown) {
-    if (!mine) { jotTapReset(); return; }
-    if (tap.downAt) return; // still held
-    if (othersHeld(k)) { jotTapReset(); return; }
-    tap.downAt = Date.now();
-    return;
+function doubleTap({ key, on, fire }) {
+  const tap = { downAt: 0, lastUp: 0 };
+  const reset = () => { tap.downAt = 0; tap.lastUp = 0; };
+  function feed(e, isDown) {
+    if (!on()) return;
+    const k = key();
+    const mine = inCombo(k, e.keycode);
+    if (mine) debug('tap', isDown ? 'down' : 'up', { downAt: tap.downAt, lastUp: tap.lastUp, others: isDown && othersHeld(k), held: [...down.keys()] });
+    if (isDown) {
+      if (!mine) { reset(); return; }
+      if (tap.downAt) return; // still held
+      if (othersHeld(k)) { reset(); return; }
+      tap.downAt = Date.now();
+      return;
+    }
+    if (!mine || !tap.downAt) return;
+    const now = Date.now(), began = tap.downAt, quick = now - began < TAP_HOLD;
+    tap.downAt = 0;
+    if (!quick) { tap.lastUp = 0; return; }
+    if (tap.lastUp && began - tap.lastUp < TAP_GAP) { tap.lastUp = 0; fire(); } else tap.lastUp = now;
   }
-  if (!mine || !tap.downAt) return;
-  const now = Date.now(), began = tap.downAt, quick = now - began < TAP_HOLD;
-  tap.downAt = 0;
-  if (!quick) { tap.lastUp = 0; return; }
-  if (tap.lastUp && began - tap.lastUp < TAP_GAP) {
-    tap.lastUp = 0;
-    if (!jotBlocked()) openComposer();
-  } else tap.lastUp = now;
+  return { feed, reset };
 }
+const jotTapper = doubleTap({
+  key: () => settings.jot.key,
+  on: () => settings.jot.mode === 'double' && settings.jot.enabled,
+  fire: () => { if (!jotBlocked()) openComposer(); },
+});
+const jotTap = jotTapper.feed;
+const jotTapReset = jotTapper.reset;
 
 // ---------- the note you write ----------
 function jotPanel(opts) {
@@ -1134,6 +1161,12 @@ function jotPanel(opts) {
   w.setAlwaysOnTop(true, OVERLAY_LEVEL, 1); // over Scrawl's layers, under Away's
   w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
   return w;
+}
+
+// The Jot key opens a note, and pressing it again while one is open puts it away (same as its ✕).
+function toggleComposer() {
+  if (composer) closeComposer();
+  else if (!jotBlocked()) openComposer();
 }
 
 function openComposer(at) {
@@ -1362,6 +1395,330 @@ function setJotEnabled(on) {
   settingsWin?.webContents.send('settings:changed', settings);
 }
 
+// ---------- Tweak: point at a file, click it, edit it ----------
+// Double-tap the Tweak key (right ⌥ to start) and a layer covers every screen. As the pointer moves, the file
+// under it on the desktop or in a Finder window lights up, with its name and type beside it. Click one and
+// it opens in Tweak's editor. Esc, a right-click, a click on nothing or the key twice again puts it away.
+// The file under the pointer comes from native/pane-files, which reads Finder through Accessibility.
+const TweakFiles = require('./tweak-files.js');
+let target = null; // { wins: Map(displayId -> BrowserWindow), helper, hit, asked, poll, at }
+const editors = new Set(); // Tweak's editor windows
+
+function cleanTweak(t) {
+  const out = { ...DEFAULTS.tweak, ...t };
+  out.key = asCombo(out.key);
+  out.copy = !!out.copy;
+  out.trash = out.trash !== false;
+  return out;
+}
+function tweakBlocked() {
+  return !settings.tweak.enabled || !!activeTool || !!pen || menu.open || spin.open || !!spinTimer || !!away ||
+    !!binding || awayBinding || jotBinding;
+}
+const tweakTap = doubleTap({
+  key: () => settings.tweak.key,
+  on: () => settings.tweak.enabled,
+  fire: () => { debug('tweak double-tap', { target: !!target, blocked: tweakBlocked() }); if (target) endTarget(); else if (!tweakBlocked()) startTarget(); },
+});
+
+// The helper sits inside app.asar's unpacked twin in the built app. While working on Pane it's built on first use.
+function helperPath() {
+  const p = path.join(__dirname, 'native', 'pane-files').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
+  if (!app.isPackaged) {
+    try { require('./scripts/native.js').build({ quiet: true }); } catch (err) { console.warn('Couldn’t build Tweak’s helper:', err.message); }
+  }
+  return p;
+}
+
+function startTarget() {
+  if (target) return;
+  if (menu.open) closeMenu(false);
+  cancelSpin();
+  const t = { wins: new Map(), helper: null, hit: null, asked: false, key: '', poll: null, closing: false };
+  target = t;
+  const here = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  for (const d of screen.getAllDisplays()) {
+    const w = new BrowserWindow({
+      ...d.bounds, frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false, resizable: false, movable: false,
+      minimizable: false, maximizable: false, fullscreenable: false, focusable: false, skipTaskbar: true, alwaysOnTop: true,
+      enableLargerThanScreen: true, acceptFirstMouse: true, type: 'panel', show: false,
+      webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false },
+    });
+    w.displayId = String(d.id);
+    w.setHiddenInMissionControl(true); // a background window, like Scrawl's layers (see createOverlays)
+    w.setAlwaysOnTop(true, OVERLAY_LEVEL, 1); // over Scrawl's layers, under Away's
+    w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+    w.loadFile(path.join(__dirname, 'target.html'), { query: { primary: d.id === here.id ? '1' : '0' } });
+    w.once('ready-to-show', () => {
+      if (target !== t || w.isDestroyed()) return;
+      w.setBounds(d.bounds);
+      w.showInactive();
+      sendTargetHit(); // whatever is already under the pointer
+    });
+    t.wins.set(String(d.id), w);
+  }
+  // One helper for as long as the pointer is out; it answers one "x y" at a time.
+  try {
+    t.helper = spawn(helperPath(), ['hover', String(process.pid)], { stdio: ['pipe', 'pipe', 'ignore'] });
+    let buf = '';
+    t.helper.stdout.on('data', (d) => {
+      buf += d;
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1);
+        t.asked = false;
+        let hit = null;
+        try { hit = JSON.parse(line); } catch {}
+        debug('hover', line);
+        if (target === t) onTargetHit(hit?.path ? hit : null);
+      }
+    });
+    debug('helper', helperPath());
+    t.helper.on('error', (err) => { console.warn('Tweak’s helper didn’t start:', err.message); t.helper = null; });
+    t.helper.stdin.on('error', () => {});
+  } catch (err) { console.warn('Tweak’s helper didn’t start:', err.message); }
+  t.poll = setInterval(() => {
+    if (!t.helper || t.asked) return;
+    const p = screen.getCursorScreenPoint();
+    const key = `${p.x},${p.y}`;
+    // Ask again now and then even when still, since Finder may scroll or the window move under the pointer.
+    if (key === t.key && Date.now() - (t.askedAt || 0) < 400) return;
+    t.key = key;
+    t.asked = true;
+    t.askedAt = Date.now();
+    t.helper.stdin.write(`${p.x} ${p.y}\n`);
+  }, 30);
+  buildMenu();
+}
+
+// Size, type and whether Tweak can open it. A file is looked at once per targeting.
+const kindCache = new Map();
+function onTargetHit(hit) {
+  const t = target;
+  if (!t) return;
+  if (!hit) { if (t.hit) { t.hit = null; sendTargetHit(); } return; }
+  const same = t.hit && t.hit.path === hit.path && t.hit.x === hit.x && t.hit.y === hit.y && t.hit.w === hit.w;
+  if (same) return;
+  let info = kindCache.get(hit.path);
+  if (!info) {
+    const k = TweakFiles.kindOf(hit.path, { dir: !!hit.dir });
+    let size = null;
+    try { if (!hit.dir) size = fs.statSync(hit.path).size; } catch {}
+    info = { ...k, size, name: path.basename(hit.path) };
+    kindCache.set(hit.path, info);
+  }
+  // Desktop icons: just around the picture itself (not its name). List rows: the row.
+  const box = hit.desktop ? { x: hit.x - 2, y: hit.y - 2, w: hit.w + 4, h: hit.h + 4 } : { x: hit.x, y: hit.y, w: hit.w, h: hit.h };
+  t.hit = { ...hit, box, info };
+  sendTargetHit();
+}
+function sendTargetHit() {
+  const t = target;
+  if (!t) return;
+  const h = t.hit;
+  const d = h ? screen.getDisplayNearestPoint({ x: Math.round(h.box.x + h.box.w / 2), y: Math.round(h.box.y + h.box.h / 2) }) : null;
+  for (const [id, w] of t.wins) {
+    if (w.isDestroyed()) continue;
+    if (!h || String(d.id) !== id) { w.webContents.send('target:hit', null); continue; }
+    const b = w.getBounds();
+    w.webContents.send('target:hit', {
+      x: h.box.x - b.x, y: h.box.y - b.y, w: h.box.w, h: h.box.h, desktop: !!h.desktop,
+      name: h.info.name, label: h.info.label, size: h.info.size, ok: h.info.ok, why: h.info.why || null, kind: h.info.kind,
+    });
+  }
+}
+function endTarget(opening = false) {
+  const t = target;
+  if (!t || t.closing) return;
+  t.closing = true;
+  target = null;
+  clearInterval(t.poll);
+  try { t.helper?.stdin.end(); t.helper?.kill(); } catch {}
+  kindCache.clear();
+  for (const w of t.wins.values()) {
+    if (w.isDestroyed()) continue;
+    w.webContents.send('target:leave', { open: opening });
+    setTimeout(() => { if (!w.isDestroyed()) w.destroy(); }, 360); // after the marks have moved and faded
+  }
+  buildMenu();
+}
+// Clicks come from the global hook (like Scrawl's pen): the layer itself is faintly tinted so it takes the
+// click and nothing lands in Finder or the app beneath.
+function targetClick(button) {
+  if (!target) return;
+  if (button !== 1) { endTarget(); return; } // a right-click puts it away
+  const h = target.hit;
+  if (!h) { endTarget(); return; } // so does a click on nothing
+  if (!h.info.ok) { for (const w of target.wins.values()) if (!w.isDestroyed()) w.webContents.send('target:nope'); return; }
+  const file = h.path, from = h.box;
+  endTarget(true);
+  openEditor(file, from);
+}
+
+// ---------- the editor ----------
+function openEditor(file, from = null) {
+  // Already open: bring that window forward instead of a second one.
+  for (const w of editors) if (!w.isDestroyed() && w.filePath === file) { w.show(); w.focus(); app.focus({ steal: true }); return w; }
+  const p = from ? { x: Math.round(from.x + from.w / 2), y: Math.round(from.y + from.h / 2) } : screen.getCursorScreenPoint();
+  const display = screen.getDisplayNearestPoint(p), wa = display.workArea;
+  const W = Math.min(1180, wa.width - 40), H = Math.min(780, wa.height - 40);
+  const bounds = { x: Math.round(wa.x + (wa.width - W) / 2), y: Math.round(wa.y + (wa.height - H) / 2), width: W, height: H };
+  const w = new BrowserWindow({
+    ...bounds, minWidth: 880, minHeight: 580,
+    titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 18, y: 19 }, backgroundColor: '#E4E5F3', show: false,
+    fullscreenable: true, title: path.basename(file),
+    webPreferences: { preload: path.join(__dirname, 'preload.js') },
+  });
+  w.filePath = file;
+  editors.add(w);
+  // Open on the Space you're looking at (even over a full-screen app), then stay there like any window.
+  w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+  w.loadFile(path.join(__dirname, 'edit.html'));
+  // Opened from a file on screen: a stand-in grows out of it first, and the window appears where it lands.
+  const ghost = from ? growGhost(display, from, bounds) : null;
+  let ready = false, landed = !ghost;
+  const reveal = () => {
+    if (!ready || !landed || w.isDestroyed()) return;
+    if (ghost) w.setOpacity(0);
+    w.show(); w.focus(); app.focus({ steal: true });
+    if (ghost) fadeWindow(w, 0, 1, 110, () => { if (!ghost.isDestroyed()) ghost.destroy(); });
+    setTimeout(() => { if (!w.isDestroyed()) w.setVisibleOnAllWorkspaces(false, { skipTransformProcessType: true }); }, 600);
+  };
+  w.once('ready-to-show', () => { ready = true; reveal(); });
+  if (ghost) {
+    const land = () => { if (!landed) { landed = true; reveal(); } };
+    ghost.once('ready-to-show', () => setTimeout(land, 360)); // once the stand-in has finished growing
+    setTimeout(land, 1500); // or regardless, if it's slow to appear
+  }
+  w.on('closed', () => { editors.delete(w); if (ghost && !ghost.isDestroyed()) ghost.destroy(); });
+  return w;
+}
+// A see-through layer over the screen, where a stand-in of the editor springs out of the file (grow.html).
+function growGhost(display, from, to) {
+  const d = display.bounds;
+  const g = new BrowserWindow({
+    ...d, frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false, resizable: false, movable: false,
+    focusable: false, skipTaskbar: true, show: false, type: 'panel', enableLargerThanScreen: true,
+    webPreferences: { backgroundThrottling: false },
+  });
+  g.setIgnoreMouseEvents(true);
+  g.setHiddenInMissionControl(true);
+  g.setAlwaysOnTop(true, OVERLAY_LEVEL, 1);
+  g.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+  const r = (a) => a.map((n) => Math.round(n)).join(',');
+  g.loadFile(path.join(__dirname, 'grow.html'), { query: { from: r([from.x - d.x, from.y - d.y, from.w, from.h]), to: r([to.x - d.x, to.y - d.y, to.width, to.height]) } });
+  g.once('ready-to-show', () => { if (!g.isDestroyed()) g.showInactive(); });
+  setTimeout(() => { if (!g.isDestroyed()) g.destroy(); }, 3000); // never left behind
+  return g;
+}
+const editorFor = (e) => [...editors].find((w) => !w.isDestroyed() && w.webContents === e.sender);
+
+ipcMain.handle('tweak:load', async (e) => {
+  const w = editorFor(e);
+  if (!w) return null;
+  try {
+    const info = await TweakFiles.load(w.filePath);
+    w.setTitle(info.name);
+    w.setRepresentedFilename(w.filePath);
+    return { ...info, prefs: { copy: settings.tweak.copy, trash: settings.tweak.trash } };
+  } catch (err) {
+    return { error: err.code === 'ENOENT' ? 'That file isn’t there anymore.' : err.message, name: path.basename(w.filePath), path: w.filePath };
+  }
+});
+// Text as a PDF: a hidden page prints it.
+async function printPdf(html) {
+  const pw = new BrowserWindow({ show: false, webPreferences: { offscreen: true } });
+  try {
+    await pw.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    return await pw.webContents.printToPDF({ pageSize: 'Letter', margins: { marginType: 'custom', top: 0.8, bottom: 0.8, left: 0.8, right: 0.8 } });
+  } finally { pw.destroy(); }
+}
+ipcMain.handle('tweak:save', async (e, job) => {
+  const w = editorFor(e);
+  if (!w || !job || typeof job.ext !== 'string' || !/^[a-z0-9]{1,10}$/.test(job.ext)) return { error: 'Nothing to save.' };
+  const src = w.filePath;
+  const p = TweakFiles.plan(src, { stem: job.stem, ext: job.ext, copy: !!job.copy });
+  const opts = {
+    trash: settings.tweak.trash, trashItem: (f) => shell.trashItem(f), printPdf, helper: helperPath(),
+    progress: (v) => { if (!w.isDestroyed()) w.webContents.send('tweak:progress', v); },
+  };
+  try {
+    let dest;
+    if (job.kind === 'image') dest = await TweakFiles.saveImage(src, job, p, opts);
+    else if (job.kind === 'text') dest = await TweakFiles.saveText(src, job, p, opts);
+    else if (job.kind === 'media') dest = await TweakFiles.saveMedia(src, job, p, opts);
+    else return { error: 'Nothing to save.' };
+    // Saved over (or replaced): the window now edits the new file. A copy keeps editing the original.
+    if (p.replace) { w.filePath = dest; w.setTitle(path.basename(dest)); w.setRepresentedFilename(dest); }
+    if (settings.tweak.copy !== !!job.copy) { settings = { ...settings, tweak: { ...settings.tweak, copy: !!job.copy } }; writeJSON('settings.json', settings); }
+    return { ok: true, path: dest, name: path.basename(dest), replaced: p.replace, trashed: p.replace && settings.tweak.trash };
+  } catch (err) {
+    return { error: err.message || 'Saving didn’t work.' };
+  }
+});
+// A song's bytes, for drawing its waveform (decoded in the editor). Long files are skipped.
+ipcMain.handle('tweak:bytes', async (e) => {
+  const w = editorFor(e);
+  if (!w) return null;
+  try {
+    if (fs.statSync(w.filePath).size > 80 * 1024 * 1024) return null;
+    const b = await fs.promises.readFile(w.filePath);
+    return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+  } catch { return null; }
+});
+// One frame of a video, saved as a picture beside it.
+ipcMain.handle('tweak:frame', async (e, at) => {
+  const w = editorFor(e);
+  if (!w) return null;
+  const src = w.filePath;
+  const sec = Math.max(0, Number(at) || 0);
+  const mm = `${Math.floor(sec / 60)}m${String(Math.floor(sec % 60)).padStart(2, '0')}s`;
+  const dest = TweakFiles.freeName(path.dirname(src), `${TweakFiles.stem(src)} frame ${mm}`, 'png');
+  try {
+    const out = await TweakFiles.run(helperPath(), ['frame', src, String(sec), dest]);
+    if (!String(out).includes('"ok"')) throw new Error('Couldn’t grab that frame.');
+    return { ok: true, path: dest, name: path.basename(dest) };
+  } catch (err) { return { error: err.message }; }
+});
+ipcMain.on('tweak:reveal', (e, file) => {
+  const w = editorFor(e);
+  if (w && typeof file === 'string' && path.isAbsolute(file)) shell.showItemInFolder(file);
+});
+// Open a different file in this window (from the editor's Open button or a file dropped on it).
+ipcMain.handle('tweak:swap', async (e, file) => {
+  const w = editorFor(e);
+  if (!w) return false;
+  let next = typeof file === 'string' && path.isAbsolute(file) && fs.existsSync(file) ? file : null;
+  if (!next) {
+    const r = await dialog.showOpenDialog(w, { properties: ['openFile'] });
+    if (r.canceled || !r.filePaths[0]) return false;
+    next = r.filePaths[0];
+  }
+  w.filePath = next;
+  return true;
+});
+async function chooseAndEdit(parent) {
+  const r = await dialog.showOpenDialog(parent && !parent.isDestroyed() ? parent : undefined, { properties: ['openFile'], message: 'Pick a file to tweak' });
+  if (!r.canceled && r.filePaths[0]) openEditor(r.filePaths[0]);
+}
+ipcMain.on('tweak:choose', () => chooseAndEdit(settingsWin));
+ipcMain.on('tweak:try', () => { if (settings.tweak.enabled && !target) startTarget(); });
+ipcMain.on('tweak:prefs', (e, patch) => {
+  if (!editorFor(e) || !patch) return;
+  const next = { ...settings.tweak };
+  if ('copy' in patch) next.copy = !!patch.copy;
+  settings = { ...settings, tweak: cleanTweak(next) };
+  writeJSON('settings.json', settings);
+  settingsWin?.webContents.send('settings:changed', settings);
+});
+function setTweakEnabled(on) {
+  settings = { ...settings, tweak: { ...settings.tweak, enabled: !!on } };
+  if (!on) endTarget();
+  writeJSON('settings.json', settings);
+  buildMenu();
+  settingsWin?.webContents.send('settings:changed', settings);
+}
+
 // ---------- settings window ----------
 function createSettings() {
   settingsWin = new BrowserWindow({
@@ -1409,6 +1766,11 @@ ipcMain.handle('settings:set', (_e, patch) => {
     registerShortcuts();
     buildMenu();
   }
+  if ('tweak' in patch) {
+    settings.tweak = cleanTweak(settings.tweak);
+    if (!settings.tweak.enabled) endTarget();
+    buildMenu();
+  }
   writeJSON('settings.json', settings);
   broadcast();
   return settings;
@@ -1446,6 +1808,7 @@ ipcMain.handle('bind:start', (_e, which) => {
   penUp();
   if (menu.open) closeMenu(false);
   cancelSpin();
+  endTarget();
   return true;
 });
 // The settings page measures its tallest page, and the fixed-width window takes that height.
@@ -1499,6 +1862,7 @@ app.whenReady().then(() => {
   settings.drawKey = asCombo(settings.drawKey);
   settings.spin.key = asCombo(settings.spin.key);
   settings.jot = cleanJot({ ...DEFAULTS.jot, ...settings.jot });
+  settings.tweak = cleanTweak(settings.tweak);
   // Spin's key can't be exactly one of Scrawl's (sharing some keys is fine): take a free right-hand modifier.
   if (sameCombo(settings.spin.key, settings.hotkey) || sameCombo(settings.spin.key, settings.drawKey)) {
     const free = [UiohookKey.MetaRight, UiohookKey.AltRight, UiohookKey.CtrlRight, UiohookKey.ShiftRight]
@@ -1529,6 +1893,9 @@ app.whenReady().then(() => {
   // in System Settings takes effect without a restart.
   startHook();
   hookTimer = setInterval(startHook, 1500);
+  // For trying Tweak from a terminal: PANE_TWEAK_OPEN=<file> opens it in the editor, PANE_TWEAK_TARGET=1 points.
+  if (process.env.PANE_TWEAK_OPEN) setTimeout(() => openEditor(process.env.PANE_TWEAK_OPEN), 800);
+  if (process.env.PANE_TWEAK_TARGET) setTimeout(startTarget, 1200);
   Updater.start({
     store: { get: () => readJSON('update.json', {}), set: (v) => writeJSON('update.json', v) },
     onState: (s) => settingsWin?.webContents.send('update:state', s),
@@ -1557,11 +1924,14 @@ function askForAccess() {
 
 let hookOn = false;
 let hookTimer = null;
+let hookWarned = false;
 function startHook() {
+  if (!trusted() && !hookWarned && !app.isPackaged) { hookWarned = true; console.warn('Pane can’t hear keys: the app that started it (Terminal?) needs Accessibility access.'); }
   if (hookOn || !trusted()) return;
   try {
     uIOhook.start();
     hookOn = true;
+    debug('key hook on');
     clearInterval(hookTimer);
   } catch (err) {
     console.warn('Key hook not started:', err.message);
@@ -1582,6 +1952,8 @@ function buildMenu() {
         { label: settings.spin.enabled ? 'Turn Spin Off' : 'Turn Spin On', click: () => setSpinEnabled(!settings.spin.enabled) },
         { label: settings.jot.enabled ? 'Turn Jot Off' : 'Turn Jot On', click: () => setJotEnabled(!settings.jot.enabled) },
         { label: 'New Note', enabled: settings.jot.enabled, click: () => openComposer() },
+        { label: settings.tweak.enabled ? 'Turn Tweak Off' : 'Turn Tweak On', click: () => setTweakEnabled(!settings.tweak.enabled) },
+        { label: 'Tweak a File…', accelerator: 'Cmd+O', click: () => chooseAndEdit(BrowserWindow.getFocusedWindow()) },
         away
           ? { label: 'Come Back', click: hideAway }
           : { label: 'Step Away', accelerator: settings.away.keys.accelerator, registerAccelerator: false, click: () => showAway(false) },
@@ -1613,9 +1985,10 @@ app.on('before-quit', () => {
   globalShortcut.unregisterAll();
   uIOhook.stop();
   if (notes) saveNotes();
+  endTarget();
 });
 
 // Test hook: only present when SCRAWL_TEST is set (used by automated checks, never in normal runs).
 if (process.env.SCRAWL_TEST) {
-  global.__scrawlTest = { startBind: (w) => { binding = w; bindKeys = []; }, settings: () => settings, spin, openSpin, closeSpin, spinHover, spinView, Music, applyTool, step, setEnabled, overlays, menu, showAway, hideAway, awayWins: () => away?.wins ?? [], jot: { open: openComposer, composer: () => composer, notes: () => notes, toasts, check: checkNotes, tap: jotTap, blocked: jotBlocked }, peek: () => ({ away: !!away, awayKey: awayKeyOn, activeTool, visible, menuOpen: menu.open, pencilColor: settings.pencilColor, enabled: settings.enabled, drawings, undo: history.undo.length, redo: history.redo.length }) };
+  global.__scrawlTest = { startBind: (w) => { binding = w; bindKeys = []; }, settings: () => settings, spin, openSpin, closeSpin, spinHover, spinView, Music, applyTool, step, setEnabled, overlays, menu, showAway, hideAway, awayWins: () => away?.wins ?? [], jot: { open: openComposer, composer: () => composer, notes: () => notes, toasts, check: checkNotes, tap: jotTap, blocked: jotBlocked }, tweak: { start: startTarget, end: endTarget, target: () => target, open: openEditor, editors, tap: tweakTap, files: TweakFiles }, peek: () => ({ away: !!away, awayKey: awayKeyOn, activeTool, visible, menuOpen: menu.open, pencilColor: settings.pencilColor, enabled: settings.enabled, drawings, undo: history.undo.length, redo: history.redo.length }) };
 }

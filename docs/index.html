@@ -9,7 +9,7 @@
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="icon.png">
 <meta property="og:title" content="Pane">
-<meta property="og:description" content="Draw on your screen. Blur it while you're away. Spin your music from a wheel. Jot a note for later.">
+<meta property="og:description" content="Draw on your screen. Blur it while you're away. Spin your music from a wheel. Jot a note for later. Point at a file and edit it.">
 <meta property="og:image" content="icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -450,6 +450,97 @@
   [data-theme="jot"] .tool-head svg .plane { transform-box: fill-box; transform-origin: 30% 70%; transition: transform 500ms var(--bouncy); }
   [data-theme="jot"]:hover .tool-head svg .plane { transform: translate(3px, -3px) rotate(-12deg); }
 
+
+  /* Tweak's theme: a workbench. Periwinkle paper, indigo ink, chartreuse crop marks with cobalt. Squarer. */
+  [data-theme="tweak"] {
+    --paper: #E4E5F3; --paper-deep: #D3D5EA; --card: #FAFAFE; --card-lip: #D9DBEE; --well: #ECEDF7; --edge: #C4C7E0;
+    --ink: #1B1D3A; --ink-2: #5F6386;
+    --accent: #CDEB5A; --accent-lip: #9CBD27; --accent-soft: #EEF8C9; --accent-ink: #5A7600; --cobalt: #5567E3; --cobalt-lip: #3646B8;
+    --stage-bg: linear-gradient(140deg, #C9CDEB, #DCDDF0 50%, #CFD7E9); --win: #FAFAFE; --bar: #E7E8F4; --line: #D5D7EA; --dark: #262950;
+  }
+  .tool[data-theme="tweak"] { border-radius: 26px; }
+  [data-theme="tweak"] .tdemo { border-radius: 20px; }
+  [data-theme="tweak"] .stage { border-radius: 14px; }
+  [data-theme="tweak"] .tool-head svg .crop { transform-box: fill-box; transform-origin: center; transition: transform 420ms var(--bouncy); }
+  [data-theme="tweak"]:hover .tool-head svg .crop { transform: scale(0.86); }
+
+  /* ---------- Tweak's demo: point at a file on a little desktop, click it, edit, save ---------- */
+  .tdemo { margin-top: 18px; background: var(--card); box-shadow: 0 7px 0 var(--card-lip); padding: 16px 16px 18px; }
+  .tdemo .stage { background: var(--stage-bg); cursor: default; }
+  .tfile { position: absolute; width: 13%; display: grid; justify-items: center; gap: 6px; padding: 8px 0 6px; border: 0; background: none; font: inherit; color: var(--ink); cursor: pointer; z-index: 1; }
+  .tfile .art { width: 58%; aspect-ratio: 1.15; border-radius: 10px; box-shadow: inset 0 -4px 0 rgba(12,13,31,0.18); position: relative; }
+  .tfile b { font-size: 12px; font-weight: 800; white-space: nowrap; }
+  .tfile[data-k="image"] .art { background: linear-gradient(135deg, #F4B07A, #E4789A); }
+  .tfile[data-k="image"] .art::after { content: ""; position: absolute; right: 18%; top: 20%; width: 18%; aspect-ratio: 1; border-radius: 50%; background: #FFE9A8; }
+  .tfile[data-k="video"] .art { background: var(--dark); }
+  .tfile[data-k="video"] .art::after { content: ""; position: absolute; left: 42%; top: 30%; border: 9px solid transparent; border-left: 13px solid #ECEDFB; }
+  .tfile[data-k="audio"] .art { background: linear-gradient(135deg, #8192FF, #B9A5F4); }
+  .tfile[data-k="audio"] .art::after { content: "♪"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 22px; font-weight: 800; }
+  .tfile[data-k="text"] .art { width: 44%; aspect-ratio: 0.8; border-radius: 5px; background: #fff; background-image: repeating-linear-gradient(transparent 0 7px, #D5D7EA 7px 9px); background-size: 70% 100%; background-position: center 30%; background-repeat: no-repeat; }
+  .tfile.dir .art { background: #8FC6F5; border-radius: 6px 6px 10px 10px; }
+  .tmarks { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; pointer-events: none; z-index: 2; transition: left 360ms var(--smooth), top 360ms var(--smooth), width 360ms var(--smooth), height 360ms var(--smooth), opacity 160ms ease; }
+  .tmarks.on { opacity: 1; }
+  .tmarks svg { position: absolute; width: 11px; height: 11px; overflow: visible; }
+  .tmarks svg path { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+  .tmarks svg path.lp { stroke: var(--accent-lip); transform: translateY(1.8px); }
+  .tmarks svg { filter: drop-shadow(0 1.5px 2px rgba(12,13,31,0.3)); }
+  .tmarks svg:nth-child(1) { left: -2px; top: -2px; } .tmarks svg:nth-child(2) { right: -2px; top: -2px; }
+  .tmarks svg:nth-child(3) { left: -2px; bottom: -2px; } .tmarks svg:nth-child(4) { right: -2px; bottom: -2px; }
+  .tmarks.shake { animation: tshake 360ms ease-out; }
+  @keyframes tshake { 20% { transform: translateX(-6px); } 45% { transform: translateX(5px); } 70% { transform: translateX(-3px); } }
+  .ttag { position: absolute; z-index: 3; display: grid; padding: 6px 12px; border-radius: 11px; background: var(--card); box-shadow: 0 4px 0 var(--card-lip), 0 12px 24px -10px rgba(12,13,31,0.4); opacity: 0; scale: 0.9; pointer-events: none; white-space: nowrap; transition: left 300ms var(--bouncy), top 300ms var(--bouncy), opacity 160ms ease, scale 300ms var(--bouncy); }
+  .ttag.on { opacity: 1; scale: 1; }
+  .ttag b { font-size: 12.5px; font-weight: 800; }
+  .ttag small { font-size: 11px; font-weight: 700; color: var(--ink-2); }
+  .thint { position: absolute; left: 50%; top: 5%; translate: -50% 0; z-index: 3; padding: 6px 13px; border-radius: 12px; background: var(--ink); color: #ECEDFB; font-size: 12px; font-weight: 700; white-space: nowrap; transition: opacity 200ms ease; }
+  .thint kbd { background: rgba(255,255,255,0.14); color: #fff; box-shadow: none; }
+  .stage.editing .thint, .stage.editing .tmarks, .stage.editing .ttag { opacity: 0; }
+  /* The editor that opens: cutting mat, tools, a save bar. */
+  .tedit { position: absolute; left: 24%; top: 9%; width: 70%; height: 84%; z-index: 4; border-radius: 12px; background: var(--card); overflow: hidden; display: grid; grid-template-rows: 30px 1fr 42px;
+    box-shadow: 0 5px 0 var(--card-lip), 0 24px 40px -14px rgba(12,13,31,0.5); transform-origin: 0 40%; opacity: 0; scale: 0.3; pointer-events: none; transition: opacity 200ms ease, scale 520ms var(--bouncy); }
+  .stage.editing .tedit { opacity: 1; scale: 1; pointer-events: auto; }
+  .tedit .tb { display: flex; align-items: center; gap: 6px; padding: 0 10px; border-bottom: 1px solid var(--edge); font-size: 12px; font-weight: 800; }
+  .tedit .tb i { width: 9px; height: 9px; border-radius: 50%; background: var(--edge); }
+  .tedit .tb i:first-child { background: #FF6159; cursor: pointer; }
+  .tedit .tb span { margin-left: 8px; }
+  .tedit .tb small { color: var(--ink-2); font-weight: 800; }
+  .tedit .bd { display: grid; grid-template-columns: 1fr 34%; min-height: 0; }
+  .tedit .mat { position: relative; display: grid; place-items: center; background-color: #262950; background-image: linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px); background-size: 18px 18px; overflow: hidden; }
+  .tedit .pic { position: relative; width: 74%; aspect-ratio: 16 / 10; background: linear-gradient(135deg, #F4B07A, #E4789A); transition: transform 400ms var(--bouncy), filter 200ms ease; }
+  .tedit .pic::before { content: ""; position: absolute; right: 18%; top: 18%; width: 14%; aspect-ratio: 1; border-radius: 50%; background: #FFE9A8; }
+  .tedit .pic .cut { position: absolute; inset: 0; box-shadow: 0 0 0 999px rgba(18,19,42,0.6); outline: 2px solid var(--accent); transition: inset 420ms var(--bouncy); }
+  .tedit[data-k="video"] .pic, .tedit[data-k="audio"] .pic { background: linear-gradient(135deg, #8192FF, #CDEB5A); }
+  .tedit[data-k="audio"] .pic { aspect-ratio: 3 / 1; background: repeating-linear-gradient(90deg, #8192FF 0 3px, transparent 3px 7px); -webkit-mask: linear-gradient(transparent 10%, #000 30% 70%, transparent 90%); }
+  .tedit[data-k="audio"] .pic::before, .tedit[data-k="audio"] .pic .cut, .tedit[data-k="text"] .pic::before, .tedit[data-k="text"] .pic .cut { display: none; }
+  .tedit[data-k="text"] .mat { background: #FAFAFE; place-items: start; padding: 14px; }
+  .tedit[data-k="text"] .pic { width: 100%; aspect-ratio: auto; background: none; font: 12px/1.6 ui-monospace, Menlo, monospace; color: var(--ink); white-space: pre; }
+  .tedit .trim { position: absolute; left: 6%; right: 6%; bottom: 8%; height: 16px; border-radius: 5px; background: rgba(255,255,255,0.1); display: none; }
+  .tedit[data-k="video"] .trim, .tedit[data-k="audio"] .trim { display: block; }
+  .tedit .trim span { position: absolute; top: -3px; bottom: -3px; left: var(--a, 0%); right: var(--b, 0%); border: 3px solid var(--accent); border-radius: 5px; transition: left 420ms var(--bouncy), right 420ms var(--bouncy); }
+  .tedit .side { background: var(--paper); padding: 10px; display: grid; gap: 6px; align-content: start; overflow: hidden; }
+  .tedit .side button { height: 28px; border: 0; border-radius: 8px; background: var(--card); box-shadow: 0 2px 0 var(--card-lip); font: inherit; font-size: 11.5px; font-weight: 800; color: var(--ink); cursor: pointer; transition: transform 200ms var(--bouncy); }
+  .tedit .side button:hover { transform: translateY(-1px); }
+  .tedit .side button:active { transform: translateY(1px); }
+  .tedit .side button.on { background: var(--ink); color: #fff; box-shadow: 0 2px 0 #0C0D1F; }
+  .tedit .ft { display: flex; align-items: center; gap: 8px; padding: 0 10px; border-top: 1px solid var(--edge); font-size: 11.5px; font-weight: 700; color: var(--ink-2); }
+  .tedit .ft select { font: inherit; font-weight: 800; color: var(--ink); border: 0; border-radius: 8px; background: var(--well); height: 26px; padding: 0 6px; }
+  .tedit .ft .what { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tedit .ft .go { height: 28px; padding: 0 14px; border: 0; border-radius: 9px; background: var(--cobalt); box-shadow: inset 0 -3px 0 var(--cobalt-lip); color: #fff; font: inherit; font-weight: 800; font-size: 12px; cursor: pointer; }
+  .tfile.saved .art { animation: tsaved 620ms var(--bouncy); }
+  @keyframes tsaved { 40% { transform: scale(1.18) rotate(-4deg); } }
+  @media (max-width: 600px) {
+    .tdemo .stage { aspect-ratio: 1 / 1.05; }
+    .thint { top: 3%; font-size: 10.5px; padding: 5px 10px; }
+    .tfile { width: 27%; }
+    .tfile b { font-size: 10px; }
+    .tfile[data-k="image"] { left: 4% !important; top: 18% !important; } .tfile[data-k="audio"] { left: 36% !important; top: 18% !important; }
+    .tfile[data-k="video"] { left: 4% !important; top: 52% !important; } .tfile[data-k="text"] { left: 36% !important; top: 52% !important; }
+    .tfile.dir { left: 69% !important; top: 18% !important; }
+    .tedit { left: 3%; top: 12%; width: 94%; height: 80%; } .tedit .tb small { display: none; }
+    .tedit .bd { grid-template-columns: 1fr; grid-template-rows: 1fr auto; } .tedit .side { grid-template-columns: 1fr 1fr; }
+    .tedit .ft .what { display: none; }
+  }
+
   /* ---------- Jot's demo: a note at the pointer, a paper airplane, a reminder in the corner ---------- */
   .stage .jnote {
     position: absolute; left: 0; top: 0; z-index: 3; width: min(54%, 268px); padding: 4px 12px 12px; border-radius: 24px; background: var(--card);
@@ -601,7 +692,7 @@
     <img class="icon pop" src="icon.png" alt="" width="128" height="128">
     <h1 class="rise" style="--d:120ms">Pane</h1>
     <p class="byline rise" style="--d:160ms">by hucklberi</p>
-    <p class="lede rise" style="--d:200ms">Four small tools for your Mac. Scrawl draws on your screen. Away blurs it while you’re gone. Spin runs your music from a wheel. Jot takes a quick note and reminds you later. Change any shortcut to keys you like.</p>
+    <p class="lede rise" style="--d:200ms">Five small tools for your Mac. Scrawl draws on your screen. Away blurs it while you’re gone. Spin runs your music from a wheel. Jot takes a quick note and reminds you later. Tweak edits any file you point at. Change any shortcut to keys you like.</p>
 
     <div class="quick pop" style="--d:300ms">
       <p class="label">Install with one command <span class="badge">Recommended</span></p>
@@ -750,6 +841,31 @@
       </div>
       <p class="switch-note" style="margin-top:16px">Add a screenshot, or take it off again. Drag a note by its top to move it. Snooze a reminder, or mark it done.</p>
     </article>
+    <article class="tool" data-theme="tweak">
+      <div class="tool-head">
+        <svg viewBox="0 0 60 44" aria-hidden="true"><path d="M11 8 H27 L37 18 V39 Q37 43 33 43 H11 Q7 43 7 39 V12 Q7 8 11 8 Z" fill="#5567E3"/><path d="M11 5 H27 L37 15 V36 Q37 40 33 40 H11 Q7 40 7 36 V9 Q7 5 11 5 Z" fill="#8192FF"/><path d="M27 5 V12 Q27 15 30 15 H37 Z" fill="#5567E3"/><g stroke="#1B1D3A" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.85"><path d="M13 22h10"/><path d="M13 29h6"/></g><g class="crop" fill="none" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(0 2.2)" stroke="#9CBD27"><path d="M30 13 H51 V31"/><path d="M24 19 V37 H45"/></g><g stroke="#CDEB5A"><path d="M30 13 H51 V31"/><path d="M24 19 V37 H45"/></g></g></svg>
+        <h3>Tweak</h3>
+        <p>Point at a file and edit it.</p>
+      </div>
+      <div class="tdemo">
+        <div class="stage" id="tstage">
+          <div class="thint">Double-tap right <kbd>⌥</kbd>, then click a file</div>
+          <button type="button" class="tfile" data-k="image" data-name="beach" data-ext="heic" style="left:5%;top:16%"><span class="art"></span><b></b></button>
+          <button type="button" class="tfile" data-k="video" data-name="clip" data-ext="mov" style="left:5%;top:52%"><span class="art"></span><b></b></button>
+          <button type="button" class="tfile" data-k="audio" data-name="voice memo" data-ext="mp3" style="left:20%;top:16%"><span class="art"></span><b></b></button>
+          <button type="button" class="tfile" data-k="text" data-name="people" data-ext="csv" style="left:20%;top:52%"><span class="art"></span><b></b></button>
+          <button type="button" class="tfile dir" data-k="dir" data-name="Projects" data-ext="" style="left:82%;top:60%"><span class="art"></span><b></b></button>
+          <div class="tmarks"><svg viewBox="0 0 18 18"><path class="lp" d="M15 3H3V15"/><path d="M15 3H3V15"/></svg><svg viewBox="0 0 18 18"><path class="lp" d="M3 3H15V15"/><path d="M3 3H15V15"/></svg><svg viewBox="0 0 18 18"><path class="lp" d="M15 15H3V3"/><path d="M15 15H3V3"/></svg><svg viewBox="0 0 18 18"><path class="lp" d="M3 15H15V3"/><path d="M3 15H15V3"/></svg></div>
+          <div class="ttag"><b></b><small></small></div>
+          <div class="tedit" role="dialog" aria-label="Tweak editor">
+            <div class="tb"><i title="Close"></i><i></i><i></i><span class="tname"></span><small class="tkind"></small></div>
+            <div class="bd"><div class="mat"><div class="pic"><div class="cut"></div></div><div class="trim"><span></span></div></div><div class="side"></div></div>
+            <div class="ft"><span>Save as</span><select aria-label="File type"></select><span class="what"></span><button type="button" class="go">Save</button></div>
+          </div>
+        </div>
+      </div>
+      <p class="switch-note" style="margin-top:16px">Crop, turn and resize pictures. Trim, crop or mute a video, pull out its sound, or save a frame. Trim songs. Find and replace in text. Change any file’s type, and save over it or as a copy. The old version goes to the Trash.</p>
+    </article>
     <p class="switch-note">Every shortcut can be changed, in Pane and right here: click a key under any demo and hold new ones. Switch tools from the button in the corner of Pane’s window.</p>
   </section>
 
@@ -821,7 +937,7 @@
 
     <div class="route">
       <h3>Then: allow Accessibility</h3>
-      <p>Scrawl and Spin need this to notice when you hold their keys, and Jot to notice a double-tap. Away works without it.</p>
+      <p>Scrawl and Spin need this to notice when you hold their keys, Jot and Tweak to notice a double-tap, and Tweak to see which file is under your pointer. Away works without it.</p>
       <ol class="steps">
         <li><span>Go to <span class="path"><span>System Settings</span>›<span>Privacy &amp; Security</span>›<span>Accessibility</span></span> and turn on <em>Pane</em>.</span></li>
         <li><span>Already on but Scrawl doesn’t react? Remove Pane with the <em>–</em> button and add it again. macOS treats each new version as a new app.</span></li>
@@ -1894,6 +2010,106 @@
     // With reduced motion the demos stay still: show the first step and the keys, and Try it still works.
     if (reduce) { demo.play(); demo.pause(); }
   });
+
+
+  // ---------- Tweak's desk: point at a file, click it, edit, save ----------
+  (function () {
+    const st = document.getElementById('tstage'); if (!st) return;
+    const marks = st.querySelector('.tmarks'), tag = st.querySelector('.ttag'), ed = st.querySelector('.tedit');
+    const files = [...st.querySelectorAll('.tfile')];
+    const KIND = { image: 'HEIC photo', video: 'QuickTime movie', audio: 'MP3 audio', text: 'CSV table', dir: 'Folder' };
+    const FORMATS = { image: ['heic', 'png', 'jpg', 'webp'], video: ['mov', 'mp4', 'gif', 'm4a'], audio: ['m4a', 'wav', 'aiff'], text: ['csv', 'json', 'md', 'txt'] };
+    const TOOLS = { image: ['Crop 16:9', 'Square', 'Turn', 'Black and white'], video: ['Trim', 'Crop', 'Mute', 'Save a frame'], audio: ['Trim', 'Quieter'], text: ['Sort lines', 'UPPER', 'Find and replace'] };
+    const TEXT = { csv: 'name,age\nAda,36\nLin,29\n', json: '[\n  { "name": "Ada", "age": "36" },\n  { "name": "Lin", "age": "29" }\n]' };
+    const label = (f) => f.dataset.name + (f.dataset.ext ? '.' + f.dataset.ext : '');
+    files.forEach((f) => { f.querySelector('b').textContent = label(f); });
+    let hot = null, open = null, idle = 0, auto = null;
+    function point(f) {
+      hot = f;
+      if (!f) { marks.classList.remove('on'); tag.classList.remove('on'); return; }
+      const r = f.getBoundingClientRect(), s = st.getBoundingClientRect(), ic = f.querySelector('.art').getBoundingClientRect(), pad = 2;
+      Object.assign(marks.style, { left: (ic.left - s.left - pad) + 'px', top: (ic.top - s.top - pad) + 'px', width: (ic.width + pad * 2) + 'px', height: (ic.height + pad * 2) + 'px' });
+      const dir = f.dataset.k === 'dir';
+      marks.classList.toggle('nope', dir);
+      tag.querySelector('b').textContent = label(f);
+      tag.querySelector('small').textContent = dir ? 'Folders can’t be tweaked' : KIND[f.dataset.k];
+      Object.assign(tag.style, { left: Math.min(r.left - s.left, s.width - 170) + 'px', top: (r.bottom - s.top + 8) + 'px' });
+      marks.classList.add('on'); tag.classList.add('on');
+    }
+    function edit(f) {
+      if (f.dataset.k === 'dir') { marks.classList.remove('shake'); void marks.offsetWidth; marks.classList.add('shake'); return; }
+      open = f;
+      const k = f.dataset.k;
+      ed.dataset.k = k;
+      ed.querySelector('.tname').textContent = label(f);
+      ed.querySelector('.tkind').textContent = KIND[k];
+      const pic = ed.querySelector('.pic');
+      pic.style.transform = ''; pic.style.filter = '';
+      pic.querySelector('.cut').style.inset = '0';
+      ed.querySelector('.trim span').style.cssText = '';
+      if (k === 'text') pic.firstChild.nodeType === 3 ? (pic.firstChild.textContent = TEXT.csv) : pic.prepend(document.createTextNode(TEXT.csv));
+      else if (pic.firstChild.nodeType === 3) pic.firstChild.remove();
+      const side = ed.querySelector('.side');
+      side.innerHTML = '';
+      TOOLS[k].forEach((t) => {
+        const b = document.createElement('button'); b.type = 'button'; b.textContent = t;
+        b.addEventListener('click', () => { b.classList.toggle('on'); act(k, t, b.classList.contains('on')); });
+        side.append(b);
+      });
+      const sel = ed.querySelector('select');
+      sel.innerHTML = FORMATS[k].map((x) => `<option value="${x}">${x.toUpperCase()}</option>`).join('');
+      sel.value = FORMATS[k].includes(f.dataset.ext) ? f.dataset.ext : FORMATS[k][0];
+      what();
+      st.classList.add('editing');
+    }
+    function act(k, t, on) {
+      const pic = ed.querySelector('.pic'), cut = pic.querySelector('.cut'), trim = ed.querySelector('.trim span');
+      if (t === 'Crop 16:9' || t === 'Crop') cut.style.inset = on ? '6% 4% 10% 4%' : '0';
+      if (t === 'Square') cut.style.inset = on ? '0 22% 0 22%' : '0';
+      if (t === 'Turn') pic.style.transform = on ? 'rotate(90deg) scale(0.62)' : '';
+      if (t === 'Black and white' || t === 'Mute' || t === 'Quieter') pic.style.filter = on ? 'grayscale(1)' : '';
+      if (t === 'Trim') trim.style.cssText = on ? '--a:18%;--b:26%' : '';
+      if (k === 'text') {
+        let v = TEXT[ed.querySelector('select').value === 'json' ? 'json' : 'csv'];
+        if (t === 'UPPER' && on) v = v.toUpperCase();
+        if (t === 'Sort lines' && on) v = v.split('\n').filter(Boolean).sort().join('\n');
+        pic.firstChild.textContent = v;
+      }
+    }
+    function what() {
+      const ext = ed.querySelector('select').value, f = open;
+      const next = f.dataset.name + '.' + ext;
+      ed.querySelector('.what').textContent = ext === f.dataset.ext ? 'Saves over ' + next + '.' : next + ' takes its place. The old one goes to the Trash.';
+      ed.querySelector('.go').textContent = ext === f.dataset.ext ? 'Save' : 'Save as ' + ext.toUpperCase();
+      if (f.dataset.k === 'text') ed.querySelector('.pic').firstChild.textContent = ext === 'json' ? TEXT.json : TEXT.csv;
+    }
+    ed.querySelector('select').addEventListener('change', what);
+    function close() { st.classList.remove('editing'); open = null; }
+    ed.querySelector('.tb i').addEventListener('click', close);
+    ed.querySelector('.go').addEventListener('click', () => {
+      const f = open, ext = ed.querySelector('select').value;
+      f.dataset.ext = ext;
+      f.querySelector('b').textContent = label(f);
+      close();
+      f.classList.remove('saved'); void f.offsetWidth; f.classList.add('saved');
+      setTimeout(() => point(f), 60);
+    });
+    files.forEach((f) => {
+      f.addEventListener('pointerenter', () => { idle = Date.now(); if (!open) point(f); });
+      f.addEventListener('focus', () => { if (!open) point(f); });
+      f.addEventListener('click', () => { idle = Date.now(); if (!open) edit(f); });
+    });
+    st.addEventListener('pointerleave', () => { if (!open) point(null); });
+    // Left alone, the marks wander between the files on their own.
+    let n = 0;
+    auto = setInterval(() => {
+      if (open || Date.now() - idle < 6000 || document.hidden || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const r = st.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > innerHeight) return;
+      point(files[n++ % files.length]);
+    }, 1400);
+    addEventListener('resize', () => { if (hot && !open) point(hot); });
+  })();
 
   // ---------- toys in the margins ----------
   const sayTo = (cap, text) => { cap.innerHTML = '<span></span>'; cap.firstChild.textContent = text; };

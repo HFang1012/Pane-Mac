@@ -1,7 +1,7 @@
 // The tool button in the top-right corner: pick which of Pane's tools the window shows.
 const switchBtn = document.getElementById('switchBtn');
 const switchMenu = document.getElementById('switchMenu');
-const PAGES = { scrawl: document.getElementById('page'), away: document.getElementById('awayPage'), spin: document.getElementById('spinPage'), jot: document.getElementById('jotPage') };
+const PAGES = { scrawl: document.getElementById('page'), away: document.getElementById('awayPage'), spin: document.getElementById('spinPage'), jot: document.getElementById('jotPage'), tweak: document.getElementById('tweakPage') };
 let currentPage = null;
 
 // Each tool in the menu: its glyph on a tile, name, one line about it, and a tick on the open one.

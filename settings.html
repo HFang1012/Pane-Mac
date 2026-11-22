@@ -599,9 +599,6 @@
   [data-theme="jot"] .card { --r: 36px; }
   [data-theme="jot"] .tips { --r: 30px; }
   [data-theme="jot"] .callout { --r: 26px; }
-  [data-theme="jot"] .keywell { border-radius: 30px; }
-  [data-theme="jot"] .keywell .ants rect { rx: 29px; }
-  [data-theme="jot"] .keycap { border-radius: 24px; min-width: 56px; }
   [data-theme="jot"] .tips .ic { border-radius: 15px; }
   [data-theme="jot"] .screen-wrap .try { border-radius: 999px; }
   [data-theme="jot"] .brand .mark svg .plane { transform-box: fill-box; transform-origin: 30% 70%; transition: transform 500ms var(--bouncy); }
@@ -689,6 +686,63 @@
   @keyframes jout { to { opacity: 0; transform: translateX(30px) scale(0.9); } }
   .jempty { padding: 12px 14px; border-radius: 18px; background: var(--well); font-size: 12px; font-weight: 600; color: var(--ink-2); animation: pop 520ms var(--bouncy) both; }
   .jempty b { color: var(--ink); }
+
+  /* ---------- Tweak page: squarer, like a workbench ---------- */
+  [data-theme="tweak"] .card { --r: 22px; }
+  [data-theme="tweak"] .tips { --r: 20px; }
+  [data-theme="tweak"] .callout { --r: 18px; }
+  [data-theme="tweak"] .keywell { border-radius: 16px; }
+  [data-theme="tweak"] .keywell .ants rect { rx: 15px; }
+  [data-theme="tweak"] .keycap { border-radius: 12px; }
+  [data-theme="tweak"] .brand .mark svg .crop { transition: transform 420ms var(--bouncy); transform-box: fill-box; transform-origin: center; }
+  [data-theme="tweak"] .brand:hover .mark svg .crop { transform: scale(0.86); }
+
+  /* A little desktop: crop marks hop between files, one is clicked, and the editor opens over it. */
+  .tdesk {
+    position: relative; height: 210px; margin-top: 14px; border-radius: 18px; overflow: hidden; isolation: isolate;
+    background: linear-gradient(140deg, #C9CDEB, #DCDDF0 50%, #CFD7E9); box-shadow: 0 5px 0 var(--card-lip);
+  }
+  .tdesk .ic { position: absolute; width: 60px; display: grid; justify-items: center; gap: 5px; font-size: 9.5px; font-weight: 800; color: var(--ink); }
+  .tdesk .ic span { width: 40px; height: 34px; border-radius: 8px; box-shadow: inset 0 -3px 0 rgba(12,13,31,0.18); }
+  .tdesk .ic:nth-child(1) { left: 22px; top: 22px; } .tdesk .ic:nth-child(1) span { background: linear-gradient(135deg, #F4B07A, #E4789A); }
+  .tdesk .ic:nth-child(2) { left: 22px; top: 100px; } .tdesk .ic:nth-child(2) span { background: #2E3260; position: relative; }
+  .tdesk .ic:nth-child(2) span::after { content: ""; position: absolute; left: 16px; top: 11px; border: 6px solid transparent; border-left: 9px solid #ECEDFB; }
+  .tdesk .ic:nth-child(3) { left: 96px; top: 22px; } .tdesk .ic:nth-child(3) span { background: #FAFAFE; width: 30px; height: 38px; border-radius: 4px; }
+  .tmark { position: absolute; width: 44px; height: 38px; left: 30px; top: 20px; animation: tmark 8s var(--smooth) infinite; }
+  .tmark svg { position: absolute; width: 11px; height: 11px; overflow: visible; }
+  .tmark svg path { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+  .tmark svg path.lp { stroke: var(--accent-lip); transform: translateY(1.8px); }
+  .tmark svg { filter: drop-shadow(0 1.5px 2px rgba(12,13,31,0.3)); }
+  .tmark svg:nth-child(1) { left: -2px; top: -2px; } .tmark svg:nth-child(2) { right: -2px; top: -2px; }
+  .tmark svg:nth-child(3) { left: -2px; bottom: -2px; } .tmark svg:nth-child(4) { right: -2px; bottom: -2px; }
+  @keyframes tmark {
+    0%, 4% { opacity: 0; transform: none; } 8%, 18% { opacity: 1; transform: none; }
+    24%, 34% { opacity: 1; transform: translate(74px, 0); } 40%, 52% { opacity: 1; transform: translate(0, 78px); }
+    54% { transform: translate(0, 78px) scale(0.9); } 58% { opacity: 1; transform: translate(0, 78px); } 62%, 100% { opacity: 0; transform: translate(0, 78px); }
+  }
+  .tdesk .tpt { position: absolute; left: 66px; top: 62px; width: 14px; height: 20px; animation: tpt 8s var(--smooth) infinite; filter: drop-shadow(0 2px 2px rgba(12,13,31,0.3)); }
+  @keyframes tpt { 0%, 18% { transform: none; } 24%, 34% { transform: translate(74px, 0); } 40%, 100% { transform: translate(0, 78px); } }
+  .twin {
+    position: absolute; left: 132px; top: 20px; width: 276px; height: 170px; border-radius: 12px; background: var(--card); overflow: hidden;
+    box-shadow: 0 4px 0 var(--card-lip), 0 18px 30px -12px rgba(12,13,31,0.45); display: grid; grid-template-rows: 20px 1fr 22px; transform-origin: 0 60%;
+    animation: twin 8s var(--bouncy) infinite;
+  }
+  @keyframes twin { 0%, 57% { opacity: 0; transform: scale(0.3); } 64%, 94% { opacity: 1; transform: none; } 100% { opacity: 0; transform: scale(0.96); } }
+  .twin .tb { display: flex; gap: 4px; align-items: center; padding: 0 8px; border-bottom: 1px solid var(--edge); }
+  .twin .tb i { width: 6px; height: 6px; border-radius: 50%; background: var(--edge); }
+  .twin .bd { display: grid; grid-template-columns: 1fr 70px; min-height: 0; }
+  .twin .mat { position: relative; background-color: #262950; background-image: linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px); background-size: 14px 14px; display: grid; place-items: center; }
+  .twin .vid { width: 120px; height: 68px; border-radius: 3px; background: linear-gradient(135deg, #8192FF, #CDEB5A); position: relative; }
+  .twin .vid::after { content: ""; position: absolute; inset: 0; box-shadow: 0 0 0 999px rgba(18,19,42,0.55); outline: 2px solid var(--accent); animation: tcrop 8s var(--bouncy) infinite; }
+  @keyframes tcrop { 0%, 70% { inset: 0; } 78%, 100% { inset: 8px 22px 12px 18px; } }
+  .twin .side { background: var(--paper); padding: 6px; display: grid; gap: 5px; align-content: start; }
+  .twin .side i { height: 18px; border-radius: 5px; background: var(--card); box-shadow: 0 2px 0 var(--card-lip); }
+  .twin .side i:first-child { background: var(--ink); }
+  .twin .ft { display: flex; align-items: center; justify-content: flex-end; gap: 4px; padding: 0 6px; border-top: 1px solid var(--edge); }
+  .twin .ft b { font-size: 8px; font-weight: 800; color: #fff; background: #5567E3; border-radius: 4px; padding: 2px 7px; animation: tsave 8s ease infinite; }
+  @keyframes tsave { 0%, 86% { transform: none; } 88% { transform: translateY(1.5px); } 90%, 100% { transform: none; } }
+  .tkinds { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tkinds span { font-size: 11.5px; font-weight: 800; padding: 3px 10px; border-radius: 8px; background: var(--well); color: var(--ink-2); }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
@@ -1083,6 +1137,96 @@
     </div>
   </section>
 </div>
+<div class="page" id="tweakPage" data-tool="tweak" hidden>
+  <section>
+    <div class="brand rise" style="--d:0ms">
+      <span class="mark" data-glyph="tweak"></span>
+      Tweak
+      <span class="version"></span>
+    </div>
+    <h1 class="rise" style="--d:60ms">Point at a file.<br>Fix it right there.</h1>
+    <p class="lede rise" style="--d:120ms">Double-tap the Tweak key and point at a file on your desktop or in Finder. Click it to crop, trim, cut or rewrite it, change its type, and save it back.</p>
+    <div class="keyrow rise" style="--d:160ms">
+      <div class="keyslot">
+        <button class="keywell" data-which="tweakKey" aria-describedby="tweakCaption">
+          <svg class="ants" aria-hidden="true"><rect rx="15"/></svg>
+          <span class="keys"></span>
+        </button>
+        <span class="keylabel">Tap twice</span>
+      </div>
+    </div>
+    <p class="caption rise" style="--d:200ms" id="tweakCaption">Click the key to change it. Tap it twice, quickly.</p>
+
+    <div class="collapse access"><div>
+      <div class="callout chunky">
+        <h3>Allow Pane to hear your keys</h3>
+        <p>Tweak needs it to notice a double-tap, and to see which file is under your pointer in Finder. Turn on Pane in Privacy &amp; Security › Accessibility.</p>
+        <button class="pill access-btn">Open Accessibility settings</button>
+      </div>
+    </div></div>
+
+    <div class="power rise" style="--d:240ms">
+      <button class="power-btn" id="tweakPower" aria-pressed="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 3.5v8"/><path d="M6.6 6.8a7.5 7.5 0 1 0 10.8 0"/></svg>
+        <span class="swap" id="tweakPowerText">Turn off</span>
+      </button>
+      <div class="status" id="tweakStatus">
+        <span class="dot"></span><span class="swap" id="tweakStatusText">Checking…</span>
+      </div>
+    </div>
+    <label class="login-line rise" style="--d:280ms"><button class="switch login small" role="switch" aria-checked="false" aria-label="Open at login"></button>Open Pane at login</label>
+    <div class="tips chunky rise" style="--d:330ms" aria-label="Good to know">
+      <span class="tips-tag">Good to know</span>
+      <ul>
+        <li><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg></span><span><b>Esc</b>, a right-click or a click on nothing puts the pointer away.</span></li>
+        <li><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></span><span>Saving over a file puts the <b>old version in the Trash</b>, so nothing is lost.</span></li>
+        <li><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></span><span><b>Drop a file</b> on the editor, or press <b>⌘O</b>, to open any file.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="card chunky rise" style="--d:90ms" aria-label="Tweak settings">
+    <div class="head solo">
+      <div>
+        <h2>Files</h2>
+        <p>Point, click, edit, save.</p>
+      </div>
+    </div>
+    <div class="screen-wrap">
+      <div class="tdesk" aria-hidden="true">
+        <div class="ic"><span></span>photo.heic</div>
+        <div class="ic"><span></span>clip.mov</div>
+        <div class="ic"><span></span>notes.md</div>
+        <div class="tmark"><svg viewBox="0 0 18 18"><path class="lp" d="M15 3H3V15"/><path d="M15 3H3V15"/></svg><svg viewBox="0 0 18 18"><path class="lp" d="M3 3H15V15"/><path d="M3 3H15V15"/></svg><svg viewBox="0 0 18 18"><path class="lp" d="M15 15H3V3"/><path d="M15 15H3V3"/></svg><svg viewBox="0 0 18 18"><path class="lp" d="M3 15H15V3"/><path d="M3 15H15V3"/></svg></div>
+        <svg class="tpt" viewBox="0 0 17 24"><path d="M1.5 1.5v17.2l4.3-4.1 3 6.9 3.1-1.3-3-6.8h6z" fill="#14161C" stroke="#FFFFFF" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        <div class="twin"><div class="tb"><i></i><i></i><i></i></div><div class="bd"><div class="mat"><div class="vid"></div></div><div class="side"><i></i><i></i><i></i><i></i></div></div><div class="ft"><b>Save</b></div></div>
+      </div>
+      <button class="try" id="tryTweak">
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 2.2v7.6L9.8 6z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        Try it
+      </button>
+    </div>
+
+    <div class="rows">
+      <div class="row stack rise" style="--d:300ms">
+        <div><h3>What it edits</h3><p>Pictures: crop, turn, resize, adjust. Video: trim, crop, mute, pull out the sound, save a frame. Sound: trim and turn down. Text: find and replace, tidy, convert.</p></div>
+        <div class="tkinds"><span>PNG</span><span>JPEG</span><span>HEIC</span><span>WebP</span><span>MP4</span><span>MOV</span><span>MP3</span><span>WAV</span><span>TXT</span><span>Markdown</span><span>JSON</span><span>CSV</span><span>Word</span></div>
+      </div>
+      <div class="row rise" style="--d:340ms">
+        <div><h3>Keep the original</h3><p>Start the editor on “Save a copy” instead of replacing the file.</p></div>
+        <button class="switch" id="tweakCopy" role="switch" aria-checked="false" aria-label="Keep the original"></button>
+      </div>
+      <div class="row rise" style="--d:380ms">
+        <div><h3>Old versions go to the Trash</h3><p>Off deletes the replaced file for good.</p></div>
+        <button class="switch" id="tweakTrash" role="switch" aria-checked="true" aria-label="Old versions go to the Trash"></button>
+      </div>
+      <div class="row rise" style="--d:420ms">
+        <div><h3>Open a file</h3><p>Pick one without pointing at it.</p></div>
+        <button class="mini" id="tweakChoose">Choose…</button>
+      </div>
+    </div>
+  </section>
+</div>
 <div class="demo" id="demo" role="dialog" aria-modal="true" aria-labelledby="demoTitle">
   <div class="demo-sheet">
     <div class="demo-head">
@@ -1148,6 +1292,7 @@
 <script src="away-settings.js"></script>
 <script src="spin-settings.js"></script>
 <script src="jot-settings.js"></script>
+<script src="tweak-settings.js"></script>
 <script src="switcher.js"></script>
 <script src="demo.js"></script>
 <script src="update.js"></script>

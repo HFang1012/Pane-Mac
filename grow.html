@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en" data-theme="tweak">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
+<title>Tweak</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  /* The editor opening: a stand-in of its window springs out of the file you clicked to where the real
+     window then appears. A layer can scale smoothly where a real window would have to re-lay itself out. */
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  .ghost {
+    position: absolute; left: 0; top: 0; transform-origin: 0 0; border-radius: 12px; overflow: hidden; background: var(--paper);
+    box-shadow: 0 30px 60px -20px rgba(12, 13, 31, 0.5), 0 0 0 0.5px rgba(12, 13, 31, 0.25);
+    display: grid; grid-template-rows: 52px 1fr 62px;
+  }
+  .ghost .bar { border-bottom: 1px solid var(--edge); }
+  .ghost .mid { display: grid; grid-template-columns: 1fr 296px; }
+  .ghost .mat { background-color: #262950; background-image: linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px); background-size: 24px 24px; }
+  .ghost .side { border-left: 1px solid var(--edge); }
+  .ghost .foot { background: var(--card); border-top: 1px solid var(--edge); }
+</style>
+</head>
+<body>
+<div class="ghost" id="g"><div class="bar"></div><div class="mid"><div class="mat"></div><div class="side"></div></div><div class="foot"></div></div>
+<script src="grow.js"></script>
+</body>
+</html>

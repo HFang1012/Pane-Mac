@@ -8,6 +8,8 @@
   const SP = { ink: '#1E2B27', inkLip: '#0B1210', mustard: '#FFC94D', mustardLip: '#DDA21F', mint: '#7ED3A8', mintLip: '#4DB283' };
   // Jot: airmail. A sky-blue note with deep teal lines, and a coral paper airplane taking off from it.
   const JT = { ink: '#17303A', inkLip: '#0A1A20', sky: '#9FD4EE', skyLip: '#68AFD3', coral: '#FF9B7A', coralLip: '#E26F4E' };
+  // Tweak: a workbench. A cobalt page with its corner folded, and chartreuse crop marks laid over it.
+  const TW = { ink: '#1B1D3A', inkLip: '#0C0D1F', cobalt: '#8192FF', cobaltLip: '#5567E3', lime: '#CDEB5A', limeLip: '#9CBD27' };
 
   // Chunky glyphs: a flat shape over a darker copy of itself, nudged down (the "lip").
   const lip = (shape, fill, under, dy) => `<g transform="translate(0 ${dy})" fill="${under}" stroke="${under}">${shape}</g><g fill="${fill}" stroke="${fill}">${shape}</g>`;
@@ -58,6 +60,19 @@
           `<g class="plane">${lip(plane, JT.coral, JT.coralLip, 2.5)}${fold}</g>`;
       },
     },
+    // Tweak: a page with a folded corner, and crop marks over it.
+    tweak: {
+      viewBox: '0 0 60 44',
+      body: () => {
+        const page = '<path d="M11 5 H27 L37 15 V36 Q37 40 33 40 H11 Q7 40 7 36 V9 Q7 5 11 5 Z" stroke="none"/>';
+        const fold = `<path d="M27 5 V12 Q27 15 30 15 H37 Z" fill="${TW.cobaltLip}" stroke="none"/>`;
+        const lines = `<g stroke="${TW.ink}" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.85"><path d="M13 22h10"/><path d="M13 29h6"/></g>`;
+        const crop = '<g class="crop" fill="none" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"><path d="M30 13 H51 V31"/><path d="M24 19 V37 H45"/></g>';
+        return lip(page, TW.cobalt, TW.cobaltLip, 3) + fold + lines +
+          `<g transform="translate(0 2.2)">${crop.replace('class="crop"', `class="crop" stroke="${TW.limeLip}"`)}</g>` +
+          crop.replace('class="crop"', `class="crop" stroke="${TW.lime}"`);
+      },
+    },
   };
   function glyph(id, h = 22) {
     const g = GLYPHS[id];
@@ -70,6 +85,7 @@
     { id: 'away', name: 'Away', blurb: 'Blur your screen while you’re away.', theme: 'away', bg: '#ECE6DD' },
     { id: 'spin', name: 'Spin', blurb: 'Run your music from a wheel.', theme: 'spin', bg: '#E4ECE3' },
     { id: 'jot', name: 'Jot', blurb: 'Quick notes that remind you later.', theme: 'jot', bg: '#DFEDF0' },
+    { id: 'tweak', name: 'Tweak', blurb: 'Point at a file and edit it.', theme: 'tweak', bg: '#E4E5F3' },
   ];
 
   // Away's gradient blobs. Each mood is three soft colors that drift behind the blur.
@@ -84,7 +100,7 @@
 
   const DEFAULT_MESSAGE = 'I’m away from my computer right now.';
 
-  const api = { TOOLS, MOODS, mood, glyph, DEFAULT_MESSAGE, COLORS: C, SPIN_COLORS: SP, JOT_COLORS: JT };
+  const api = { TOOLS, MOODS, mood, glyph, DEFAULT_MESSAGE, COLORS: C, SPIN_COLORS: SP, JOT_COLORS: JT, TWEAK_COLORS: TW };
   if (typeof window !== 'undefined') window.Tools = api;
   if (typeof module !== 'undefined') module.exports = api;
 })();

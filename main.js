@@ -1720,7 +1720,9 @@ ipcMain.handle('tweak:save', async (e, job) => {
     // Saved over (or replaced): the window now edits the new file. A copy keeps editing the original.
     if (p.replace) { w.filePath = dest; w.setTitle(path.basename(dest)); w.setRepresentedFilename(dest); }
     if (settings.tweak.copy !== !!job.copy) { settings = { ...settings, tweak: { ...settings.tweak, copy: !!job.copy } }; writeJSON('settings.json', settings); }
-    return { ok: true, path: dest, name: path.basename(dest), replaced: p.replace, trashed: p.replace && settings.tweak.trash };
+    let size = null;
+    try { size = fs.statSync(dest).size; } catch {}
+    return { ok: true, path: dest, name: path.basename(dest), size, replaced: p.replace, trashed: p.replace && settings.tweak.trash };
   } catch (err) {
     return { error: err.message || 'Saving didn’t work.' };
   }

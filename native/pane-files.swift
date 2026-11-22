@@ -6,7 +6,9 @@
 //                                  Accessibility, which Pane has.
 //   pane-files media '<json>'      Trims, crops, rotates, flips, mutes or quiets a video or a song, or pulls the
 //                                  sound out of a video, with AVFoundation. Prints {"progress":0.4} lines while
-//                                  it works and {"ok":true} or {"error":"…"} at the end.
+//                                  it works and {"ok":true} or {"error":"…"} at the end. "size" makes it smaller:
+//                                  "smaller" is HEVC video at ~0.1 bits a pixel / 96 kbps sound, "smallest" caps video
+//                                  at 960×540 and ~0.06 bits a pixel, and sound at 64 kbps.
 //   pane-files frame <in> <sec> <out.png>   Saves one frame of a video as a picture.
 //
 // Built by scripts/native.js (and by Pane itself the first time, while you're working on it).
@@ -204,6 +206,7 @@ struct MediaOpts: Decodable {
   var mute: Bool?
   var gifFps: Double?
   var gifWidth: Double?
+  var size: String? // full | smaller | smallest: how hard to squeeze the file
 }
 
 func fail(_ msg: String) -> Never { emit(["error": msg]); exit(1) }
@@ -258,6 +261,15 @@ func media(_ json: String) {
     if quarter != 0 { (t, size) = normalizedAfter(t, size, CGAffineTransform(rotationAngle: CGFloat(quarter) * .pi / 180)) }
     if o.flipH == true { (t, size) = normalizedAfter(t, size, CGAffineTransform(scaleX: -1, y: 1)) }
     if o.flipV == true { (t, size) = normalizedAfter(t, size, CGAffineTransform(scaleX: 1, y: -1)) }
+    // Smallest: no bigger than 960×540 (or 540×960 standing up).
+    if o.size == "smallest" {
+      let long = max(size.width, size.height), short = min(size.width, size.height)
+      let k = min(1, 960 / long, 540 / short)
+      if k < 1 {
+        t = t.concatenating(CGAffineTransform(scaleX: k, y: k))
+        size = CGSize(width: size.width * k, height: size.height * k)
+      }
+    }
     let render = CGSize(width: even(size.width), height: even(size.height))
     let vc = AVMutableVideoComposition()
     vc.renderSize = render
@@ -287,13 +299,23 @@ func media(_ json: String) {
 
   if o.format == "gif" { gif(comp, videoComp, o, outURL); return }
 
+  // Smaller video: written frame by frame at a bit rate Pane picks (the export presets choose their own,
+  // which barely shrinks anything).
+  let fileType: AVFileType = audioOut ? .m4a : (o.format == "mov" ? .mov : o.format == "m4v" ? .m4v : .mp4)
+  if !audioOut, let vc = videoComp, o.size == "smaller" || o.size == "smallest" {
+    squeezeVideo(comp, vc, mix, smallest: o.size == "smallest", fileType: fileType, out: outURL)
+    return
+  }
+
   // wav / aiff / caf: make an m4a first, then afconvert turns it into plain samples.
-  let viaM4A = ["wav", "aiff", "caf"].contains(o.format)
+  // A smaller m4a also goes through afconvert, which can set the bit rate (the export preset can't).
+  let squeeze = o.format == "m4a" && (o.size == "smaller" || o.size == "smallest")
+  let viaM4A = ["wav", "aiff", "caf"].contains(o.format) || squeeze
   let exportURL = viaM4A ? URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("pane-\(UUID().uuidString).m4a") : outURL
   let preset = audioOut ? AVAssetExportPresetAppleM4A : AVAssetExportPresetHighestQuality
   guard let ex = AVAssetExportSession(asset: comp, presetName: preset) else { fail("Can't save this kind of file.") }
   ex.outputURL = exportURL
-  ex.outputFileType = audioOut ? .m4a : (o.format == "mov" ? .mov : o.format == "m4v" ? .m4v : .mp4)
+  ex.outputFileType = fileType
   ex.videoComposition = videoComp
   ex.audioMix = mix
   ex.shouldOptimizeForNetworkUse = true
@@ -303,7 +325,8 @@ func media(_ json: String) {
   guard ex.status == .completed else { fail(ex.error?.localizedDescription ?? "Saving didn't work.") }
 
   if viaM4A {
-    let fmt: [String] = o.format == "wav" ? ["-f", "WAVE", "-d", "LEI16"] : o.format == "aiff" ? ["-f", "AIFF", "-d", "BEI16"] : ["-f", "caff", "-d", "LEI16"]
+    let kbps = o.size == "smallest" ? "64000" : "96000" // AAC won't go lower than 64 kbps for stereo here
+    let fmt: [String] = squeeze ? ["-f", "m4af", "-d", "aac", "-b", kbps] : o.format == "wav" ? ["-f", "WAVE", "-d", "LEI16"] : o.format == "aiff" ? ["-f", "AIFF", "-d", "BEI16"] : ["-f", "caff", "-d", "LEI16"]
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/bin/afconvert")
     p.arguments = fmt + [exportURL.path, outURL.path]
@@ -311,6 +334,71 @@ func media(_ json: String) {
     try? FileManager.default.removeItem(at: exportURL)
     guard p.terminationStatus == 0 else { fail("Couldn't convert the sound.") }
   }
+  emit(["ok": true])
+}
+
+// Reads the edited picture and sound (crop, turns, trim, volume all applied by the composition) and writes
+// them again with HEVC at a set bit rate (H.264 where HEVC can't go) and AAC sound.
+func squeezeVideo(_ comp: AVComposition, _ vc: AVVideoComposition, _ mix: AVAudioMix?, smallest: Bool, fileType: AVFileType, out: URL) {
+  let reader: AVAssetReader, writer: AVAssetWriter
+  do { reader = try AVAssetReader(asset: comp); writer = try AVAssetWriter(outputURL: out, fileType: fileType) } catch { fail("Couldn't start making it smaller.") }
+  let vOut = AVAssetReaderVideoCompositionOutput(videoTracks: comp.tracks(withMediaType: .video),
+    videoSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange])
+  vOut.videoComposition = vc
+  vOut.alwaysCopiesSampleData = false
+  reader.add(vOut)
+  let aTracks = comp.tracks(withMediaType: .audio)
+  var aOut: AVAssetReaderAudioMixOutput?
+  if !aTracks.isEmpty {
+    // Plain 44.1 kHz stereo samples, whatever the source was, so the AAC settings below always fit.
+    let o = AVAssetReaderAudioMixOutput(audioTracks: aTracks, audioSettings: [
+      AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: 44100, AVNumberOfChannelsKey: 2,
+      AVLinearPCMBitDepthKey: 16, AVLinearPCMIsFloatKey: false, AVLinearPCMIsBigEndianKey: false, AVLinearPCMIsNonInterleaved: false])
+    o.audioMix = mix
+    reader.add(o)
+    aOut = o
+  }
+  let w = vc.renderSize.width, h = vc.renderSize.height
+  let fps = vc.frameDuration.seconds > 0 ? 1 / vc.frameDuration.seconds : 30
+  let bitrate = max(300_000, Double(w * h) * fps * (smallest ? 0.06 : 0.1))
+  func videoSettings(_ codec: AVVideoCodecType) -> [String: Any] {
+    [AVVideoCodecKey: codec, AVVideoWidthKey: w, AVVideoHeightKey: h,
+     AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate, AVVideoExpectedSourceFrameRateKey: fps]]
+  }
+  let codec: AVVideoCodecType = writer.canApply(outputSettings: videoSettings(.hevc), forMediaType: .video) ? .hevc : .h264
+  let vIn = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings(codec))
+  vIn.expectsMediaDataInRealTime = false
+  writer.add(vIn)
+  var aIn: AVAssetWriterInput?
+  if aOut != nil {
+    let i = AVAssetWriterInput(mediaType: .audio, outputSettings: [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 44100, AVNumberOfChannelsKey: 2, AVEncoderBitRateKey: smallest ? 64000 : 96000])
+    i.expectsMediaDataInRealTime = false
+    writer.add(i)
+    aIn = i
+  }
+  guard reader.startReading(), writer.startWriting() else { fail(writer.error?.localizedDescription ?? reader.error?.localizedDescription ?? "Couldn't start making it smaller.") }
+  writer.startSession(atSourceTime: .zero)
+  let total = max(0.01, comp.duration.seconds)
+  let group = DispatchGroup()
+  func pump(_ input: AVAssetWriterInput, _ output: AVAssetReaderOutput, _ name: String, report: Bool) {
+    group.enter()
+    var finished = false
+    input.requestMediaDataWhenReady(on: DispatchQueue(label: "pane.\(name)")) {
+      while !finished && input.isReadyForMoreMediaData {
+        guard let sb = output.copyNextSampleBuffer() else { finished = true; input.markAsFinished(); group.leave(); return }
+        if report { emit(["progress": min(1, CMSampleBufferGetPresentationTimeStamp(sb).seconds / total)]) }
+        if !input.append(sb) { finished = true; input.markAsFinished(); group.leave(); return }
+      }
+    }
+  }
+  pump(vIn, vOut, "video", report: true)
+  if let a = aIn, let o = aOut { pump(a, o, "audio", report: false) }
+  group.wait()
+  if reader.status == .failed { writer.cancelWriting(); fail(reader.error?.localizedDescription ?? "Couldn't read the video.") }
+  let done = DispatchSemaphore(value: 0)
+  writer.finishWriting { done.signal() }
+  done.wait()
+  guard writer.status == .completed else { fail(writer.error?.localizedDescription ?? "Saving didn't work.") }
   emit(["ok": true])
 }
 

@@ -91,7 +91,7 @@
   kbd { font-family: inherit; font-weight: 800; color: var(--ink); background: var(--card); box-shadow: 0 2px 0 var(--card-lip); border-radius: 6px; padding: 0 6px; }
 
   /* ---------- tools, each with a demo that plays itself ---------- */
-  .tools { margin-top: 110px; display: grid; gap: 36px; }
+  .tools { margin-top: 56px; display: grid; gap: 36px; }
   .tool { background: color-mix(in srgb, var(--paper) 45%, var(--paper-deep)); border-radius: 32px; padding: 26px; }
   .tool-head { display: flex; align-items: center; gap: 12px; }
   .tool-head svg { height: 30px; width: auto; flex: none; }
@@ -851,9 +851,11 @@
   .who-row { display: grid; grid-template-columns: 80px auto; align-items: center; font-size: 14px; font-weight: 700; margin-top: 6px; }
   .who-row:nth-child(2) { --w: 170ms; }
   .who-row:nth-child(3) { --w: 220ms; }
+  .who-row:nth-child(4) { --w: 270ms; }
   .who-k { justify-self: start; font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--blue-ink); background: var(--blue-soft); padding: 1px 7px; border-radius: 999px; }
   .who-k.discord { color: #4A55C8; background: #E2E5FE; } /* a light take on Discord's blurple */
   .who-k.email { color: #9A6A00; background: var(--yellow-soft); }
+  .who-k.site { color: var(--blue-ink); background: var(--blue-soft); }
   .who-v { justify-self: start; font-weight: 700; text-decoration: underline 2px transparent; text-underline-offset: 3px; transition: text-decoration-color 140ms ease, color 140ms ease; }
   .who-v:hover { text-decoration-color: var(--yellow); }
   .who-info { min-width: 0; }
@@ -907,8 +909,24 @@
     .nap .star { transition: none; }
   }
 
+
+  /* A nudge at the bottom of the first screen: there's more below. It bows out once you scroll. */
+  /* The hero fills the first screen so the hint lands at its bottom edge, never over the content. */
+  main > .hero { min-height: calc(100svh - 88px); display: flex; flex-direction: column; }
+  .scroll-hint {
+    margin: auto auto 0; padding-top: 40px; padding-bottom: 22px; align-self: center;
+    display: flex; flex-direction: column; align-items: center; gap: 6px; text-decoration: none;
+    color: var(--ink-2); font-size: 13px; font-weight: 800; letter-spacing: 0.02em;
+    transition: opacity 260ms ease;
+  }
+  .scroll-hint .chev { width: 34px; height: 34px; border-radius: 17px; display: grid; place-items: center; background: var(--card); box-shadow: 0 4px 0 var(--card-lip); color: var(--accent-ink); animation: hint-bob 1.8s var(--smooth) 1.2s infinite; }
+  .scroll-hint .chev svg { width: 16px; height: 16px; }
+  .scroll-hint:hover .chev { color: var(--ink); }
+  .scroll-hint.gone { opacity: 0; }
+  @keyframes hint-bob { 0%, 60%, 100% { transform: none; } 30% { transform: translateY(5px); } }
+
   @media (prefers-reduced-motion: reduce) {
-    .pop, .rise { animation: none; }
+    .pop, .rise, .scroll-hint .chev { animation: none; }
     .twirl .heads { opacity: 1; animation: none !important; }
     .stage .blob { animation: none; }
   }
@@ -936,7 +954,8 @@
       <span class="who-info">
         <strong class="who-title">hucklberi</strong>
         <span class="who-row"><span class="who-k discord">Discord</span><button class="who-v who-copy" type="button" data-copy="basicallyahucklberi" title="Copy username">basicallyahucklberi</button></span>
-        <span class="who-row"><span class="who-k email">Email</span><a class="who-v" href="mailto:hfanggamedev@gmail.com">hfanggamedev@gmail.com</a></span>
+        <span class="who-row"><span class="who-k email">Email</span><button class="who-v who-copy" type="button" data-copy="hfanggamedev@gmail.com" title="Copy email">hfanggamedev@gmail.com</button></span>
+        <span class="who-row"><span class="who-k site">Site</span><a class="who-v" href="https://hfang1012.github.io/hucklberi/" target="_blank" rel="noopener">hfang1012.github.io/hucklberi</a></span>
       </span>
       <button class="nap" type="button" aria-label="Wake it up" aria-pressed="false">
         <span class="z z1" aria-hidden="true">z</span><span class="z z2" aria-hidden="true">z</span><span class="z z3" aria-hidden="true">z</span>
@@ -967,9 +986,14 @@
     </div>
     <p class="fine rise" style="--d:420ms" id="fine">For Macs with Apple silicon. Free and open source.</p>
 
+    <a class="scroll-hint rise" style="--d:900ms" href="#tools" id="scroll-hint">
+      <span>Scroll to see the tools</span>
+      <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9.5l6 6 6-6"/></svg></span>
+    </a>
+
   </section>
 
-  <section class="tools" aria-label="The tools">
+  <section class="tools" id="tools" aria-label="The tools">
     <article class="tool" data-theme="scrawl">
       <div class="tool-head">
         <svg viewBox="200 270 640 470" aria-hidden="true"><g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="78"><path d="M262 640 C372 640 480 590 506 470 C526 372 456 306 392 334 C318 366 326 492 424 566 C508 628 628 628 690 548 C716 514 734 474 746 436" stroke="#D96F8A" transform="translate(0 30)"/><path d="M262 640 C372 640 480 590 506 470 C526 372 456 306 392 334 C318 366 326 492 424 566 C508 628 628 628 690 548 C716 514 734 474 746 436" stroke="#F49CB0"/></g><circle cx="752" cy="444" r="74" fill="#0F1218"/><circle cx="752" cy="414" r="74" fill="#262B36"/></svg>
@@ -1253,7 +1277,6 @@
     const who = document.getElementById('who');
     const name = who.querySelector('.who-name');
     const nap = who.querySelector('.nap');
-    const copy = who.querySelector('.who-copy');
     let timer = 0, pointer = 'mouse';
     const open = () => { clearTimeout(timer); who.classList.add('open'); name.setAttribute('aria-expanded', 'true'); };
     const close = (wait = 0) => {
@@ -1351,12 +1374,19 @@
       }
     }
 
-    copy.addEventListener('click', async () => {
+    who.querySelectorAll('.who-copy').forEach(copy => copy.addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(copy.dataset.copy); } catch { return; }
       copy.textContent = 'copied!';
       copy.classList.add('done');
       setTimeout(() => { copy.textContent = copy.dataset.copy; copy.classList.remove('done'); }, 1200);
-    });
+    }));
+  })();
+
+  // The scroll hint shows only while you're still at the top.
+  (() => {
+    const hint = document.getElementById('scroll-hint');
+    const sync = () => hint.classList.toggle('gone', scrollY > 40);
+    addEventListener('scroll', sync, { passive: true }); sync();
   })();
 
   const isMac = /Macintosh|Mac OS X/.test(navigator.userAgent);

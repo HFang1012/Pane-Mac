@@ -224,8 +224,20 @@ async function swapIn({ work, staged, target }) {
 }
 
 // Once this process has quit, open the new app and tidy up.
+// Opening the instant the main process ends is too soon: Pane's helper processes are still closing and
+// macOS still counts Pane as running, so `open` does nothing. So: wait for every process from this
+// bundle to be gone (10 s at most), give macOS a moment, open, and open once more if it didn't take.
+const REOPEN = `
+while kill -0 "$PID" 2>/dev/null; do sleep 0.2; done
+i=0; while pgrep -f "$TARGET/Contents/" >/dev/null && [ $i -lt 50 ]; do sleep 0.2; i=$((i+1)); done
+if [ -z "$NO_OPEN" ]; then
+  sleep 0.5; open "$TARGET"
+  sleep 3; pgrep -f "$TARGET/Contents/MacOS/" >/dev/null || open "$TARGET"
+fi
+rm -rf "$WORK"
+`;
 function reopenAfterExit({ work, target, pid, openIt = true }) {
-  const script = 'while kill -0 "$PID" 2>/dev/null; do sleep 0.2; done; [ -n "$NO_OPEN" ] || open "$TARGET"; rm -rf "$WORK"';
+  const script = REOPEN;
   const child = spawn('/bin/sh', ['-c', script], {
     detached: true, stdio: 'ignore',
     env: { ...process.env, PID: String(pid), WORK: work, TARGET: target, NO_OPEN: openIt ? '' : '1' },

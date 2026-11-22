@@ -1626,7 +1626,9 @@ function openEditor(file, from = null) {
     // No macOS title bar or traffic lights: the editor draws its own close and hide buttons in its bar.
     // Still resizable, rounded and shadowed like any window; ⌘W and ⌘M work from the Window menu.
     frame: false, backgroundColor: '#E4E5F3', show: false,
-    fullscreenable: false, title: path.basename(file),
+    // A panel, like Away's and Scrawl's windows: only panels can sit over another app's full-screen Space.
+    // An ordinary window there makes macOS swipe you off to a desktop to show it.
+    type: 'panel', fullscreenable: false, title: path.basename(file),
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
   w.filePath = file;
@@ -1642,6 +1644,9 @@ function openEditor(file, from = null) {
   let ready = false, landed = !ghost;
   const reveal = () => {
     if (!ready || !landed || w.isDestroyed()) return;
+    // Pane coming forward would also take you to the settings window's Space, if it's open on another one
+    // (see showAway). Tuck it away; it opens again from the Dock or the Pane menu.
+    if (settingsWin?.isVisible() && !settingsWin.isFocused()) settingsWin.hide();
     if (ghost) w.setOpacity(0);
     w.show(); w.focus(); app.focus({ steal: true });
     if (ghost) fadeWindow(w, 0, 1, 110, () => { if (!ghost.isDestroyed()) ghost.destroy(); });
@@ -1778,7 +1783,7 @@ ipcMain.on('tweak:window', (e, what) => {
   const w = editorFor(e);
   if (!w) return;
   if (what === 'close') w.close();
-  else if (what === 'hide') w.minimize();
+  else if (what === 'hide') w.hide(); // a panel can't go to the Dock; clicking Pane's Dock icon brings it back
 });
 ipcMain.on('tweak:reveal', (e, file) => {
   const w = editorFor(e);
@@ -1839,7 +1844,8 @@ function createSettings() {
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
   settingsWin.loadFile(path.join(__dirname, 'settings.html'));
-  settingsWin.once('ready-to-show', () => settingsWin.show());
+  // Not when trying Tweak from a terminal (PANE_TWEAK_OPEN): just the editor, on the Space you're on.
+  settingsWin.once('ready-to-show', () => { if (!process.env.PANE_TWEAK_OPEN) settingsWin.show(); });
   settingsWin.on('close', (e) => {
     if (quitting) return;
     e.preventDefault();
@@ -2118,7 +2124,12 @@ function buildMenu() {
   ]));
 }
 
-app.on('activate', () => settingsWin?.show());
+app.on('activate', () => {
+  // Pane's Dock icon: a Tweak editor that was hidden comes back first, otherwise the settings window.
+  const hidden = [...editors].filter((w) => !w.isDestroyed() && !w.isVisible());
+  if (hidden.length) for (const w of hidden) { w.show(); w.focus(); }
+  else settingsWin?.show();
+});
 app.on('window-all-closed', () => { /* stay running: the overlay is the app */ });
 app.on('before-quit', () => {
   quitting = true;

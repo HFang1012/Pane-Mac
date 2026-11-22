@@ -9,6 +9,7 @@ const fsp = fs.promises;
 const path = require('path');
 const os = require('os');
 const { execFile, spawn } = require('child_process');
+const { pipeline } = require('stream/promises');
 
 const IMAGE = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'heic', 'heif', 'tif', 'tiff', 'avif', 'ico', 'icns', 'psd', 'tga', 'jp2'];
 const BROWSER_IMAGE = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'avif', 'ico']; // the editor can read these as they are
@@ -214,14 +215,20 @@ function plan(src, { stem: newStem, ext, copy }) {
 }
 
 // Put the finished temp file where it belongs, sending the original away if it's being replaced.
+// Saved over itself, the file is changed, not swapped for a new one: the new contents are written into the
+// same file, so Finder (and an app's Open dialog) sees it update in place, and it keeps its tags, comments,
+// Date Added and spot in the folder. With `trash` on, a copy of the old version goes to the Trash first.
 async function settle(src, tmp, p, { trash, trashItem }) {
   if (p.inPlace) {
     if (trash) {
-      await trashItem(src);
-      await fsp.rename(tmp, p.dest);
-    } else {
-      await fsp.rename(tmp, p.dest);
+      const keep = path.join(await fsp.mkdtemp(path.join(os.tmpdir(), 'pane-tweak-old-')), path.basename(src));
+      await fsp.copyFile(src, keep);
+      await trashItem(keep); // it shows in the Trash under the file's own name
+      fsp.rm(path.dirname(keep), { recursive: true, force: true }).catch(() => {});
     }
+    // 'w' empties the same file and writes into it; it doesn't make a new one.
+    await pipeline(fs.createReadStream(tmp), fs.createWriteStream(src, { flags: 'w' }));
+    await fsp.rm(tmp, { force: true });
   } else {
     await fsp.rename(tmp, p.dest);
     if (p.replace) { if (trash) await trashItem(src); else await fsp.rm(src, { force: true }); }

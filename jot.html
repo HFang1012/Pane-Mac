@@ -56,7 +56,7 @@
   .shot { position: relative; margin-top: 10px; border-radius: 18px; overflow: hidden; background: var(--well); box-shadow: 0 4px 0 var(--card-lip); animation: shot-in 520ms var(--bouncy) both; }
   @keyframes shot-in { from { opacity: 0; transform: scale(0.6) rotate(-3deg); } }
   .shot img { display: block; width: 100%; max-height: 150px; object-fit: cover; border-radius: 18px; }
-  .shot .x { position: absolute; top: 8px; right: 8px; background: rgba(247, 251, 252, 0.92); }
+  .shot .x { position: absolute; top: 8px; right: 8px; background: rgba(247, 251, 252, 0.92); box-shadow: 0 2px 6px rgba(10, 26, 32, 0.18); }
   .shot.flash::after { content: ""; position: absolute; inset: 0; background: #FFF; animation: flash 420ms ease-out forwards; }
   @keyframes flash { to { opacity: 0; } }
 
@@ -98,29 +98,30 @@
   }
   .pill.custom input::-webkit-inner-spin-button { display: none; }
 
-  /* ---------- send: a round coral stamp with a paper airplane ---------- */
+  /* ---------- send: a round coral button with a line-drawn paper plane ---------- */
   .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
   .hint { font-size: 11.5px; font-weight: 700; color: var(--ink-2); display: flex; gap: 6px; align-items: center; transition: color 160ms ease; }
   .hint kbd { font: inherit; font-weight: 800; color: var(--ink); background: var(--well); border-radius: 7px; padding: 1px 6px; box-shadow: 0 2px 0 var(--card-lip); }
   .hint.warn { color: var(--accent-ink); }
   .send {
-    width: 52px; height: 52px; border-radius: 26px; display: grid; place-items: center; margin-bottom: 5px;
-    background: var(--accent); box-shadow: 0 5px 0 var(--accent-lip); color: var(--ink);
-    transition: transform 240ms var(--bouncy), box-shadow 240ms var(--bouncy);
+    position: relative; width: 46px; height: 46px; border-radius: 23px; display: grid; place-items: center; margin-bottom: 4px;
+    background: var(--accent); box-shadow: 0 4px 0 var(--accent-lip); color: var(--ink);
+    transition: transform 320ms var(--smooth), box-shadow 320ms var(--smooth), filter 240ms ease, opacity 240ms ease;
   }
-  .send svg { width: 26px; height: 26px; overflow: visible; transition: transform 420ms var(--bouncy); }
-  .send:hover { transform: translateY(-2px) rotate(-6deg); box-shadow: 0 7px 0 var(--accent-lip); }
-  .send:hover svg { transform: translate(2px, -2px) rotate(-8deg); }
-  .send:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--accent-lip); }
-  .send:focus-visible { box-shadow: 0 5px 0 var(--accent-lip), 0 0 0 4px var(--accent-soft); }
+  .send svg.i { width: 20px; height: 20px; stroke-width: 2.4; overflow: visible; transition: transform 380ms var(--smooth); }
+  .send:hover { transform: translateY(-2px); box-shadow: 0 6px 0 var(--accent-lip); }
+  .send:hover svg.i { transform: translate(1.5px, -1.5px); }
+  .send:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--accent-lip); transition-duration: 120ms; }
+  .send:focus-visible { box-shadow: 0 4px 0 var(--accent-lip), 0 0 0 4px var(--accent-soft); }
   .send.empty { filter: saturate(0.4); opacity: 0.75; }
-  .send.empty:hover { transform: none; }
+  .send.empty:hover { transform: none; box-shadow: 0 4px 0 var(--accent-lip); }
+  .send.empty:hover svg.i { transform: none; }
 
-  /* Sent: the card folds away toward the corner while the plane takes off. */
-  .compose.sent .card { animation: fold 520ms cubic-bezier(.6, 0, .8, .3) forwards; transform-origin: calc(100% - 40px) calc(100% - 40px); }
-  @keyframes fold { 30% { transform: scale(1.03, 0.96); } to { transform: scale(0.12) rotate(18deg); opacity: 0; } }
-  .flyer { position: fixed; left: 0; top: 0; width: 30px; height: 30px; pointer-events: none; z-index: 5; }
-  .flyer svg { width: 30px; height: 30px; overflow: visible; filter: drop-shadow(0 4px 4px rgba(10, 26, 32, 0.25)); }
+  /* Sent: the plane glides out of the button, then the card eases away toward the corner. */
+  .sent .send svg.i { animation: glide 520ms cubic-bezier(.5, 0, .2, 1) forwards; }
+  @keyframes glide { 35% { transform: translate(-2px, 2px); } to { transform: translate(26px, -26px); opacity: 0; } }
+  .compose.sent .card { animation: fold 480ms cubic-bezier(.55, 0, .35, 1) 220ms forwards; transform-origin: calc(100% - 40px) calc(100% - 40px); }
+  @keyframes fold { to { transform: scale(0.6) translate(10px, -6px); opacity: 0; } }
   .compose.gone .card { animation: toss 300ms cubic-bezier(.5, 0, .9, .4) forwards; transform-origin: 50% 50%; }
   @keyframes toss { to { transform: scale(0.7) rotate(-6deg) translateY(10px); opacity: 0; } }
 
@@ -149,7 +150,9 @@
     line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 132px; overflow-y: auto; user-select: text; cursor: text;
   }
   .t-text:empty { display: none; }
-  .t-shot { display: block; width: 100%; margin-top: 8px; border-radius: 14px; overflow: hidden; box-shadow: 0 3px 0 var(--card-lip); transition: transform 260ms var(--bouncy); }
+  .t-shotwrap { position: relative; margin-top: 8px; }
+  .t-shotwrap .x { position: absolute; top: 8px; right: 8px; background: rgba(247, 251, 252, 0.92); box-shadow: 0 2px 6px rgba(10, 26, 32, 0.18); }
+  .t-shot { display: block; width: 100%; border-radius: 14px; overflow: hidden; box-shadow: 0 3px 0 var(--card-lip); transition: transform 260ms var(--bouncy); }
   .t-shot:hover { transform: scale(1.02) rotate(-0.5deg); }
   .t-shot img { display: block; width: 100%; max-height: 130px; object-fit: cover; border-radius: 14px; }
   .acts { display: flex; gap: 6px; margin-top: 10px; }
@@ -182,8 +185,7 @@
     <textarea id="text" style="--i:1" rows="3" maxlength="1000" spellcheck="true" placeholder="What do you want to remember?" aria-label="Note"></textarea>
     <div class="shot" id="shot" hidden><img id="shotImg" alt="Screenshot"><button class="x" id="shotX" aria-label="Remove screenshot"><svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="tools" style="--i:2">
-      <button class="chipbtn" id="shotBtn" title="Drag over part of the screen. Press Space to pick a window."><svg class="i" viewBox="0 0 24 24"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6H8l1.5-2h5L16 6h1.5A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3.4"/></svg><span>Screenshot</span></button>
-      <button class="chipbtn" id="clipBtn" title="Add the text or picture you copied"><svg class="i" viewBox="0 0 24 24"><rect x="6" y="4.5" width="12" height="16" rx="3"/><path d="M9.5 4.5V3.8a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v.7"/><path d="M9.5 11h5M9.5 15h3"/></svg><span>Paste copied</span></button>
+      <button class="chipbtn" id="shotBtn" title="Drag over part of the screen. Press Space to pick a window."><svg class="i" viewBox="0 0 24 24"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6H8l1.5-2h5L16 6h1.5A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3.4"/></svg><span id="shotLabel">Screenshot</span></button>
     </div>
     <div class="timer" style="--i:3">
       <div class="label">Remind me in <span id="when"></span></div>
@@ -192,7 +194,7 @@
     <div class="foot" style="--i:4">
       <span class="hint" id="hint"><kbd>⌘</kbd><kbd>↩</kbd> to send</span>
       <button class="send" id="send" aria-label="Send">
-        <svg viewBox="0 0 26 26" aria-hidden="true"><path d="M2.5 12.6 L23 3.5 L18 22.5 L12.6 16.4 Z" fill="#FBF8F3" stroke="#17303A" stroke-width="2" stroke-linejoin="round"/><path d="M12.6 16.4 L23 3.5 L10.8 18.8 Z" fill="#17303A"/></svg>
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3.5 10.6 13.4"/><path d="M20.5 3.5 14.2 20.5l-3.6-7.1-7.1-3.6z"/></svg>
       </button>
     </div>
   </div></div>
@@ -206,7 +208,7 @@
       <button class="x" id="tClose" aria-label="Done"><svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
     <p class="t-text" id="tText" style="--i:1"></p>
-    <button class="t-shot" id="tShot" style="--i:2" hidden title="Open the screenshot"><img id="tShotImg" alt="Screenshot"></button>
+    <div class="t-shotwrap" id="tShotWrap" style="--i:2" hidden><button class="t-shot" id="tShot" title="Open the screenshot"><img id="tShotImg" alt="Screenshot"></button><button class="x" id="tShotX" aria-label="Remove screenshot" title="Remove screenshot"><svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="acts" style="--i:3">
       <button class="act copy" id="tCopy" title="Copy the note’s text"><svg class="i" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="3"/><path d="M16 8V6.5A2.5 2.5 0 0 0 13.5 4h-7A2.5 2.5 0 0 0 4 6.5v7A2.5 2.5 0 0 0 6.5 16H8"/></svg><span class="swap">Copy</span></button>
       <button class="act" id="tSnooze"><svg class="i" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><span id="tSnoozeText">Snooze</span></button>

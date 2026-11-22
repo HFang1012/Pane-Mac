@@ -1068,11 +1068,11 @@ ipcMain.handle('away:keys', (_e, keys) => {
 
 // ---------- Jot: a quick note that comes back when its time is up ----------
 // Double-tap the Jot key (or press its shortcut) and a note opens at the pointer. Write, maybe add a
-// screenshot or what you copied, pick a timer and send it off. When the time's up it comes back in the
+// screenshot (and take it off again), pick a timer and send it off. When the time's up it comes back in the
 // top-left corner of the main screen, where you can snooze it or be done with it.
 // Never while Scrawl has a tool in hand, a wheel is up, Away is up or keys are being chosen.
 let notes = []; // { id, text, image (a file in userData/jot), made, due, snoozed, showing }
-let composer = null; // { win, front }
+let composer = null; // { win, front, shots: screenshots taken while it was open }
 let jotBinding = false; // the settings window is listening for Jot's shortcut
 let jotKeyOn = false; // Jot's shortcut is registered (shortcut mode only)
 const toasts = new Map(); // note id -> { win, h }
@@ -1147,7 +1147,7 @@ function openComposer(at) {
   // The card's top-left corner lands just by the pointer (it grows out of there), kept on the screen.
   const x = Math.round(Math.min(Math.max(p.x - 34, wa.x + 4), wa.x + wa.width - JOT_W - 4));
   const y = Math.round(Math.min(Math.max(p.y - 26, wa.y + 4), wa.y + wa.height - H - 4));
-  const c = { win: null, front: null };
+  const c = { win: null, front: null, shots: new Set() };
   composer = c;
   frontApp().then((id) => { if (id && id !== 'com.pane.app' && !id.startsWith('com.github.Electron')) c.front = id; });
   // Like Away: a settings window on another Space would pull macOS over there when the note takes focus.
@@ -1159,7 +1159,13 @@ function openComposer(at) {
     if (composer !== c || w.isDestroyed()) return;
     w.show(); w.focus(); app.focus({ steal: true });
   });
-  w.on('closed', () => { if (composer === c) composer = null; });
+  // Screenshots taken but never sent (removed, retaken, or the note thrown away) leave with the window.
+  w.on('closed', () => { if (composer === c) composer = null; for (const f of c.shots) dropShotFile(f); });
+}
+// A picture file goes once no note still points at it.
+function dropShotFile(file) {
+  if (typeof file !== 'string' || path.dirname(file) !== jotDir() || notes.some((n) => n.image === file)) return;
+  fs.rm(file, { force: true }, () => {});
 }
 // Close the note and hand the keyboard back to the app you were in.
 function closeComposer() {
@@ -1187,6 +1193,7 @@ ipcMain.handle('jot:send', (e, { text, minutes, image }) => {
   if (!fromComposer(e)) return false;
   const m = Math.max(1, Math.min(1440, Math.round(Number(minutes)) || 15));
   const shot = typeof image === 'string' && path.dirname(image) === jotDir() && fs.existsSync(image) ? image : null;
+  composer.shots.delete(shot);
   const now = Date.now();
   notes.push({ id: `${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`, text: String(text || '').slice(0, 1000), image: shot, made: now, due: now + m * 60000, minutes: m });
   saveNotes();
@@ -1196,13 +1203,6 @@ ipcMain.handle('jot:send', (e, { text, minutes, image }) => {
   return true;
 });
 
-// A picture for the note, saved beside Pane's settings. The page gets a small copy to show.
-function keepImage(img) {
-  fs.mkdirSync(jotDir(), { recursive: true });
-  const file = path.join(jotDir(), `${Date.now().toString(36)}.png`);
-  fs.writeFileSync(file, img.toPNG());
-  return { path: file, url: thumb(img, 640) };
-}
 const thumb = (img, w) => (img.getSize().width > w ? img.resize({ width: w, quality: 'good' }) : img).toDataURL();
 
 // A screenshot with macOS's own tool: drag over part of the screen, or press Space and click a window.
@@ -1224,39 +1224,15 @@ ipcMain.handle('jot:shot', async (e) => {
   w.show(); w.setOpacity(1); w.focus(); app.focus({ steal: true });
   if (!fs.existsSync(file)) return null; // Esc: nothing taken
   const img = nativeImage.createFromPath(file);
-  if (img.isEmpty()) return null;
+  if (img.isEmpty()) { fs.rm(file, { force: true }, () => {}); return null; }
+  composer?.shots.add(file);
   return { image: { path: file, url: thumb(img, 640) } };
 });
-// A copied picture, written out by macOS itself (this Electron's clipboard only reads text): PNG if the
-// clipboard has it, else TIFF (what most apps copy), turned into a PNG.
-function clipboardImage() {
-  fs.mkdirSync(jotDir(), { recursive: true });
-  const base = path.join(jotDir(), `${Date.now().toString(36)}`);
-  const dump = (cls, file) => new Promise((resolve) => execFile('osascript', [
-    '-e', `set f to open for access (POSIX file "${file}") with write permission`,
-    '-e', 'set eof f to 0',
-    '-e', `try\nwrite (the clipboard as «class ${cls}») to f\non error\nclose access f\nerror "none"\nend try`,
-    '-e', 'close access f',
-  ], (err) => resolve(!err && fs.existsSync(file) && fs.statSync(file).size > 0)));
-  return (async () => {
-    for (const [cls, ext] of [['PNGf', 'png'], ['TIFF', 'tiff']]) {
-      const file = `${base}.${ext}`;
-      const ok = await dump(cls, file);
-      if (!ok) { fs.rm(file, { force: true }, () => {}); continue; }
-      const img = nativeImage.createFromPath(file);
-      fs.rm(file, { force: true }, () => {});
-      if (!img.isEmpty()) return img;
-    }
-    return null;
-  })();
-}
-// What you copied: a picture becomes the note's picture, text goes into the note.
-ipcMain.handle('jot:clip', async (e) => {
-  if (!fromComposer(e)) return null;
-  const img = await clipboardImage();
-  if (img) return { image: keepImage(img) };
-  const text = clipboard.readText().trim();
-  return text ? { text: text.slice(0, 1000) } : {};
+// Taking a screenshot off the note you're writing: its file goes right away.
+ipcMain.on('jot:dropShot', (e, file) => {
+  if (!fromComposer(e) || !composer.shots.has(file)) return;
+  composer.shots.delete(file);
+  dropShotFile(file);
 });
 
 // ---------- reminders ----------
@@ -1324,6 +1300,16 @@ ipcMain.on('jot:snooze', (e) => {
   jotChanged();
 });
 ipcMain.on('jot:copy', (e) => { const n = noteFor(e); if (n?.text) clipboard.writeText(n.text); });
+// Taking the screenshot off a reminder that came back: the note keeps its text.
+ipcMain.on('jot:removeShot', (e) => {
+  const n = noteFor(e);
+  if (!n?.image) return;
+  const file = n.image;
+  n.image = null;
+  saveNotes();
+  dropShotFile(file);
+  jotChanged();
+});
 ipcMain.on('jot:openShot', (e) => { const n = noteFor(e); if (n?.image) shell.openPath(n.image); });
 
 // ---------- the settings page ----------

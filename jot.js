@@ -80,11 +80,15 @@ async function startCompose() {
   requestAnimationFrame(() => { pick(minutes); requestAnimationFrame(() => { thumb.style.transition = ''; }); });
   setInterval(() => pick(minutes), 15000); // keep "at 3:57 PM" honest while the note is open
 
-  // ---------- a screenshot, or what you copied ----------
+  // ---------- a screenshot ----------
   let image = null; // { path, url }
   function setImage(img) {
+    // A new one replaces the old, and a removed one is deleted, so no stray pictures pile up.
+    if (image && image.path !== img?.path) scrawl.send('jot:dropShot', image.path);
     image = img;
     $('shot').hidden = !img;
+    $('shotLabel').textContent = img ? 'Retake' : 'Screenshot';
+    calm();
     if (!img) return;
     $('shotImg').src = img.url;
     const s = $('shot');
@@ -103,19 +107,6 @@ async function startCompose() {
     btn.classList.remove('busy');
     if (r?.image) { setImage(r.image); done(btn); }
     else if (r?.denied) say('Allow Screen Recording for Pane first.', true);
-    text.focus();
-  });
-  $('clipBtn').addEventListener('click', async () => {
-    const btn = $('clipBtn');
-    const r = await scrawl.invoke('jot:clip');
-    if (r?.image) { setImage(r.image); done(btn); }
-    else if (r?.text) {
-      // Into the note where the caret is, on a line of its own.
-      const s = text.selectionStart ?? text.value.length, e = text.selectionEnd ?? s;
-      const before = text.value.slice(0, s), add = (before && !before.endsWith('\n') ? '\n' : '') + r.text;
-      text.setRangeText(add, s, e, 'end');
-      grow(); done(btn);
-    } else { shake(btn); say('Nothing copied yet.', true); }
     text.focus();
   });
 
@@ -145,22 +136,9 @@ async function startCompose() {
     const body = text.value.trim();
     if (!body && !image) { shake($('send')); say('Write something first.', true); text.focus(); return; }
     leaving = true;
-    // A paper airplane leaves the button and climbs out of the top corner while the card folds away.
-    const r = $('send').getBoundingClientRect();
-    const fly = document.createElement('div');
-    fly.className = 'flyer';
-    fly.innerHTML = $('send').innerHTML;
-    document.body.append(fly);
-    $('send').style.visibility = 'hidden';
-    const x0 = r.left + 11, y0 = r.top + 11;
-    fly.animate([
-      { transform: `translate(${x0}px, ${y0}px) rotate(0deg) scale(1)` },
-      { transform: `translate(${x0 - 40}px, ${y0 + 6}px) rotate(-14deg) scale(1.1)`, offset: 0.22 },
-      { transform: `translate(${x0 - 10}px, ${y0 - 80}px) rotate(-30deg) scale(1.15)`, offset: 0.55 },
-      { transform: `translate(${innerWidth + 20}px, -40px) rotate(-20deg) scale(0.8)` },
-    ], { duration: 820, easing: 'cubic-bezier(.45,.05,.4,1)', fill: 'forwards' });
+    // The plane glides out of the button (CSS), then the card eases away.
     document.body.classList.add('sent');
-    await new Promise((res) => setTimeout(res, 760));
+    await new Promise((res) => setTimeout(res, 700));
     scrawl.invoke('jot:send', { text: body, minutes, image: image?.path || null });
   }
   $('send').addEventListener('click', send);
@@ -196,7 +174,11 @@ async function startToast() {
   $('tSnoozeText').textContent = `${n.snoozeFor} min`;
   $('tSnooze').title = `Snooze for ${span(n.snoozeFor)}`;
   $('tCopy').hidden = !n.text;
-  if (n.image) { $('tShot').hidden = false; $('tShotImg').src = n.image; }
+  if (n.image) { $('tShotWrap').hidden = false; $('tShotImg').src = n.image; }
+  $('tShotX').addEventListener('click', () => {
+    $('tShotWrap').animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(0.7)' }], { duration: 180, easing: 'ease-in' })
+      .finished.then(() => { $('tShotWrap').hidden = true; scrawl.send('jot:removeShot', id); });
+  });
 
   let going = false;
   const leave = (cls, channel) => {

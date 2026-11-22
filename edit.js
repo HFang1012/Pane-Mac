@@ -1168,7 +1168,8 @@ const OTHER = '__other';
 const ENDING = /^[A-Za-z0-9_-]{1,15}$/;
 const isOther = () => $('format').value === OTHER;
 const typed = () => $('ending').value.trim().replace(/^\.+/, '');
-const fmt = () => (isOther() ? F?.def : $('format').value);
+// A typed ending that's on the menu (jpg on a picture) is written as that type, not just named it.
+const fmt = () => (isOther() ? (F?.formats?.includes(typed().toLowerCase()) ? typed().toLowerCase() : F?.def) : $('format').value);
 const ending = () => (isOther() ? (ENDING.test(typed()) ? typed() : F?.def) : $('format').value);
 let mode = 'replace';
 function setFormat(ext) { $('format').value = ext; onFormat(); }
@@ -1176,7 +1177,8 @@ function onFormat() {
   const other = isOther();
   syncFormat();
   $('ending').hidden = !other;
-  if (other && document.activeElement !== $('ending')) requestAnimationFrame(() => $('ending').focus());
+  if (other && !typed()) $('ending').value = 'jpg'; // the ending most people want; typing replaces it
+  if (other && document.activeElement !== $('ending')) requestAnimationFrame(() => { $('ending').focus(); $('ending').select(); });
   K?.onFormat?.(fmt());
   $('ext').textContent = `.${ending()}`;
   changed();

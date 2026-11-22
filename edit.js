@@ -355,12 +355,23 @@ function timeline(host, media, { onSeek, getRange, setRange, begin, end }) {
   host.append(tl);
   const track = $('track'), D = () => media.duration || 1;
   const pos = (t) => `${(t / D()) * 100}%`;
+  // Scrubbing: a new seek cancels one still under way, so seeking on every pointer move showed nothing
+  // until you stopped. Instead one seek runs at a time, and when it lands the latest spot is next, so the
+  // picture keeps up as you drag. The playhead follows the pointer straight away.
+  let want = null;
+  const seekTo = (t) => {
+    want = t;
+    if (!media.seeking) { media.currentTime = t; want = null; }
+    place();
+  };
+  media.addEventListener('seeked', () => { if (want != null) { const t = want; want = null; media.currentTime = t; } });
+  const now = () => want ?? media.currentTime;
   function place() {
     const { start, end } = getRange();
     $('trimL').style.left = pos(start); $('trimR').style.left = pos(end);
     $('outL').style.width = pos(start); $('outR').style.width = `${(1 - end / D()) * 100}%`;
-    $('head').style.left = pos(media.currentTime);
-    $('clock').innerHTML = `<b>${fmtTime(media.currentTime)}</b> / ${fmtTime(end - start)}`;
+    $('head').style.left = pos(now());
+    $('clock').innerHTML = `<b>${fmtTime(now())}</b> / ${fmtTime(end - start)}`;
   }
   const at = (ev) => clamp(((ev.clientX - track.getBoundingClientRect().left) / track.clientWidth) * D(), 0, D());
   for (const side of ['L', 'R']) {
@@ -373,8 +384,8 @@ function timeline(host, media, { onSeek, getRange, setRange, begin, end }) {
         const t = at(ev), r = getRange();
         if (side === 'L') setRange({ start: clamp(t, 0, r.end - 0.1), end: r.end });
         else setRange({ start: r.start, end: clamp(t, r.start + 0.1, D()) });
-        media.currentTime = side === 'L' ? getRange().start : getRange().end;
-        place();
+        seekTo(side === 'L' ? getRange().start : getRange().end);
+        onSeek?.(now());
       };
       const up = () => { h.removeEventListener('pointermove', move); end?.(); };
       h.addEventListener('pointermove', move);
@@ -384,7 +395,7 @@ function timeline(host, media, { onSeek, getRange, setRange, begin, end }) {
   track.addEventListener('pointerdown', (e) => {
     if (e.target.classList.contains('trim')) return;
     track.setPointerCapture(e.pointerId);
-    const go = (ev) => { media.currentTime = at(ev); place(); onSeek?.(); };
+    const go = (ev) => { seekTo(at(ev)); onSeek?.(now()); };
     go(e);
     track.addEventListener('pointermove', go);
     track.addEventListener('pointerup', () => track.removeEventListener('pointermove', go), { once: true });
@@ -405,7 +416,7 @@ function timeline(host, media, { onSeek, getRange, setRange, begin, end }) {
     requestAnimationFrame(loop);
   }
   media.addEventListener('seeked', place);
-  return { place, play, strip: $('strip') };
+  return { place, play, now, strip: $('strip') };
 }
 function trimGroup(media, { getRange, commitRange, tl }) {
   const g = group('Trim', '<button class="link" data-reset>Reset</button>');
@@ -428,6 +439,41 @@ function waitMeta(media) {
   });
 }
 
+// How hard saving squeezes a video or a song. Full is as it is now; Smaller and Smallest write it again at
+// a lower bit rate (and Smallest at no more than 960×540). Plain-sample sound (WAV, AIFF, CAF) can't shrink.
+const SIZES = [['full', 'Full'], ['smaller', 'Smaller'], ['smallest', 'Smallest']];
+const SIZE_NOTE = {
+  video: { full: 'Keeps the quality it has.', smaller: 'About a third of the size. Looks the same on most screens.', smallest: 'Much smaller, at most 960 × 540. Good for sending.' },
+  audio: { full: 'Keeps the quality it has.', smaller: 'Smaller, at 96 kbps. Sounds the same to most ears.', smallest: 'About half the size, at 64 kbps. Fine for voices.' },
+};
+function sizeCard(kind) {
+  const g = group('File size');
+  const row = el('div', 'row fill');
+  const btns = SIZES.map(([v, label]) => {
+    const b = button(label, () => commit({ ...state, size: v }), 'tbtn sm');
+    b.dataset.size = v;
+    b.setAttribute('aria-pressed', 'false');
+    row.append(b);
+    return b;
+  });
+  g.append(row);
+  const note = el('p', 'note', '');
+  const plain = el('p', 'note', '');
+  const toM4A = button('Save as M4A instead', () => setFormat('m4a'), 'tbtn sm');
+  g.append(note, plain, toM4A);
+  let ext = '';
+  const sync = () => {
+    const lossless = ['wav', 'aiff', 'caf'].includes(ext);
+    for (const b of btns) { const on = b.dataset.size === (state.size || 'full'); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); b.disabled = lossless; }
+    const soundOut = kind === 'audio' || ['m4a', 'wav', 'aiff', 'caf'].includes(ext);
+    note.textContent = SIZE_NOTE[soundOut ? 'audio' : 'video'][state.size || 'full'];
+    note.hidden = lossless;
+    plain.textContent = `${ext.toUpperCase()} keeps every sample, so it can’t be made smaller.`;
+    plain.hidden = toM4A.hidden = !lossless;
+  };
+  return { sync, onFormat: (e) => { ext = e; g.hidden = e === 'gif'; sync(); } };
+}
+
 // ============ video ============
 const VideoKind = {
   async init() {
@@ -437,7 +483,7 @@ const VideoKind = {
     this.v = v;
     await waitMeta(v);
     this.W = v.videoWidth; this.H = v.videoHeight;
-    state = { start: 0, end: v.duration, crop: null, rot: 0, fh: false, fv: false, vol: 1, mute: false, gifFps: 12, gifWidth: 480 };
+    state = { start: 0, end: v.duration, crop: null, rot: 0, fh: false, fv: false, vol: 1, mute: false, gifFps: 12, gifWidth: 480, size: 'full' };
     this.crop = cropBox($('frame'), {
       size: () => ({ w: this.W, h: this.H }), get: () => state.crop,
       set: (r) => { state.crop = r; },
@@ -458,7 +504,7 @@ const VideoKind = {
   },
   layout() {
     const wrap = $('wrap');
-    if (!wrap) return;
+    if (!wrap || !state) return; // between files (after a save reopens it), the last one's watcher may still fire
     const turned = state.rot % 180 && !this.crop.isLive();
     const aw = wrap.clientWidth - 68, ah = wrap.clientHeight - 68;
     const k = turned ? Math.min(aw / this.H, ah / this.W) : Math.min(aw / this.W, ah / this.H);
@@ -470,7 +516,7 @@ const VideoKind = {
   apply() {
     this.layout();
     this.v.volume = state.vol; this.v.muted = state.mute;
-    this.trim.sync(); this.cropUI.sync(); this.soundUI?.();
+    this.trim.sync(); this.cropUI.sync(); this.soundUI?.(); this.sizeUI?.sync();
   },
   async filmstrip() {
     // A row of frames along the timeline, pulled from a second copy of the video.
@@ -491,6 +537,7 @@ const VideoKind = {
   },
   tools(range) {
     this.trim = trimGroup(this.v, { getRange: range, commitRange: (r) => commit({ ...state, ...r }), tl: this.tl });
+    this.sizeUI = sizeCard('video'); // high up: making a clip small enough to send is a common reason to be here
     this.cropUI = cropGroup({
       size: () => ({ w: this.W, h: this.H }), live: () => this.crop.isLive(),
       getCrop: () => state.crop, setCrop: (r) => commit({ ...state, crop: r }),
@@ -521,9 +568,9 @@ const VideoKind = {
     slider(this.gif, { label: 'Frames a second', min: 4, max: 24, value: 12, onChange: (x) => { state = { ...state, gifFps: x }; } });
     slider(this.gif, { label: 'Width', min: 160, max: 960, step: 40, value: 480, unit: ' px', onChange: (x) => { state = { ...state, gifWidth: x }; } });
   },
-  onFormat(ext) { this.gif.hidden = ext !== 'gif'; },
+  onFormat(ext) { this.gif.hidden = ext !== 'gif'; this.sizeUI.onFormat(ext); },
   async job() {
-    return { kind: 'media', ops: { start: state.start, end: state.end, crop: state.crop ? [state.crop.x, state.crop.y, state.crop.w, state.crop.h] : null, rotate: state.rot, flipH: state.fh, flipV: state.fv, volume: state.vol, mute: state.mute, gifFps: state.gifFps, gifWidth: state.gifWidth } };
+    return { kind: 'media', ops: { start: state.start, end: state.end, crop: state.crop ? [state.crop.x, state.crop.y, state.crop.w, state.crop.h] : null, rotate: state.rot, flipH: state.fh, flipV: state.fv, volume: state.vol, mute: state.mute, gifFps: state.gifFps, gifWidth: state.gifWidth, size: state.size } };
   },
   info() { const c = state.crop; return `${fmtTime(state.end - state.start)}${c ? `, ${c.w} × ${c.h}` : ''}`; },
   keys(e) {
@@ -544,10 +591,22 @@ const AudioKind = {
     a.src = F.url; a.preload = 'auto';
     this.a = a;
     await waitMeta(a);
-    state = { start: 0, end: a.duration, vol: 1 };
+    state = { start: 0, end: a.duration, vol: 1, size: 'full' };
     let pre = null;
     const range = () => ({ start: state.start, end: state.end });
+    // Dragging along the timeline: the wave follows, and a moment of sound plays where you are.
+    let blip = 0;
+    const scrubSound = () => {
+      if (!a.paused && !blip) return; // already playing on its own
+      const t = Date.now();
+      if (t - (this.lastBlip || 0) < 110) return;
+      this.lastBlip = t;
+      clearTimeout(blip);
+      a.play().catch(() => {});
+      blip = setTimeout(() => { a.pause(); blip = 0; }, 90);
+    };
     this.tl = timeline(stage, a, {
+      onSeek: () => { this.drawWave(); scrubSound(); },
       getRange: range, setRange: (r) => { state = { ...state, ...r }; this.drawWave(); },
       begin: () => { pre = JSON.stringify(state); }, end: () => { if (pre !== JSON.stringify(state)) { hist.past.push(pre); hist.future = []; changed(); this.trim.sync(); } },
     });
@@ -556,6 +615,7 @@ const AudioKind = {
     let p2 = null;
     this.vol = slider(snd, { label: 'Quieter', min: 0, max: 100, value: 100, unit: '%', onInput: (x) => { p2 ??= JSON.stringify(state); state = { ...state, vol: x / 100 }; a.volume = state.vol; this.drawWave(); }, onChange: () => { if (p2 !== JSON.stringify(state)) { hist.past.push(p2); hist.future = []; changed(); } p2 = null; } });
     snd.append(el('p', 'note', 'Turns the whole file down. 100% leaves it as it is.'));
+    this.sizeUI = sizeCard('audio');
     a.addEventListener('timeupdate', () => this.drawWave());
     new ResizeObserver(() => this.drawWave()).observe($('wrap'));
     this.peaks = await this.loadPeaks();
@@ -574,7 +634,7 @@ const AudioKind = {
   },
   drawWave() {
     const c = $('wave');
-    if (!c) return;
+    if (!c || !state) return;
     const dpr = DPR(), W = c.clientWidth, H = c.clientHeight;
     c.width = W * dpr; c.height = H * dpr;
     const ctx = c.getContext('2d');
@@ -586,7 +646,7 @@ const AudioKind = {
       const v = p ? p[Math.floor((i / bars) * p.length)] : 0.3 + 0.25 * Math.sin(i * 0.7) * Math.sin(i * 0.13);
       const h = Math.max(3, v * (H - 8) * (0.15 + 0.85 * state.vol));
       const inside = t >= state.start && t <= state.end;
-      ctx.fillStyle = !inside ? 'rgba(255,255,255,0.14)' : t <= this.a.currentTime ? '#CDEB5A' : 'rgba(205,235,90,0.42)';
+      ctx.fillStyle = !inside ? 'rgba(255,255,255,0.14)' : t <= (this.tl?.now() ?? this.a.currentTime) ? '#CDEB5A' : 'rgba(205,235,90,0.42)';
       ctx.beginPath(); ctx.roundRect(i * 5, (H - h) / 2, 3, h, 1.5); ctx.fill();
     }
     $('wlen').textContent = `${fmtTime(state.end - state.start)} of ${fmtTime(D)}`;
@@ -602,8 +662,9 @@ const AudioKind = {
       strip.append(s);
     }
   },
-  apply() { this.a.volume = state.vol; this.vol.set(Math.round(state.vol * 100)); this.trim.sync(); this.drawWave(); },
-  async job() { return { kind: 'media', ops: { start: state.start, end: state.end, volume: state.vol } }; },
+  apply() { this.a.volume = state.vol; this.vol.set(Math.round(state.vol * 100)); this.trim.sync(); this.sizeUI.sync(); this.drawWave(); },
+  onFormat(ext) { this.sizeUI.onFormat(ext); },
+  async job() { return { kind: 'media', ops: { start: state.start, end: state.end, volume: state.vol, size: state.size } }; },
   info() { return fmtTime(state.end - state.start); },
   keys(e) {
     if (e.key === ' ') { this.tl.play(); return true; }
@@ -1250,7 +1311,9 @@ async function save() {
     const r = await scrawl.invoke('tweak:save', job);
     $('fill').style.width = '100%';
     if (r?.ok) {
-      toast(r.replaced ? `Saved ${r.name}${r.trashed ? '. The old version is in the Trash.' : ''}` : `Saved ${r.name}`, r.path);
+      // How big it came out, beside how big it was, so a squeeze shows what it did.
+      const was = F.size, sized = r.size != null ? ` · ${fmtSize(r.size)}${was && Math.abs(r.size - was) > was * 0.02 ? ` (was ${fmtSize(was)})` : ''}` : '';
+      toast(r.replaced ? `Saved ${r.name}${sized}${r.trashed ? '. The old version is in the Trash.' : ''}` : `Saved ${r.name}${sized}`, r.path);
       if (r.replaced) { await start(true); } // now editing the saved file
     } else toast(r?.error || 'Saving didn’t work.', null, true);
   } catch (err) {

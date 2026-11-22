@@ -911,10 +911,11 @@
 
 
   /* A nudge at the bottom of the first screen: there's more below. It bows out once you scroll. */
-  /* The hero fills the first screen so the hint lands at its bottom edge, never over the content. */
-  main > .hero { min-height: calc(100svh - 88px); display: flex; flex-direction: column; }
+  /* The hero fills the first screen, so the tools start below it. The hint is pinned to the window's
+     bottom edge over the hero's empty bottom, so it's always whole on the first screen. */
+  main > .hero { min-height: calc(100svh - 88px); }
   .scroll-hint {
-    margin: auto auto 0; padding-top: 72px; padding-bottom: 34px; align-self: center;
+    position: fixed; left: 50%; bottom: 18px; translate: -50% 0; z-index: 5;
     display: flex; flex-direction: column; align-items: center; gap: 12px; text-decoration: none;
     color: var(--ink-2); font-size: 13px; font-weight: 800; letter-spacing: 0.02em;
     transition: opacity 260ms ease;
@@ -922,7 +923,7 @@
   .scroll-hint .chev { width: 34px; height: 34px; border-radius: 17px; display: grid; place-items: center; background: var(--card); box-shadow: 0 4px 0 var(--card-lip); color: var(--accent-ink); animation: hint-bob 1.8s var(--smooth) 1.2s infinite; }
   .scroll-hint .chev svg { width: 16px; height: 16px; }
   .scroll-hint:hover .chev { color: var(--ink); }
-  .scroll-hint.gone { opacity: 0; }
+  .scroll-hint.gone { opacity: 0; pointer-events: none; }
   @keyframes hint-bob { 0%, 60%, 100% { transform: none; } 30% { transform: translateY(5px); } }
 
   @media (prefers-reduced-motion: reduce) {
@@ -1382,11 +1383,16 @@
     }));
   })();
 
+  // A reload starts at the top, where the page begins, not wherever you'd scrolled to.
+  if (!location.hash) { history.scrollRestoration = 'manual'; scrollTo(0, 0); }
+
   // The scroll hint shows only while you're still at the top.
   (() => {
     const hint = document.getElementById('scroll-hint');
-    const sync = () => hint.classList.toggle('gone', scrollY > 40);
-    addEventListener('scroll', sync, { passive: true }); sync();
+    const fine = document.getElementById('fine');
+    // It's pinned to the window, so on a short or narrow one it would sit on the page: then it stays out.
+    const sync = () => hint.classList.toggle('gone', scrollY > 40 || fine.getBoundingClientRect().bottom > hint.getBoundingClientRect().top - 6);
+    addEventListener('scroll', sync, { passive: true }); addEventListener('resize', sync); sync();
     hint.addEventListener('click', e => {
       e.preventDefault();
       const smooth = !matchMedia('(prefers-reduced-motion: reduce)').matches;

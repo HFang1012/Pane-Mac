@@ -17,7 +17,8 @@ const AppPatch = require('./app-patch.js');
 const REPO = 'HFang1012/Pane-Mac';
 const API = `https://api.github.com/repos/${REPO}/releases?per_page=20`;
 const FIRST_CHECK = 15 * 1000;
-const EVERY = 6 * 60 * 60 * 1000;
+// Every 5 minutes: 12 requests an hour, well inside GitHub's 60 an hour for apps that don't sign in.
+const EVERY = 5 * 60 * 1000;
 
 let store = { get: () => ({}), set: () => {} };
 let onState = () => {};
@@ -91,7 +92,9 @@ function changelog(releases, from) {
 async function check({ manual = false } = {}) {
   if (['checking', 'downloading', 'installing'].includes(state.status)) { if (manual) { set({ open: true }); reveal(true); } return; }
   const was = state;
-  set({ status: 'checking', error: '', open: manual || was.open });
+  // Only a check you asked for says "Checking…". Background ones run quietly, so an open update sheet
+  // doesn't flicker every few minutes.
+  if (manual || !['available', 'current'].includes(was.status)) set({ status: 'checking', error: '', open: manual || was.open });
   if (manual) reveal(true);
   try {
     const releases = await fetchReleases();

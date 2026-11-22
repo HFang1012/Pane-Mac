@@ -343,12 +343,20 @@
   .mug:hover .wisps path, .mug:focus-visible .wisps path { animation: steam 1.8s ease-in-out infinite; }
   .mug .wisps path:nth-child(2) { animation-delay: -0.9s !important; }
   .mug.empty .wisps { opacity: 0; }
+  .mug { position: relative; touch-action: none; cursor: grab; }
+  .mug.held { cursor: grabbing; }
+  .mug .wisps { transform-box: fill-box; transform-origin: 50% 100%; }
+  .toy-mug .drop { position: absolute; left: 0; top: 0; width: 6px; height: 7px; margin: -3px 0 0 -3px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; background: #9A6236; pointer-events: none; }
+  .toy-mug .stream { position: absolute; left: 50%; top: -34px; width: 8px; height: 0; margin-left: -12px; border-radius: 4px; background: linear-gradient(#B77945, #9A6236); pointer-events: none; }
+  /* The spinner leans toward the pointer. */
+  .spinner { transition: transform 300ms var(--smooth); }
+  .spinner .spark { pointer-events: none; }
   @keyframes steam { 0% { transform: translateY(3px); opacity: 0; } 35% { opacity: 1; } 100% { transform: translateY(-7px); opacity: 0; } }
 
   /* Spin's turntable: point at it to play, drag the record to scratch, click for the next one. */
   .deck { width: 180px; height: 150px; touch-action: none; cursor: grab; border-radius: 22px; }
   .deck.held { cursor: grabbing; }
-  .deck svg { display: block; width: 180px; height: 150px; overflow: visible; }
+  .deck svg { display: block; width: 180px; height: 150px; overflow: visible; transform-origin: 50% 95%; }
   .deck .plinth { fill: var(--card); }
   .deck .plinth-lip { fill: var(--card-lip); }
   .deck .vinyl-lip { fill: #0B1210; }
@@ -365,6 +373,11 @@
   .deck .pivot-lip { fill: var(--mint-lip, #4DB283); }
   .deck .pivot { fill: var(--mint, #7ED3A8); }
   .deck .note { fill: none; stroke: var(--mint-lip, #4DB283); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; animation: note-up 1500ms ease-out forwards; }
+  .deck .note { stroke: color-mix(in srgb, var(--c, #FFC94D) 70%, var(--ink) 30%); }
+  .deck.swapping .arm { transform: rotate(-26deg); }
+  .deck.held .arm { animation: jiggle 140ms linear infinite; }
+  @keyframes jiggle { 50% { translate: 0 1px; } }
+  .deck .wk { fill: var(--ink); font-family: var(--font); font-size: 12px; font-weight: 800; pointer-events: none; }
   @keyframes note-up { from { opacity: 0; transform: translate(0, 6px) scale(0.6); } 25% { opacity: 1; } to { opacity: 0; transform: translate(var(--dx), -34px) rotate(var(--r)); } }
 
   @media (prefers-reduced-motion: reduce) {
@@ -620,7 +633,42 @@
   .plane-toy .plane { position: absolute; left: 50%; top: 40px; width: 64px; height: 64px; margin-left: -32px; will-change: transform; transition: scale 260ms var(--bouncy); }
   .plane-toy .plane svg { display: block; width: 64px; height: 64px; overflow: visible; filter: drop-shadow(0 6px 6px rgba(10, 26, 32, 0.22)); }
   .plane-toy:hover .plane:not(.flying) { animation: hover-bob 1.6s ease-in-out infinite; }
-  @keyframes hover-bob { 50% { transform: translateY(-5px) rotate(-4deg); } }
+  @keyframes hover-bob { 50% { translate: 0 -5px; rotate: -4deg; } }
+  .plane-toy .band { fill: none; stroke: var(--accent-lip); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; opacity: 0; transition: opacity 160ms ease; }
+  .plane-toy.winding .band { opacity: 1; }
+  .plane-toy .trail circle.star { fill: var(--accent); }
+
+  /* Tweak's crop: drag a corner to crop, drag inside to slide the crop around (fling it), click to turn the picture. */
+  .crop-toy { position: relative; width: 180px; height: 150px; border-radius: 22px; touch-action: none; cursor: pointer; }
+  .crop-toy .frame { position: absolute; left: 50%; top: 50%; width: 140px; height: 100px; margin: -50px 0 0 -70px; transform: rotate(var(--a, 0deg)) scale(var(--s, 1)); transition: transform 640ms var(--bouncy); }
+  .crop-toy .photo { position: absolute; inset: 0; border-radius: 8px; overflow: hidden; box-shadow: 0 5px 0 var(--card-lip), 0 14px 22px -10px rgba(12, 13, 31, 0.45); }
+  .crop-toy .photo svg { display: block; width: 100%; height: 100%; }
+  .crop-toy .shade, .crop-toy .cut { position: absolute; left: var(--l); top: var(--t); width: var(--w); height: var(--h); transition: left 520ms var(--bouncy), top 520ms var(--bouncy), width 520ms var(--bouncy), height 520ms var(--bouncy); }
+  .crop-toy.held .shade, .crop-toy.held .cut, .crop-toy.glide .shade, .crop-toy.glide .cut { transition: none; }
+  .crop-toy .shade { box-shadow: 0 0 0 999px rgba(27, 29, 58, 0.58); outline: 1.5px solid rgba(255, 255, 255, 0.55); }
+  .crop-toy .shade::before, .crop-toy .shade::after { content: ""; position: absolute; inset: 0; border: 0 solid rgba(255, 255, 255, 0.35); opacity: 0; transition: opacity 160ms ease; }
+  .crop-toy .shade::before { border-width: 0 1px; left: 33.3%; right: 33.3%; }
+  .crop-toy .shade::after { border-width: 1px 0; top: 33.3%; bottom: 33.3%; }
+  .crop-toy.held .shade::before, .crop-toy.held .shade::after { opacity: 1; }
+  .crop-toy .cut { pointer-events: none; }
+  .crop-toy .cut svg { position: absolute; width: 15px; height: 15px; overflow: visible; filter: drop-shadow(0 1.5px 2px rgba(12, 13, 31, 0.35)); }
+  .crop-toy .cut svg path { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+  .crop-toy .cut svg path.lp { stroke: var(--accent-lip); transform: translateY(1.8px); }
+  .crop-toy .cut svg:nth-child(1) { left: -4px; top: -4px; --dx: 3px; --dy: 3px; } .crop-toy .cut svg:nth-child(2) { right: -4px; top: -4px; --dx: -3px; --dy: 3px; }
+  .crop-toy .cut svg:nth-child(3) { left: -4px; bottom: -4px; --dx: 3px; --dy: -3px; } .crop-toy .cut svg:nth-child(4) { right: -4px; bottom: -4px; --dx: -3px; --dy: -3px; }
+  .crop-toy:hover:not(.held) .cut svg { animation: nudge 1.3s ease-in-out infinite; }
+  @keyframes nudge { 50% { translate: var(--dx) var(--dy); } }
+  .crop-toy .cut svg.grab { scale: 1.35; transition: scale 260ms var(--bouncy); }
+  .crop-toy .waves { animation: waves 2.4s linear infinite; }
+  @keyframes waves { to { transform: translateX(-24px); } }
+  .crop-toy .waves.back { animation-duration: 3.6s; animation-direction: reverse; }
+  .crop-toy .boat { transform-box: fill-box; transform-origin: 50% 100%; animation: bob 2.2s ease-in-out infinite; }
+  @keyframes bob { 50% { transform: translateY(-2px) rotate(-6deg); } }
+  .crop-toy .sun { transform-box: fill-box; transform-origin: center; animation: glow 3s ease-in-out infinite; }
+  @keyframes glow { 50% { transform: scale(1.12); } }
+  .crop-toy .gull { animation: gull 7s linear infinite; }
+  @keyframes gull { from { transform: translate(-20px, 4px); } 50% { transform: translate(80px, -4px); } to { transform: translate(170px, 2px); } }
+  @media (prefers-reduced-motion: reduce) { .crop-toy .waves, .crop-toy .boat, .crop-toy .sun, .crop-toy .gull, .crop-toy .cut svg { animation: none !important; } }
   .plane-toy.winding .plane { animation: wind 120ms linear infinite; }
   @keyframes wind { 50% { translate: 1px 0; } }
   .plane-toy .trail { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
@@ -837,7 +885,7 @@
           <span class="pad"></span><span class="meter"></span>
           <span class="plane"><svg viewBox="0 0 26 26" aria-hidden="true"><path d="M2.5 12.6 L23 3.5 L18 22.5 L12.6 16.4 Z" fill="#E26F4E" transform="translate(0 1.6)"/><path d="M2.5 12.6 L23 3.5 L18 22.5 L12.6 16.4 Z" fill="#FF9B7A"/><path d="M12.6 16.4 L23 3.5 L10.8 18.8 Z" fill="#E26F4E"/><path d="M12.6 16.4 L23 3.5" stroke="#FFE4DA" stroke-width="0.9" stroke-linecap="round"/></svg></span>
         </button>
-        <p class="toy-cap" aria-live="polite"><span>Hold, then let go to throw</span></p>
+        <p class="toy-cap" aria-live="polite"><span>Pull it back, then let go</span></p>
       </div>
       <p class="switch-note" style="margin-top:16px">Add a screenshot, or take it off again. Drag a note by its top to move it. Snooze a reminder, or mark it done.</p>
     </article>
@@ -863,6 +911,27 @@
             <div class="ft"><span>Save as</span><select aria-label="File type"></select><span class="what"></span><button type="button" class="go">Save</button></div>
           </div>
         </div>
+      </div>
+      <div class="toy l toy-crop" style="top: 120px">
+        <button class="crop-toy" type="button" aria-label="Turn the picture">
+          <span class="frame">
+            <span class="photo">
+              <svg viewBox="0 0 140 100" preserveAspectRatio="none" aria-hidden="true">
+                <defs><linearGradient id="cropSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8FA2FF"/><stop offset="0.7" stop-color="#F4B07A"/><stop offset="1" stop-color="#E4789A"/></linearGradient></defs>
+                <rect width="140" height="100" fill="url(#cropSky)"/>
+                <circle class="sun" cx="102" cy="36" r="12" fill="#FFE9A8"/>
+                <path class="gull" d="M0 20 q3 -3.5 6 0 q3 -3.5 6 0" fill="none" stroke="#262950" stroke-width="1.6" stroke-linecap="round"/>
+                <path class="waves back" d="M-24 60 q6 -4 12 0 t12 0 t12 0 t12 0 t12 0 t12 0 t12 0 t12 0 t12 0 t12 0 t12 0 t12 0 t12 0 t12 0 t12 0 V100 H-24 Z" fill="#3646B8"/>
+                <g class="boat"><path d="M34 58 h20 l-4 6 h-12 z" fill="#FAFAFE"/><path d="M44 57 V44 l8 12 z" fill="#CDEB5A"/></g>
+                <path class="waves" d="M-24 66 q6 -4 12 0 t12 0 t12 0 t12 0 t12 0 t12 0 t12 0 t12 0 t12 0 t12 0 t12 0 t12 0 t12 0 t12 0 t12 0 V100 H-24 Z" fill="#5567E3"/>
+                <path d="M0 84 Q50 74 140 82 V100 H0 Z" fill="#F2D49A"/>
+              </svg>
+              <span class="shade"></span>
+            </span>
+            <span class="cut"><svg viewBox="0 0 18 18"><path class="lp" d="M15 3H3V15"/><path d="M15 3H3V15"/></svg><svg viewBox="0 0 18 18"><path class="lp" d="M3 3H15V15"/><path d="M3 3H15V15"/></svg><svg viewBox="0 0 18 18"><path class="lp" d="M15 15H3V3"/><path d="M15 15H3V3"/></svg><svg viewBox="0 0 18 18"><path class="lp" d="M3 15H15V3"/><path d="M3 15H15V3"/></svg></span>
+          </span>
+        </button>
+        <p class="toy-cap" aria-live="polite"><span>Drag a corner, or click to turn</span></p>
       </div>
       <p class="switch-note" style="margin-top:16px">Crop, turn and resize pictures. Trim, crop or mute a video, pull out its sound, or save a frame. Trim songs. Find and replace in text. Change any file’s type, and save over it or as a copy. The old version goes to the Trash.</p>
     </article>
@@ -2139,7 +2208,25 @@
       `<path class="tick" d="M54.5 1.5 Q60 0 65.5 1.5 L61.2 10.2 Q60 11.8 58.8 10.2 Z"/></svg>`;
     const svg = btn.firstChild, turns = svg.querySelectorAll('.turn'), tick = svg.querySelector('.tick');
     const norm = (d) => ((((d + 180) % 360) + 360) % 360) - 180;
-    let rot = 0, v = 0, raf = 0, last = 0, drag = null, landed = null, lastTop = null;
+    let rot = 0, v = 0, raf = 0, last = 0, drag = null, landed = null, lastTop = null, spun = 0, streak = 0;
+    const SPARKS = ['#F49CB0', '#FFC94D', '#7ED3A8', '#B9A5F4', '#8FC6F5'];
+    // The landed slice pops out toward the tick, and a little burst comes off it.
+    function celebrate(sp) {
+      if (reduce) return;
+      const m = (sp.mid * Math.PI) / 180, ox = Math.cos(m) * 6, oy = Math.sin(m) * 6;
+      svg.querySelectorAll(`[data-id="${sp.id}"]`).forEach((el) => el.animate(
+        [{ transform: 'translate(0, 0)' }, { transform: `translate(${ox.toFixed(1)}px, ${oy.toFixed(1)}px)`, offset: 0.35 }, { transform: 'translate(0, 0)' }],
+        { duration: 620, easing: 'cubic-bezier(.3,1.5,.5,1)' }));
+      const n = Math.min(14, 6 + Math.round(spun / 120));
+      for (let i = 0; i < n; i++) {
+        const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        c.setAttribute('class', 'spark'); c.setAttribute('cx', '60'); c.setAttribute('cy', '14'); c.setAttribute('r', (1.6 + Math.random() * 1.8).toFixed(1));
+        c.setAttribute('fill', SPARKS[i % SPARKS.length]); svg.appendChild(c);
+        const t = Math.PI + (Math.PI * (i + 0.5)) / n, d = 18 + Math.random() * 16;
+        c.animate([{ transform: 'translate(0, 0) scale(0.4)', opacity: 1 }, { transform: `translate(${(Math.cos(t) * d).toFixed(1)}px, ${(Math.sin(t) * d + 10).toFixed(1)}px) scale(1)`, opacity: 0 }],
+          { duration: 700 + Math.random() * 300, easing: 'cubic-bezier(.2,.7,.4,1)' }).onfinish = () => c.remove();
+      }
+    }
     const set = () => turns.forEach((g) => g.setAttribute('transform', `rotate(${rot.toFixed(2)} ${cx} ${cy})`));
     const hot = (id) => svg.querySelectorAll('[data-id]').forEach((el) => el.classList.toggle('hot', el.dataset.id === id));
     const atTop = () => { const L = -90 - rot; return spans.find((sp) => ((((L - sp.s) % 360) + 360) % 360) < sp.e - sp.s); };
@@ -2157,12 +2244,15 @@
         if (k < 1) raf = requestAnimationFrame(step); else { raf = 0; rot = norm(rot); set(); }
       };
       raf = requestAnimationFrame(step);
-      landed = sp.id; hot(sp.id); bump();
-      sayTo(cap, `Landed on ${NAMES[sp.id]}`);
+      streak = landed === sp.id ? streak + 1 : 1;
+      landed = sp.id; hot(sp.id); bump(); celebrate(sp);
+      const laps = Math.floor(spun / 360);
+      sayTo(cap, streak > 1 ? `${NAMES[sp.id][0].toUpperCase() + NAMES[sp.id].slice(1)} ${streak === 2 ? 'twice' : streak + ' times'} in a row!` : laps >= 2 ? `${laps} turns, then ${NAMES[sp.id]}` : `Landed on ${NAMES[sp.id]}`);
+      spun = 0;
     }
     function coast(now) {
       const dt = Math.min(32, now - last); last = now;
-      rot += v * dt; v *= Math.pow(0.9966, dt); set(); passing();
+      rot += v * dt; spun += Math.abs(v * dt); v *= Math.pow(0.9966, dt); set(); passing();
       if (Math.abs(v) > 0.04) raf = requestAnimationFrame(coast); else settle();
     }
     function spin(speed) {
@@ -2174,12 +2264,17 @@
     btn.addEventListener('pointerdown', (e) => {
       cancelAnimationFrame(raf); raf = 0;
       try { btn.setPointerCapture(e.pointerId); } catch {} btn.classList.add('held');
-      drag = { ang: angle(e), t: performance.now(), moved: 0, v: 0 };
+      drag = { ang: angle(e), t: performance.now(), moved: 0, v: 0 }; btn.style.transform = '';
     });
+    const lean = (e) => {
+      if (reduce) return;
+      const b = btn.getBoundingClientRect(), nx = (e.clientX - b.left) / b.width - 0.5, ny = (e.clientY - b.top) / b.height - 0.5;
+      btn.style.transform = `perspective(420px) rotateX(${(-ny * 22).toFixed(1)}deg) rotateY(${(nx * 22).toFixed(1)}deg)`;
+    };
     btn.addEventListener('pointermove', (e) => {
-      if (!drag) { if (!raf) hot(e.target.closest('.slice')?.dataset.id ?? landed); return; }
+      if (!drag) { lean(e); if (!raf) hot(e.target.closest('.slice')?.dataset.id ?? landed); return; }
       const ang = angle(e), d = norm(ang - drag.ang), now = performance.now(), dt = Math.max(1, now - drag.t);
-      rot += d; drag.ang = ang; drag.t = now; drag.moved += Math.abs(d);
+      rot += d; spun += Math.abs(d); drag.ang = ang; drag.t = now; drag.moved += Math.abs(d);
       drag.v = drag.v * 0.6 + (d / dt) * 0.4; set(); passing();
     });
     const release = () => {
@@ -2191,28 +2286,84 @@
     };
     btn.addEventListener('pointerup', release);
     btn.addEventListener('pointercancel', release);
-    btn.addEventListener('pointerleave', () => { if (!drag && !raf) hot(landed); });
+    btn.addEventListener('pointerleave', () => { btn.style.transform = ''; if (!drag && !raf) hot(landed); });
     btn.addEventListener('click', (e) => { if (e.detail === 0) spin(1.3 + Math.random() * 0.9); }); // Return or Space
     set();
   })();
 
-  // Away's mug: three sips, then a refill.
+  // Away's mug. Drag it sideways to tip it (tip it far enough and it pours), wave over it to blow the steam, click to sip.
   (function () {
     const toy = document.querySelector('.toy-mug'); if (!toy) return;
-    const mug = toy.querySelector('.mug'), svg = mug.querySelector('svg'), cap = toy.querySelector('.toy-cap');
-    let sips = 3;
-    mug.addEventListener('click', () => {
-      if (sips === 0) {
-        sips = 3; mug.classList.remove('empty'); mug.setAttribute('aria-label', 'Take a sip');
-        if (!reduce) svg.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-8px) scale(1.04, 0.97)' }, { transform: 'translateY(0)' }], { duration: 480, easing: 'cubic-bezier(.3,1.6,.5,1)' });
-        sayTo(cap, 'Fresh cup. Click to sip'); return;
+    const mug = toy.querySelector('.mug'), svg = mug.querySelector('svg'), cap = toy.querySelector('.toy-cap'), wisps = svg.querySelector('.wisps');
+    svg.insertAdjacentHTML('beforeend', '<circle class="rim-l" cx="12.5" cy="19.5" r="0.4" fill="none"/><circle class="rim-r" cx="39.5" cy="19.5" r="0.4" fill="none"/>');
+    const rimL = svg.querySelector('.rim-l'), rimR = svg.querySelector('.rim-r');
+    let sips = 3, tilt = 0, w = 0, sway = 0, swayV = 0, gust = 0, raf = 0, last = 0, drag = null, poured = 0, dropAt = 0, busy = false;
+    const POUR = 34; // degrees of tip before coffee comes out
+    const steam = () => { wisps.style.opacity = sips ? String(sips / 3 + 0.001) : ''; mug.classList.toggle('empty', !sips); mug.setAttribute('aria-label', sips ? 'Take a sip' : 'Refill the mug'); };
+    const say = () => sayTo(cap, ['All gone. Click to refill', 'One sip left', 'Two sips left', 'Full. Drag to tip it'][sips]);
+    function drop(side) {
+      const t = toy.getBoundingClientRect(), r = (side < 0 ? rimL : rimR).getBoundingClientRect();
+      const d = document.createElement('i'); d.className = 'drop';
+      d.style.left = `${r.left - t.left}px`; d.style.top = `${r.top - t.top}px`; toy.appendChild(d);
+      d.animate([{ transform: 'translate(0, 0) scale(1)', opacity: 1 }, { transform: `translate(${(side * (6 + Math.random() * 10)).toFixed(1)}px, ${(46 + Math.random() * 14).toFixed(0)}px) scale(0.5)`, opacity: 0 }],
+        { duration: 620, easing: 'cubic-bezier(.45,0,.9,.6)' }).onfinish = () => d.remove();
+    }
+    function loop(now) {
+      const dt = Math.min(32, now - last) / 1000; last = now;
+      if (!drag) { w += (-200 * tilt - 9 * w) * dt; tilt += w * dt; } // a spring back to standing, with a wobble
+      swayV += (-160 * (sway - gust) - 10 * swayV) * dt; sway += swayV * dt; gust *= Math.pow(0.01, dt);
+      svg.style.rotate = `${tilt.toFixed(2)}deg`;
+      wisps.style.transform = `skewX(${Math.max(-40, Math.min(40, sway - tilt * 0.6)).toFixed(2)}deg)`;
+      if (Math.abs(tilt) > POUR && sips) {
+        const side = tilt < 0 ? -1 : 1;
+        if (now > dropAt) { drop(side); dropAt = now + 55; }
+        poured += dt;
+        if (poured > 0.45) { poured = 0; sips--; steam(); sayTo(cap, sips ? 'Spilled a sip!' : 'You spilled it all. Click to refill'); }
       }
-      sips--;
-      if (!reduce) svg.animate([{ rotate: '0deg' }, { rotate: '-24deg', offset: 0.35 }, { rotate: '-24deg', offset: 0.6 }, { rotate: '0deg' }], { duration: 900, easing: 'cubic-bezier(.45,.05,.25,1)' });
-      mug.querySelector('.wisps').style.opacity = String(sips / 3 + 0.001);
-      if (sips === 0) { mug.classList.add('empty'); mug.setAttribute('aria-label', 'Refill the mug'); mug.querySelector('.wisps').style.opacity = ''; }
-      sayTo(cap, ['All gone. Click to refill', 'One sip left', 'Two sips left'][sips]);
+      if (drag || Math.abs(tilt) > 0.05 || Math.abs(w) > 0.5 || Math.abs(sway) > 0.05 || Math.abs(swayV) > 0.5) raf = requestAnimationFrame(loop);
+      else { raf = 0; tilt = 0; sway = 0; svg.style.rotate = ''; wisps.style.transform = ''; }
+    }
+    const kick = () => { if (!raf && !reduce) { last = performance.now(); raf = requestAnimationFrame(loop); } };
+    function sip() {
+      if (busy) return;
+      if (sips === 0) { // pour a fresh cup from above
+        busy = true; sayTo(cap, 'Pouring…');
+        const st = document.createElement('i'); st.className = 'stream'; mug.appendChild(st);
+        const done = () => { st.remove(); sips = 3; steam(); busy = false; sayTo(cap, 'Fresh cup. Click to sip');
+          if (!reduce) svg.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(4px) scale(1.06, 0.92)' }, { transform: 'translateY(-6px) scale(0.97, 1.04)' }, { transform: 'translateY(0)' }], { duration: 560, easing: 'cubic-bezier(.3,1.6,.5,1)' }); };
+        if (reduce) { done(); return; }
+        st.animate([{ height: '0px', transform: 'translateY(0)' }, { height: '52px', transform: 'translateY(0)', offset: 0.35 }, { height: '52px', transform: 'translateY(0)', offset: 0.75 }, { height: '0px', transform: 'translateY(52px)' }],
+          { duration: 1000, easing: 'ease-in-out' }).onfinish = done;
+        return;
+      }
+      sips--; steam();
+      if (!reduce) { w -= 150; kick(); } // a quick tip and it settles back
+      if (!reduce) svg.animate([{ transform: 'none' }, { transform: 'translateY(-4px)', offset: 0.4 }, { transform: 'none' }], { duration: 700, easing: 'ease-in-out' });
+      say();
+    }
+    mug.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || busy) return;
+      try { mug.setPointerCapture(e.pointerId); } catch {}
+      drag = { x: e.clientX, t0: tilt, moved: 0 }; w = 0; mug.classList.add('held'); kick();
     });
+    mug.addEventListener('pointermove', (e) => {
+      if (!drag) { gust += -e.movementX * 1.4; gust = Math.max(-30, Math.min(30, gust)); kick(); return; }
+      const dx = e.clientX - drag.x; drag.moved = Math.max(drag.moved, Math.abs(dx));
+      tilt = Math.max(-62, Math.min(62, drag.t0 + dx * 0.7));
+      if (drag.moved > 6 && !drag.said) { drag.said = true; sayTo(cap, sips ? 'Careful…' : 'It’s empty'); }
+      if (reduce) svg.style.rotate = `${tilt}deg`;
+    });
+    const release = () => {
+      if (!drag) return;
+      const { moved } = drag; drag = null; mug.classList.remove('held'); poured = 0;
+      if (moved < 4) { tilt = 0; sip(); }
+      else if (sips) say();
+      if (reduce) { tilt = 0; svg.style.rotate = ''; }
+      kick();
+    };
+    mug.addEventListener('pointerup', release);
+    mug.addEventListener('pointercancel', release);
+    mug.addEventListener('click', (e) => { if (e.detail === 0) sip(); }); // Return or Space
   })();
 
   // Spin's turntable. The record turns while you point at it, scratches when you drag it, and changes when you click.
@@ -2226,18 +2377,44 @@
     let grooves = ''; for (const r of [50, 44, 38, 32]) grooves += `<circle class="groove" cx="${cx}" cy="${cy}" r="${r}"/>`;
     deck.innerHTML = `<svg viewBox="0 0 180 150" aria-hidden="true">
       <rect class="plinth-lip" x="2" y="10" width="176" height="138" rx="22"/><rect class="plinth" x="2" y="4" width="176" height="138" rx="22"/>
-      <circle class="vinyl-lip" cx="${cx}" cy="${cy + 3}" r="58"/>
+      <g class="swap"><circle class="vinyl-lip" cx="${cx}" cy="${cy + 3}" r="58"/>
       <g class="disc"><circle class="vinyl" cx="${cx}" cy="${cy}" r="58"/>${grooves}
         <path class="shine" d="M${cx - 40} ${cy - 30} A50 50 0 0 1 ${cx - 12} ${cy - 48}"/>
         <circle class="label-lip" cx="${cx}" cy="${cy + 1.5}" r="19"/><circle class="label" cx="${cx}" cy="${cy}" r="19"/>
         <circle cx="${cx + 9}" cy="${cy - 6}" r="3" fill="rgba(255,255,255,0.55)"/></g>
-      <circle class="spindle" cx="${cx}" cy="${cy}" r="3.2"/>
+      <circle class="spindle" cx="${cx}" cy="${cy}" r="3.2"/></g>
       <g class="notes"></g>
       <g class="arm" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="7">
         <path class="arm-lip" d="M154 26 L154 70 Q154 96 118 106" transform="translate(0 3)"/><path class="arm-top" d="M154 26 L154 70 Q154 96 118 106"/>
         <circle class="pivot-lip" cx="154" cy="29" r="11" stroke="none"/><circle class="pivot" cx="154" cy="26" r="11" stroke="none"/>
       </g></svg>`;
-    const svg = deck.firstChild, disc = svg.querySelector('.disc'), label = svg.querySelector('.label'), notes = svg.querySelector('.notes');
+    const svg = deck.firstChild, disc = svg.querySelector('.disc'), label = svg.querySelector('.label'), notes = svg.querySelector('.notes'), swap = svg.querySelector('.swap');
+    const BEAT = 520; // ms, the plinth thumps along
+    let beatAt = 0, lastDir = 0, wkAt = 0, swapping = false;
+    const WIKKA = ['wikka', 'wub', 'zzik', 'wikki', 'ft-ft'];
+    function wikka() {
+      const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      t.setAttribute('class', 'wk'); t.setAttribute('x', (96 + Math.random() * 40).toFixed(0)); t.setAttribute('y', (30 + Math.random() * 40).toFixed(0));
+      t.textContent = WIKKA[Math.floor(Math.random() * WIKKA.length)]; notes.appendChild(t);
+      t.animate([{ transform: 'translateY(4px) scale(0.5)', opacity: 0 }, { transform: 'translateY(0) scale(1.1)', opacity: 1, offset: 0.25 }, { transform: 'translateY(-14px) scale(1)', opacity: 0 }],
+        { duration: 700, easing: 'ease-out' }).onfinish = () => t.remove();
+      t.style.transformBox = 'fill-box'; t.style.transformOrigin = 'center';
+    }
+    // Change records: the old one slides off the deck, the new one slides on.
+    function next() {
+      rec = (rec + 1) % RECORDS.length;
+      if (reduce) { setRec(); sayTo(cap, `Now playing ${RECORDS[rec][1]}`); return; }
+      if (swapping) return; swapping = true; deck.classList.add('swapping');
+      sayTo(cap, `Now playing ${RECORDS[rec][1]}`);
+      setTimeout(setRec, 300);
+      swap.animate([{ transform: 'translateX(0) rotate(0deg)' }, { transform: 'translateX(-150px) rotate(-90deg)', opacity: 1, offset: 0.46 }, { transform: 'translateX(-150px)', opacity: 0, offset: 0.47 },
+        { transform: 'translateY(-120px)', opacity: 0, offset: 0.48 }, { transform: 'translateY(-120px)', opacity: 1, offset: 0.5 }, { transform: 'translateY(0)' }],
+        { duration: 760, easing: 'cubic-bezier(.4,0,.3,1)' }).onfinish = () => {
+        swapping = false; deck.classList.remove('swapping');
+        label.animate([{ transform: 'scale(0.4)' }, { transform: 'scale(1)' }], { duration: 420, easing: 'cubic-bezier(.3,1.6,.5,1)' });
+      };
+      swap.style.transformBox = 'view-box'; swap.style.transformOrigin = `${cx}px ${cy}px`;
+    }
     const PLAY = 0.2; // degrees per millisecond, about 33 rpm
     let rot = 0, v = 0, target = 0, raf = 0, last = 0, drag = null, rec = 0, noteAt = 0, playing = false, inside = false;
     const setRec = () => { svg.style.setProperty('--c', RECORDS[rec][0]); };
@@ -2257,7 +2434,11 @@
       const dt = Math.min(32, now - last); last = now;
       if (!drag) v += (target - v) * (1 - Math.pow(target ? 0.996 : 0.9975, dt));
       rot += v * dt; disc.setAttribute('transform', `rotate(${rot.toFixed(2)} ${cx} ${cy})`);
-      if (playing && !drag && !reduce && now > noteAt) { note(); noteAt = now + 650 + Math.random() * 500; }
+      if (playing && !drag && !reduce && now > beatAt) {
+        beatAt = now + BEAT;
+        svg.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.03, 0.96)', offset: 0.25 }, { transform: 'scale(1)' }], { duration: 260, easing: 'ease-out' });
+        if (now > noteAt) { note(); noteAt = now + BEAT * (1 + Math.floor(Math.random() * 2)) - 40; }
+      }
       if (drag || playing || Math.abs(v) > 0.002) raf = requestAnimationFrame(loop); else raf = 0;
     }
     const kick = () => { if (!raf) { last = performance.now(); raf = requestAnimationFrame(loop); } };
@@ -2281,25 +2462,28 @@
       const a = angle(e), d = norm(a - drag.ang), now = performance.now(), dt = Math.max(1, now - drag.t);
       rot += d; drag.ang = a; drag.t = now; drag.moved += Math.abs(d); drag.v = drag.v * 0.6 + (d / dt) * 0.4;
       if (drag.moved > 20 && !drag.said) { drag.said = true; sayTo(cap, 'Scratching'); }
+      const dir = Math.sign(d); // each time the record changes direction, it says so
+      if (dir && dir !== lastDir && drag.moved > 10 && now > wkAt && !reduce) { wikka(); wkAt = now + 140; }
+      if (dir) lastDir = dir;
     });
     const release = () => {
       if (!drag) return;
       const { moved, v: fling } = drag; drag = null; deck.classList.remove('held');
-      if (moved < 4) { // a click: next record
-        rec = (rec + 1) % RECORDS.length; setRec();
-        if (!reduce) label.animate([{ transform: 'scale(0.4)' }, { transform: 'scale(1)' }], { duration: 420, easing: 'cubic-bezier(.3,1.6,.5,1)' });
-        sayTo(cap, `Now playing ${RECORDS[rec][1]}`);
-      } else {
+      let said = false;
+      if (moved < 4) { next(); said = true; } // a click: next record
+      else {
         v = Math.max(-2, Math.min(2, fling));
+        const rpm = Math.round(Math.abs(v) * 1000 * 60 / 360);
+        if (rpm > 45) { sayTo(cap, v < 0 ? `Backwards at ${rpm} rpm!` : `Whee, ${rpm} rpm!`); said = true; }
       }
       if (!inside) play(false);
       else if (!playing) play(true);
-      else sayTo(cap, `Now playing ${RECORDS[rec][1]}`);
+      else if (!said) sayTo(cap, `Now playing ${RECORDS[rec][1]}`);
       kick();
     };
     deck.addEventListener('pointerup', release);
     deck.addEventListener('pointercancel', release);
-    deck.addEventListener('click', (e) => { if (e.detail === 0) { rec = (rec + 1) % RECORDS.length; setRec(); sayTo(cap, `Now playing ${RECORDS[rec][1]}`); } });
+    deck.addEventListener('click', (e) => { if (e.detail === 0) next(); });
     setRec();
   })();
 
@@ -2318,60 +2502,196 @@
       { name: 'A swoop', f: (t, p) => ({ x: 160 * p * Math.sin(Math.PI * t), y: 70 * p * Math.sin(2 * Math.PI * t) - 40 * p * Math.sin(Math.PI * t) }) },
       { name: 'A big circle', f: (t, p) => ({ x: 75 * p * Math.sin(2 * Math.PI * t), y: -75 * p * (1 - Math.cos(2 * Math.PI * t)) }) },
     ];
-    let flights = 0, held = 0, flying = false, raf = 0;
+    let flights = 0, held = 0, flying = false, raf = 0, pull = null, at = null;
     const NOSE = 24; // the drawing points up and to the right; turn it to face along the path
-    const puff = (x, y) => {
+    const CX = 85, CY = 72, MAXPULL = 38;
+    trail.insertAdjacentHTML('beforeend', '<path class="band"/>');
+    const band = trail.querySelector('.band');
+    // Which way it faces: flying left, it's drawn mirrored so it never flies upside down.
+    const face = (deg, mirror) => mirror ? `rotate(${(deg + 180 - NOSE).toFixed(1)}deg) scaleX(-1)` : `rotate(${(deg + NOSE).toFixed(1)}deg)`;
+    const puff = (x, y, star) => {
       const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      c.setAttribute('cx', (x + 85).toFixed(1)); c.setAttribute('cy', (y + 72).toFixed(1)); c.setAttribute('r', '2.6');
-      c.style.transformOrigin = `${x + 85}px ${y + 72}px`;
+      c.setAttribute('cx', (x + CX).toFixed(1)); c.setAttribute('cy', (y + CY).toFixed(1)); c.setAttribute('r', star ? '3.4' : '2.6');
+      if (star) c.classList.add('star');
+      c.style.transformOrigin = `${x + CX}px ${y + CY}px`;
       trail.append(c); setTimeout(() => c.remove(), 900);
     };
-    function wind() {
+    const pose = () => {
+      const p = Math.max(Math.min(1, (performance.now() - held) / 900), pull ? Math.hypot(pull.x, pull.y) / MAXPULL : 0);
+      btn.style.setProperty('--p', p.toFixed(3));
+      if (pull && Math.hypot(pull.x, pull.y) > 6) {
+        const deg = (Math.atan2(-pull.y, -pull.x) * 180) / Math.PI;
+        plane.style.transform = `translate(${pull.x.toFixed(1)}px, ${pull.y.toFixed(1)}px) ${face(deg, pull.x > 0)}`;
+        band.setAttribute('d', `M${CX - 26} ${CY + 14} L${(CX + pull.x - (pull.x > 0 ? -6 : 6)).toFixed(1)} ${(CY + pull.y + 6).toFixed(1)} L${CX + 26} ${CY + 14}`);
+      } else {
+        plane.style.transform = `translateX(${-10 * p}px) rotate(${8 * p}deg)`;
+        band.setAttribute('d', `M${CX - 26} ${CY + 14} L${(CX - 10 * p - 6).toFixed(1)} ${CY + 6} L${CX + 26} ${CY + 14}`);
+      }
+      return p;
+    };
+    function wind(e) {
       if (flying) return;
       held = performance.now();
+      at = e && e.clientX != null ? { x: e.clientX, y: e.clientY } : null; pull = at ? { x: 0, y: 0 } : null;
       btn.classList.add('winding');
-      sayTo(cap, 'Winding up… let go to throw');
-      const grow = () => {
-        if (!held) return;
-        const p = Math.min(1, (performance.now() - held) / 900);
-        btn.style.setProperty('--p', p.toFixed(3));
-        plane.style.transform = `translateX(${-10 * p}px) rotate(${8 * p}deg)`;
-        raf = requestAnimationFrame(grow);
-      };
+      sayTo(cap, at ? 'Pull it back to aim…' : 'Winding up… let go to throw');
+      const grow = () => { if (!held) return; pose(); raf = requestAnimationFrame(grow); };
       grow();
     }
     function fly() {
       if (!held || flying) return;
-      const power = 0.55 + 0.45 * Math.min(1, (performance.now() - held) / 900);
-      held = 0; cancelAnimationFrame(raf);
+      const p = pose(), power = 0.55 + 0.45 * p;
+      const aimed = pull && Math.hypot(pull.x, pull.y) > 6;
+      const mirror = aimed && pull.x > 0;
+      // Pull down to throw it higher, up to keep it low.
+      const lift = aimed ? Math.max(0.55, Math.min(1.6, 1 + pull.y / MAXPULL * 0.6)) : 1;
+      held = 0; pull = null; cancelAnimationFrame(raf);
       btn.classList.remove('winding'); btn.style.setProperty('--p', 0);
       const trick = TRICKS[flights % TRICKS.length];
       flights++;
-      if (reduce) { plane.animate([{ transform: 'none' }, { transform: 'translateY(-12px) rotate(-10deg)' }, { transform: 'none' }], { duration: 500 }); sayTo(cap, `${trick.name}. Flight ${flights}`); return; }
+      if (reduce) { plane.style.transform = ''; plane.animate([{ transform: 'none' }, { transform: 'translateY(-12px) rotate(-10deg)' }, { transform: 'none' }], { duration: 500 }); sayTo(cap, `${trick.name}. Flight ${flights}`); return; }
       flying = true; plane.classList.add('flying');
-      sayTo(cap, `${trick.name}!`);
-      const dur = 1500 + 600 * power, t0 = performance.now();
-      let last = 0;
+      sayTo(cap, `${trick.name}${mirror ? ', leftward' : ''}${p > 0.95 ? ', full power' : ''}!`);
+      const dur = 1500 + 600 * power, t0 = performance.now(), sx = mirror ? -1 : 1;
+      const path = (t) => { const q = trick.f(t, power); return { x: q.x * sx, y: q.y * lift }; };
+      let last = 0, stars = 0;
       const step = (now) => {
         const t = Math.min(1, (now - t0) / dur), e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-        const a = trick.f(e, power), b = trick.f(Math.min(1, e + 0.01), power);
-        const ang = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI + NOSE;
-        plane.style.transform = `translate(${a.x.toFixed(1)}px, ${a.y.toFixed(1)}px) rotate(${t < 0.98 ? ang.toFixed(1) : 0}deg)`;
-        if (now - last > 45 && t < 0.97) { last = now; puff(a.x, a.y); }
+        const a = path(e), b = path(Math.min(1, e + 0.01));
+        const deg = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+        plane.style.transform = `translate(${a.x.toFixed(1)}px, ${a.y.toFixed(1)}px) ${t < 0.98 ? face(deg, mirror) : ''}`;
+        if (now - last > 45 && t < 0.97) { last = now; puff(a.x, a.y, ++stars % 5 === 0); }
         if (t < 1) raf = requestAnimationFrame(step);
         else {
           flying = false; plane.classList.remove('flying'); plane.style.transform = '';
-          plane.animate([{ transform: 'translateY(-6px) scale(1.08, 0.92)' }, { transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.3,1.6,.5,1)' });
-          sayTo(cap, flights === 1 ? 'Landed. Again?' : `Landed. ${flights} flights so far`);
+          plane.animate([{ transform: 'translateY(-6px) scale(1.08, 0.92)' }, { transform: 'translateY(1px) scale(0.96, 1.05)' }, { transform: 'none' }], { duration: 520, easing: 'cubic-bezier(.3,1.6,.5,1)' });
+          sayTo(cap, flights === 1 ? 'Landed. Pull it back to aim' : `Landed. ${flights} flights so far`);
         }
       };
       raf = requestAnimationFrame(step);
     }
-    btn.addEventListener('pointerdown', (e) => { if (e.button !== 0) return; try { btn.setPointerCapture(e.pointerId); } catch {} wind(); });
+    const reset = () => { held = 0; pull = null; cancelAnimationFrame(raf); btn.classList.remove('winding'); btn.style.setProperty('--p', 0); plane.style.transform = ''; };
+    btn.addEventListener('pointerdown', (e) => { if (e.button !== 0) return; try { btn.setPointerCapture(e.pointerId); } catch {} wind(e); });
+    btn.addEventListener('pointermove', (e) => {
+      if (!held || !pull || !at) return;
+      let x = e.clientX - at.x, y = e.clientY - at.y; const d = Math.hypot(x, y);
+      if (d > MAXPULL) { x *= MAXPULL / d; y *= MAXPULL / d; }
+      const side = d > 8 ? (x > 0 ? 'left' : 'right') : '';
+      if (side && side !== pull.side) sayTo(cap, `Aiming ${side}… let go`);
+      pull = { x, y, side: side || pull.side };
+    });
     btn.addEventListener('pointerup', fly);
-    btn.addEventListener('pointercancel', () => { held = 0; cancelAnimationFrame(raf); btn.classList.remove('winding'); btn.style.setProperty('--p', 0); plane.style.transform = ''; });
+    btn.addEventListener('pointercancel', reset);
     btn.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); wind(); } });
     btn.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); fly(); } });
+  })();
+
+  // Tweak's crop. Drag a corner to crop (it stretches past the edge and snaps back), drag inside to slide the crop or fling it, click to turn.
+  (function () {
+    const toy = document.querySelector('.toy-crop'); if (!toy) return;
+    const btn = toy.querySelector('.crop-toy'), frame = btn.querySelector('.frame'), cap = toy.querySelector('.toy-cap'), marks = [...btn.querySelectorAll('.cut svg')];
+    const W = 140, H = 100, MIN = 26, K = 4032 / W; // the picture is a 4032 × 2880 photo
+    const CORNERS = [['l', 't'], ['r', 't'], ['l', 'b'], ['r', 'b']]; // same order as the marks
+    let c = { l: 16, t: 12, r: 124, b: 88 }, ang = 0, drag = null, raf = 0, turns = 0;
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const rubber = (v, lo, hi) => v < lo ? lo - (lo - v) * 0.3 : v > hi ? hi + (v - hi) * 0.3 : v;
+    const px = (n) => Math.round(n * K).toLocaleString('en-US');
+    const size = (b) => `${px(b.r - b.l)} × ${px(b.b - b.t)}`;
+    const show = (b) => { for (const [k, v] of [['--l', b.l], ['--t', b.t], ['--w', b.r - b.l], ['--h', b.b - b.t]]) frame.style.setProperty(k, `${v.toFixed(1)}px`); };
+    const sideways = () => (ang / 90) % 2 === 1;
+    const scale = () => (sideways() ? 0.9 : 1);
+    // Pointer moves on screen, turned back into the picture's own (unturned) frame.
+    const local = (dx, dy) => { const r = (-ang * Math.PI) / 180, s = scale(); return { x: (dx * Math.cos(r) - dy * Math.sin(r)) / s, y: (dx * Math.sin(r) + dy * Math.cos(r)) / s }; };
+    const toPhoto = (e) => { const b = btn.getBoundingClientRect(), p = local(e.clientX - (b.left + b.width / 2), e.clientY - (b.top + b.height / 2)); return { x: p.x + W / 2, y: p.y + H / 2 }; };
+    const hit = (p) => {
+      let which = -1, best = 18;
+      CORNERS.forEach(([kx, ky], i) => { const d = Math.hypot(p.x - c[kx], p.y - c[ky]); if (d < best) { best = d; which = i; } });
+      if (which >= 0) return { mode: 'corner', which };
+      return p.x > c.l && p.x < c.r && p.y > c.t && p.y < c.b ? { mode: 'move', which } : { mode: null, which };
+    };
+    function fit(raw, mode, which, rub) {
+      const f = rub ? rubber : clamp, b = { ...c };
+      if (mode === 'corner') {
+        const [kx, ky] = CORNERS[which];
+        b[kx] = kx === 'l' ? f(raw.l, 0, c.r - MIN) : f(raw.r, c.l + MIN, W);
+        b[ky] = ky === 't' ? f(raw.t, 0, c.b - MIN) : f(raw.b, c.t + MIN, H);
+      } else {
+        const w = c.r - c.l, h = c.b - c.t;
+        b.l = f(raw.l, 0, W - w); b.r = b.l + w; b.t = f(raw.t, 0, H - h); b.b = b.t + h;
+      }
+      return b;
+    }
+    // While dragging, the caption updates in place instead of popping in every frame.
+    const live = (text) => { if (cap.dataset.live) cap.firstChild.textContent = text; else { sayTo(cap, text); cap.dataset.live = '1'; } };
+    const say = (text) => { delete cap.dataset.live; sayTo(cap, text); };
+    const boing = () => { if (!reduce) marks.forEach((m) => m.animate([{ scale: '1.5' }, { scale: '1' }], { duration: 320, easing: 'cubic-bezier(.3,1.6,.5,1)' })); };
+    function turn() {
+      ang += 90; turns++;
+      frame.style.setProperty('--a', `${ang}deg`); frame.style.setProperty('--s', scale());
+      say(turns % 4 === 0 ? 'All the way around' : `Turned to ${ang % 360}°`);
+    }
+    function glide(vx, vy) {
+      btn.classList.add('glide');
+      const w = c.r - c.l, h = c.b - c.t; let last = performance.now(), bumps = 0;
+      const step = (now) => {
+        const dt = Math.min(32, now - last); last = now;
+        let l = c.l + vx * dt, t = c.t + vy * dt;
+        if (l < 0 || l > W - w) { l = l < 0 ? -l : 2 * (W - w) - l; vx = -vx * 0.7; bumps++; boing(); }
+        if (t < 0 || t > H - h) { t = t < 0 ? -t : 2 * (H - h) - t; vy = -vy * 0.7; bumps++; boing(); }
+        l = clamp(l, 0, W - w); t = clamp(t, 0, H - h);
+        c = { l, t, r: l + w, b: t + h }; show(c);
+        const k = Math.pow(0.994, dt); vx *= k; vy *= k;
+        if (Math.hypot(vx, vy) > 0.015) raf = requestAnimationFrame(step);
+        else { raf = 0; btn.classList.remove('glide'); say(bumps ? `Boing${bumps > 1 ? ` ×${bumps}` : ''}! Landed at ${size(c)}` : `Slid the crop`); }
+      };
+      say('Wheee…'); raf = requestAnimationFrame(step);
+    }
+    btn.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      if (raf) { cancelAnimationFrame(raf); raf = 0; btn.classList.remove('glide'); } // catch a sliding crop
+      try { btn.setPointerCapture(e.pointerId); } catch {}
+      const h = hit(toPhoto(e));
+      drag = { ...h, x: e.clientX, y: e.clientY, t: performance.now(), raw: { ...c }, moved: 0, vx: 0, vy: 0 };
+      if (h.which >= 0) marks[h.which].classList.add('grab');
+    });
+    btn.addEventListener('pointermove', (e) => {
+      if (!drag) { // show what a drag here would do
+        const h = hit(toPhoto(e)), diag = (h.which === 0 || h.which === 3) !== sideways();
+        btn.style.cursor = h.mode === 'corner' ? (diag ? 'nwse-resize' : 'nesw-resize') : h.mode === 'move' ? 'grab' : 'pointer';
+        return;
+      }
+      const now = performance.now(), d = local(e.clientX - drag.x, e.clientY - drag.y), dt = Math.max(1, now - drag.t);
+      drag.x = e.clientX; drag.y = e.clientY; drag.t = now; drag.moved += Math.hypot(d.x, d.y);
+      const raw = drag.raw;
+      if (drag.mode === 'corner') { const [kx, ky] = CORNERS[drag.which]; raw[kx] += d.x; raw[ky] += d.y; }
+      else { raw.l += d.x; raw.t += d.y; drag.vx = drag.vx * 0.5 + (d.x / dt) * 0.5; drag.vy = drag.vy * 0.5 + (d.y / dt) * 0.5; }
+      if (drag.moved < 3 || !drag.mode) return;
+      btn.classList.add('held'); if (drag.mode === 'move') btn.style.cursor = 'grabbing';
+      const b = fit(raw, drag.mode, drag.which, true); show(b);
+      live(drag.mode === 'corner' ? `Cropping ${size(b)}` : 'Moving the crop');
+    });
+    const release = () => {
+      if (!drag) return;
+      const { mode, which, moved, raw } = drag; let { vx, vy } = drag;
+      if (performance.now() - drag.t > 80) vx = vy = 0; // held still before letting go: no fling
+      drag = null; marks.forEach((m) => m.classList.remove('grab')); btn.classList.remove('held');
+      if (moved < 3) { turn(); return; }
+      if (!mode) return;
+      c = fit(raw, mode, which, false);
+      const sp = Math.hypot(vx, vy);
+      if (mode === 'move' && sp > 0.2 && !reduce) { const k = Math.min(1, 1.4 / sp); glide(vx * k, vy * k); return; }
+      show(c); // springs back inside the picture
+      say(mode === 'corner' ? `Cropped to ${size(c)}` : 'Moved the crop');
+    };
+    btn.addEventListener('pointerup', release);
+    btn.addEventListener('pointercancel', release);
+    btn.addEventListener('click', (e) => { if (e.detail === 0) turn(); }); // Return or Space
+    btn.addEventListener('keydown', (e) => { // arrow keys slide the crop
+      const m = { ArrowLeft: [-8, 0], ArrowRight: [8, 0], ArrowUp: [0, -8], ArrowDown: [0, 8] }[e.key]; if (!m) return;
+      e.preventDefault();
+      c = fit({ ...c, l: c.l + m[0], t: c.t + m[1] }, 'move', -1, false); show(c); say('Moved the crop');
+    });
+    show(c);
   })();
 
 </script>

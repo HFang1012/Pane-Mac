@@ -829,19 +829,19 @@
 
     <div class="rows">
       <div class="row rise" style="--d:300ms">
-        <div><h3>Pencil color</h3><p>Color of new lines.</p></div>
+        <div><h3>Pencil color</h3></div>
         <div class="swatches" id="swatches" role="radiogroup" aria-label="Pencil color"></div>
       </div>
       <div class="row rise" style="--d:340ms">
-        <div><h3>Pencil size</h3><p>Thickness of new lines.</p></div>
+        <div><h3>Pencil size</h3></div>
         <div class="stepper" data-key="pencilSize" data-values="2,3,4,6,8,12,16" data-unit=" px"></div>
       </div>
       <div class="row rise" style="--d:380ms">
-        <div><h3>Eraser size</h3><p>How wide it erases.</p></div>
+        <div><h3>Eraser size</h3></div>
         <div class="stepper" data-key="eraserSize" data-values="12,20,28,40,56,80" data-unit=" px"></div>
       </div>
       <div class="row rise" style="--d:420ms">
-        <div><h3>Wheel size</h3><p>How big the wheel opens.</p></div>
+        <div><h3>Wheel size</h3></div>
         <div class="stepper" data-key="wheelSize" data-values="60,76,96" data-labels="Small,Medium,Large"></div>
       </div>
     </div>
@@ -914,7 +914,6 @@
     <div class="head solo">
       <div>
         <h2>Away screen</h2>
-        <p>What people see while you’re gone.</p>
       </div>
     </div>
     <div class="screen-wrap">
@@ -936,22 +935,22 @@
 
     <div class="rows">
       <div class="row stack rise" style="--d:300ms">
-        <div><h3>Message <button class="reset" id="resetMsg">Use the default</button></h3><p>Shown on every screen.</p></div>
+        <div><h3>Message <button class="reset" id="resetMsg">Use the default</button></h3></div>
         <div class="field">
           <textarea id="message" rows="2" maxlength="120" spellcheck="true" aria-label="Away message"></textarea>
           <span class="count" id="msgCount"></span>
         </div>
       </div>
       <div class="row rise" style="--d:340ms">
-        <div><h3>Colors</h3><p>The soft glow behind the blur.</p></div>
+        <div><h3>Colors</h3></div>
         <div class="swatches" id="moods" role="radiogroup" aria-label="Away colors"></div>
       </div>
       <div class="row rise" style="--d:380ms">
-        <div><h3>Show when I left</h3><p>Adds “Away since 3:42 PM”.</p></div>
+        <div><h3>Show when I left</h3></div>
         <button class="switch" id="showTime" role="switch" aria-checked="true" aria-label="Show when I left"></button>
       </div>
       <div class="row rise" style="--d:420ms">
-        <div><h3>Hide the pointer</h3><p>Hides the mouse while you’re away.</p></div>
+        <div><h3>Hide the pointer</h3></div>
         <button class="switch" id="hidePointer" role="switch" aria-checked="true" aria-label="Hide the pointer"></button>
       </div>
     </div>
@@ -1015,7 +1014,6 @@
     <div class="head">
       <div>
         <h2>Music app</h2>
-        <p>The one Spin plays, skips and turns up.</p>
       </div>
       <div class="preview spin-preview" id="spinPreview"></div>
     </div>
@@ -1037,14 +1035,14 @@
       </div>
       <div class="row stack spin-row rise" style="--d:330ms" id="playlistRow" hidden>
         <div class="pl-head">
-          <div><h3>Playlists</h3><p>Click one to start it from the top.</p></div>
+          <div><h3>Playlists</h3></div>
           <button class="mini" id="plRefresh">Refresh</button>
         </div>
         <div class="pl-list" id="plList" role="list" aria-label="Playlists"></div>
         <p class="pl-note" id="plNote" aria-live="polite"></p>
       </div>
       <div class="row stack spin-row rise" style="--d:340ms" id="spotifyRow">
-        <div id="spotifyAbout"><h3>Spotify queue</h3><p>Spotify keeps its queue to itself. Link your account once to see it, and your playlists, on the wheel. Play, skip and volume work without this.</p></div>
+        <div id="spotifyAbout"><h3>Spotify queue</h3></div>
         <div class="linked" id="spotifyLinked" hidden><span><span class="dot"></span><span id="spotifyName">Spotify linked</span></span><button class="mini" id="spotifyUnlink">Unlink</button></div>
         <p class="pl-note" id="spotifyRelink" hidden>Link again (Unlink, then Link Spotify) so songs and playlists start without bringing Spotify’s window forward.</p>
         <div class="link" id="spotifyLink">
@@ -1128,7 +1126,6 @@
     <div class="head solo">
       <div>
         <h2>Notes</h2>
-        <p>Write one, send it off, get it back later.</p>
       </div>
     </div>
     <div class="screen-wrap">
@@ -1150,11 +1147,11 @@
 
     <div class="rows">
       <div class="row rise" style="--d:300ms">
-        <div><h3>Snooze for</h3><p>How long Snooze puts a note off.</p></div>
+        <div><h3>Snooze for</h3></div>
         <div class="stepper" data-key="jot.snooze" data-values="5,10,15,30,60" data-unit=" min"></div>
       </div>
       <div class="row rise" style="--d:340ms">
-        <div><h3>Play a sound</h3><p>A soft chime when a note comes back.</p></div>
+        <div><h3>Play a sound</h3></div>
         <button class="switch" id="jotSound" role="switch" aria-checked="true" aria-label="Play a sound"></button>
       </div>
       <div class="row stack rise" style="--d:380ms">
@@ -1228,7 +1225,6 @@
     <div class="head solo">
       <div>
         <h2>Files</h2>
-        <p>Point, click, edit, save.</p>
       </div>
     </div>
     <div class="screen-wrap">
@@ -1248,19 +1244,19 @@
 
     <div class="rows">
       <div class="row stack rise" style="--d:300ms">
-        <div><h3>What it edits</h3><p>Pictures: crop, turn, resize, adjust. Video: trim, crop, mute, pull out the sound, save a frame. Sound: trim and turn down. Text: find and replace, tidy, convert.</p></div>
+        <div><h3>What it edits</h3></div>
         <div class="tkinds"><span>PNG</span><span>JPEG</span><span>HEIC</span><span>WebP</span><span>MP4</span><span>MOV</span><span>MP3</span><span>WAV</span><span>TXT</span><span>Markdown</span><span>JSON</span><span>CSV</span><span>Word</span></div>
       </div>
       <div class="row rise" style="--d:340ms">
-        <div><h3>Keep the original</h3><p>Start the editor on “Save a copy” instead of replacing the file.</p></div>
+        <div><h3>Keep the original</h3></div>
         <button class="switch" id="tweakCopy" role="switch" aria-checked="false" aria-label="Keep the original"></button>
       </div>
       <div class="row rise" style="--d:380ms">
-        <div><h3>Old versions go to the Trash</h3><p>Off deletes the replaced file for good.</p></div>
+        <div><h3>Old versions go to the Trash</h3></div>
         <button class="switch" id="tweakTrash" role="switch" aria-checked="true" aria-label="Old versions go to the Trash"></button>
       </div>
       <div class="row rise" style="--d:420ms">
-        <div><h3>Open a file</h3><p>Pick one without pointing at it.</p></div>
+        <div><h3>Open a file</h3></div>
         <button class="mini" id="tweakChoose">Choose…</button>
       </div>
     </div>

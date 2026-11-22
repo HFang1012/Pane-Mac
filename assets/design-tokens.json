@@ -1,0 +1,447 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "Pane design tokens (W3C DTCG format). A snapshot of the design language already in the app, taken from base.css, settings.html, jot.html, edit.html, away.html, overlay.html, target.html, grow.html, tools.js, wheel.js and overlay.js as of v1.5.4. This file is documentation only: nothing in the app reads it. When the CSS changes, update this file to match.",
+
+  "meta": {
+    "app": { "$type": "string", "$value": "Pane" },
+    "version": { "$type": "string", "$value": "1.5.4" },
+    "principles": {
+      "$type": "string",
+      "$value": "1) Chunky, tactile surfaces: a flat fill over a solid lip of a darker shade of the same hue, never an outline or border. 2) One accent per tool: each tool has a paper/ink/accent/secondary set, and the role names stay the same across themes. 3) Springy motion: hover lifts a control by 1–2px and grows its lip; press pushes it down 2–5px and shrinks the lip to 1px. 4) Rounded type: ui-rounded at weights 600–800, never 400. 5) Shape personality per tool: Jot is rounder, Tweak is squarer."
+    }
+  },
+
+  "color": {
+    "$description": "Semantic color roles. Each role is a CSS custom property set in base.css, and the theme values below fill it.",
+    "role": {
+      "paper":       { "$type": "string", "$value": "--paper",       "$description": "Window background." },
+      "paper-deep":  { "$type": "string", "$value": "--paper-deep",  "$description": "Hover fill for sunken controls (wells, tiles, keywells)." },
+      "card":        { "$type": "string", "$value": "--card",        "$description": "Raised surfaces: cards, sheets, buttons, notes." },
+      "card-lip":    { "$type": "string", "$value": "--card-lip",    "$description": "The solid lip under a card-colored surface." },
+      "well":        { "$type": "string", "$value": "--well",        "$description": "Sunken surfaces: inputs, steppers, tiles at rest, chips." },
+      "edge":        { "$type": "string", "$value": "--edge",        "$description": "Quiet structure: disabled glyphs, dashed dividers, wheel slice edges, idle dots." },
+      "ink":         { "$type": "string", "$value": "--ink",         "$description": "Primary text and glyphs." },
+      "ink-2":       { "$type": "string", "$value": "--ink-2",       "$description": "Secondary text, captions, labels, icons at rest." },
+      "accent":      { "$type": "string", "$value": "--accent",      "$description": "The tool's one accent: primary buttons, selected rings, hot wheel slices, toggled switches." },
+      "accent-lip":  { "$type": "string", "$value": "--accent-lip",  "$description": "Lip under accent surfaces; also check badges, progress fill, active dots." },
+      "accent-soft": { "$type": "string", "$value": "--accent-soft", "$description": "Tinted backgrounds: focus ring, tip icons, open switcher, pressed demo keys." },
+      "accent-ink":  { "$type": "string", "$value": "--accent-ink",  "$description": "Accent dark enough for text: warnings, reset links, time chips, errors." },
+      "peach":       { "$type": "string", "$value": "--peach",       "$description": "Secondary glyph color (named after Away's apricot; it's sky, mint, etc. in other themes). Volume fill, Jot textarea focus." },
+      "peach-lip":   { "$type": "string", "$value": "--peach-lip",   "$description": "Lip under the secondary color; caret, breathing dot." }
+    },
+
+    "theme": {
+      "scrawl": {
+        "$description": "Default theme. Cool sketch paper, graphite, eraser pink, sky.",
+        "paper":       { "$type": "color", "$value": "#E3E8EF" },
+        "paper-deep":  { "$type": "color", "$value": "#D3DAE4" },
+        "card":        { "$type": "color", "$value": "#F8FAFC" },
+        "card-lip":    { "$type": "color", "$value": "#DCE2EA" },
+        "well":        { "$type": "color", "$value": "#EBEFF4" },
+        "edge":        { "$type": "color", "$value": "#C6CFDB" },
+        "ink":         { "$type": "color", "$value": "#262B36" },
+        "ink-2":       { "$type": "color", "$value": "#646D80" },
+        "accent":      { "$type": "color", "$value": "#F49CB0", "$description": "Eraser pink" },
+        "accent-lip":  { "$type": "color", "$value": "#D96F8A" },
+        "accent-soft": { "$type": "color", "$value": "#FBE3E9" },
+        "accent-ink":  { "$type": "color", "$value": "#B54563" },
+        "peach":       { "$type": "color", "$value": "#A9C1EC", "$description": "Sky" },
+        "peach-lip":   { "$type": "color", "$value": "#7F9BD1" },
+        "ink-lip":     { "$type": "color", "$value": "#0F1218", "$description": "Lip under ink-colored surfaces (tooltips, glyph shadows)." }
+      },
+      "away": {
+        "$description": "Warm oat paper, plum graphite, lilac with apricot.",
+        "paper":       { "$type": "color", "$value": "#ECE6DD" },
+        "paper-deep":  { "$type": "color", "$value": "#DFD7CB" },
+        "card":        { "$type": "color", "$value": "#FBF8F3" },
+        "card-lip":    { "$type": "color", "$value": "#E4DBCE" },
+        "well":        { "$type": "color", "$value": "#F2EDE5" },
+        "edge":        { "$type": "color", "$value": "#D3C9BB" },
+        "ink":         { "$type": "color", "$value": "#2B2733" },
+        "ink-2":       { "$type": "color", "$value": "#6F6777" },
+        "accent":      { "$type": "color", "$value": "#B9A5F4", "$description": "Lilac" },
+        "accent-lip":  { "$type": "color", "$value": "#8E76DC" },
+        "accent-soft": { "$type": "color", "$value": "#E8E0FC" },
+        "accent-ink":  { "$type": "color", "$value": "#6A50C4" },
+        "peach":       { "$type": "color", "$value": "#FFC593", "$description": "Apricot" },
+        "peach-lip":   { "$type": "color", "$value": "#E39C60" },
+        "ink-lip":     { "$type": "color", "$value": "#16131C" }
+      },
+      "spin": {
+        "$description": "Sage record-sleeve paper, green-black vinyl, a mustard label with mint.",
+        "paper":       { "$type": "color", "$value": "#E4ECE3" },
+        "paper-deep":  { "$type": "color", "$value": "#D3DFD2" },
+        "card":        { "$type": "color", "$value": "#F8FBF6" },
+        "card-lip":    { "$type": "color", "$value": "#D8E3D6" },
+        "well":        { "$type": "color", "$value": "#ECF2EA" },
+        "edge":        { "$type": "color", "$value": "#C3D2C1" },
+        "ink":         { "$type": "color", "$value": "#1E2B27" },
+        "ink-2":       { "$type": "color", "$value": "#5C6E67" },
+        "accent":      { "$type": "color", "$value": "#FFC94D", "$description": "Mustard" },
+        "accent-lip":  { "$type": "color", "$value": "#DDA21F" },
+        "accent-soft": { "$type": "color", "$value": "#FFF0C4" },
+        "accent-ink":  { "$type": "color", "$value": "#8F6400" },
+        "peach":       { "$type": "color", "$value": "#7ED3A8", "$description": "Mint" },
+        "peach-lip":   { "$type": "color", "$value": "#4DB283" },
+        "ink-lip":     { "$type": "color", "$value": "#0B1210" },
+        "vinyl":       { "$type": "color", "$value": "#18221F", "$description": "Record body (wheel beads, now-playing disc)." },
+        "vinyl-lip":   { "$type": "color", "$value": "#0B1210" },
+        "groove":      { "$type": "color", "$value": "rgba(255, 255, 255, 0.14)" },
+        "disc-rim":    { "$type": "color", "$value": "rgba(11, 18, 16, 0.35)" }
+      },
+      "jot": {
+        "$description": "Airmail. Pale aqua paper, deep teal ink, a coral stamp with sky blue. Rounder than the rest.",
+        "paper":       { "$type": "color", "$value": "#DFEDF0" },
+        "paper-deep":  { "$type": "color", "$value": "#CBE0E5" },
+        "card":        { "$type": "color", "$value": "#F7FBFC" },
+        "card-lip":    { "$type": "color", "$value": "#D2E3E7" },
+        "well":        { "$type": "color", "$value": "#E8F2F4" },
+        "edge":        { "$type": "color", "$value": "#BCD3D9" },
+        "ink":         { "$type": "color", "$value": "#17303A" },
+        "ink-2":       { "$type": "color", "$value": "#587079" },
+        "accent":      { "$type": "color", "$value": "#FF9B7A", "$description": "Coral stamp" },
+        "accent-lip":  { "$type": "color", "$value": "#E26F4E" },
+        "accent-soft": { "$type": "color", "$value": "#FFE4DA" },
+        "accent-ink":  { "$type": "color", "$value": "#B4472A" },
+        "peach":       { "$type": "color", "$value": "#9FD4EE", "$description": "Sky" },
+        "peach-lip":   { "$type": "color", "$value": "#68AFD3" },
+        "ink-lip":     { "$type": "color", "$value": "#0A1A20" }
+      },
+      "tweak": {
+        "$description": "A workbench. Periwinkle paper, indigo ink, chartreuse crop marks with cobalt. Squarer than the rest.",
+        "paper":       { "$type": "color", "$value": "#E4E5F3" },
+        "paper-deep":  { "$type": "color", "$value": "#D3D5EA" },
+        "card":        { "$type": "color", "$value": "#FAFAFE" },
+        "card-lip":    { "$type": "color", "$value": "#D9DBEE" },
+        "well":        { "$type": "color", "$value": "#ECEDF7" },
+        "edge":        { "$type": "color", "$value": "#C4C7E0" },
+        "ink":         { "$type": "color", "$value": "#1B1D3A" },
+        "ink-2":       { "$type": "color", "$value": "#5F6386" },
+        "accent":      { "$type": "color", "$value": "#CDEB5A", "$description": "Chartreuse" },
+        "accent-lip":  { "$type": "color", "$value": "#9CBD27" },
+        "accent-soft": { "$type": "color", "$value": "#EEF8C9" },
+        "accent-ink":  { "$type": "color", "$value": "#5A7600" },
+        "peach":       { "$type": "color", "$value": "#8192FF", "$description": "Cobalt" },
+        "peach-lip":   { "$type": "color", "$value": "#5567E3" },
+        "ink-lip":     { "$type": "color", "$value": "#0C0D1F" },
+        "editor": {
+          "$description": "Tweak's editor window (edit.html): the file lies on an indigo cutting mat.",
+          "mat":          { "$type": "color", "$value": "#262950" },
+          "mat-2":        { "$type": "color", "$value": "#2E3260" },
+          "mat-line":     { "$type": "color", "$value": "rgba(255, 255, 255, 0.055)" },
+          "mat-line-2":   { "$type": "color", "$value": "rgba(255, 255, 255, 0.1)" },
+          "act":          { "$type": "color", "$value": "#CDEB5A", "$description": "Everything that acts or marks: crop box, trim brackets, Save, sliders." },
+          "act-lip":      { "$type": "color", "$value": "#9CBD27" },
+          "act-soft":     { "$type": "color", "$value": "#EEF8C9" },
+          "act-ink":      { "$type": "color", "$value": "#4E6800" },
+          "on-mat-text":  { "$type": "color", "$value": "#ECEDFB" },
+          "on-mat-muted": { "$type": "color", "$value": "#A6A9CF" },
+          "crop-scrim":   { "$type": "color", "$value": "rgba(18, 19, 42, 0.62)" },
+          "checker":      { "$type": "color", "$value": "#E6E7F2", "$description": "Transparency checkerboard squares, 8px on white." },
+          "close-hover":  { "$type": "color", "$value": "#F7D3DC" },
+          "close-hover-ink": { "$type": "color", "$value": "#8A2343" },
+          "close-hover-lip": { "$type": "color", "$value": "#E3A5B5" }
+        }
+      }
+    },
+
+    "status": {
+      "ready":   { "$type": "color", "$value": "#2FA36B", "$description": "Listening/ready dot with its ping ring; linked-account dot." },
+      "warning": { "$type": "string", "$value": "{color.role.accent-ink}", "$description": "Warnings and errors use the theme's accent-ink, not red." }
+    },
+
+    "pencil": {
+      "$description": "Scrawl's drawing colors (wheel.js COLORS), each with its lip. Shown on the wheel's color arc and the settings swatches.",
+      "red":      { "$type": "color", "$value": "#E5484D", "lip": "#B8343A" },
+      "orange":   { "$type": "color", "$value": "#F5A524", "lip": "#C9811A" },
+      "green":    { "$type": "color", "$value": "#2FA36B", "lip": "#217A50" },
+      "blue":     { "$type": "color", "$value": "#3A7BEA", "lip": "#2A5DB8" },
+      "violet":   { "$type": "color", "$value": "#8E5BE8", "lip": "#6B41B8" },
+      "graphite": { "$type": "color", "$value": "#262B36", "lip": "#0F1218" },
+      "white":    { "$type": "color", "$value": "#FFFFFF", "lip": "#C6CFDB" }
+    },
+
+    "mood": {
+      "$description": "Away's blurred backdrop blobs (tools.js MOODS). Three radial blobs drift behind the note.",
+      "dusk":  { "$type": "color", "$value": ["#B9A5F4", "#FFB38A", "#F3A6CB"] },
+      "sea":   { "$type": "color", "$value": ["#7CC4E8", "#8EE0C6", "#A3A9F6"] },
+      "grove": { "$type": "color", "$value": ["#A6D98C", "#F2DC86", "#7ACFB6"] },
+      "ember": { "$type": "color", "$value": ["#FF9C78", "#FFD07A", "#F28CA6"] },
+      "mist":  { "$type": "color", "$value": ["#CFC6DE", "#E8DECF", "#B9C6D2"] }
+    },
+
+    "overlay": {
+      "$description": "The drawing overlay and its cursor (overlay.html).",
+      "cursor-ring":    { "$type": "color", "$value": "#262B36", "$description": "1.5px ring with a 1.5px light halo inside and out, so it reads on any background." },
+      "cursor-halo":    { "$type": "color", "$value": "rgba(248, 250, 252, 0.9)" },
+      "cursor-down":    { "$type": "color", "$value": "rgba(244, 156, 176, 0.2)", "$description": "Ring fill while drawing." },
+      "away-tint":      { "$type": "color", "$value": "radial-gradient(120% 90% at 50% 45%, rgba(43,39,51,0.16), rgba(43,39,51,0.38))" },
+      "tweak-target-tint": { "$type": "color", "$value": "rgba(27, 29, 58, 0.045)" },
+      "scrim":          { "$type": "color", "$value": "color-mix(in srgb, var(--ink) 30%, transparent)", "$description": "Behind modal sheets (demo, update)." }
+    }
+  },
+
+  "typography": {
+    "fontFamily": {
+      "ui":   { "$type": "fontFamily", "$value": ["ui-rounded", "SF Pro Rounded", "system-ui", "sans-serif"], "$description": "--font. Used everywhere." },
+      "mono": { "$type": "fontFamily", "$value": ["ui-monospace", "SF Mono", "Menlo", "monospace"], "$description": "IDs, code snippets, Spotify ID input." }
+    },
+    "fontWeight": {
+      "medium":    { "$type": "fontWeight", "$value": 500, "$description": "Ledes, captions, card descriptions." },
+      "semibold":  { "$type": "fontWeight", "$value": 600, "$description": "Row titles, labels, list items." },
+      "bold":      { "$type": "fontWeight", "$value": 700, "$description": "Headings h1/h2, keycaps, chips." },
+      "extrabold": { "$type": "fontWeight", "$value": 800, "$description": "Buttons, sheet titles, tags, now-playing, Away message." }
+    },
+    "fontSize": {
+      "$description": "The sizes that are actually used, smallest to largest.",
+      "3xs":  { "$type": "dimension", "$value": "9px",    "$description": "Keycap side labels (uppercase)." },
+      "2xs":  { "$type": "dimension", "$value": "10px",   "$description": "Tiny tags inside notes." },
+      "xs-":  { "$type": "dimension", "$value": "10.5px", "$description": "Half-tile names, slice names." },
+      "xs":   { "$type": "dimension", "$value": "11px",   "$description": "Menu titles, tips tag, time chips, counters." },
+      "xs+":  { "$type": "dimension", "$value": "11.5px", "$description": "Tile names, editor chips, Jot hints." },
+      "sm":   { "$type": "dimension", "$value": "12px",   "$description": "Captions, descriptions, pills, tips." },
+      "sm+":  { "$type": "dimension", "$value": "12.5px", "$description": "List rows, update notes." },
+      "md-":  { "$type": "dimension", "$value": "13px",   "$description": "Secondary buttons, editor body, stepper value." },
+      "md":   { "$type": "dimension", "$value": "14px",   "$description": "Body (settings/Jot), row titles." },
+      "md+":  { "$type": "dimension", "$value": "15px",   "$description": "Power button, wave title, Away 'since' chip." },
+      "lg":   { "$type": "dimension", "$value": "16px",   "$description": "Card h2, Jot textarea, demo step." },
+      "lg+":  { "$type": "dimension", "$value": "17px",   "$description": "Brand wordmark." },
+      "xl":   { "$type": "dimension", "$value": "18px",   "$description": "Sheet titles, word keycaps." },
+      "2xl":  { "$type": "dimension", "$value": "21px",   "$description": "Demo keycaps." },
+      "3xl":  { "$type": "dimension", "$value": "26px",   "$description": "Page h1, keycap glyphs." },
+      "4xl":  { "$type": "dimension", "$value": "34px",   "$description": "Away's screen message." }
+    },
+    "lineHeight": {
+      "tight":   { "$type": "number", "$value": 1.12, "$description": "h1" },
+      "snug":    { "$type": "number", "$value": 1.2,  "$description": "Sheet titles, Away message (1.18)." },
+      "normal":  { "$type": "number", "$value": 1.4,  "$description": "Body default." },
+      "relaxed": { "$type": "number", "$value": 1.5,  "$description": "Callout text, ledes (1.45)." }
+    },
+    "letterSpacing": {
+      "tight":   { "$type": "dimension", "$value": "-0.01em",  "$description": "h1, tile names." },
+      "tighter": { "$type": "dimension", "$value": "-0.015em", "$description": "Away message." },
+      "caps":    { "$type": "dimension", "$value": "0.06em",   "$description": "Uppercase menu titles and keycap side labels." },
+      "caps-sm": { "$type": "dimension", "$value": "0.04em",   "$description": "Uppercase version tags in update notes." }
+    },
+    "style": {
+      "h1":        { "$type": "typography", "$value": { "fontFamily": "{typography.fontFamily.ui}", "fontSize": "26px", "fontWeight": 700, "lineHeight": 1.12, "letterSpacing": "-0.01em" } },
+      "h2-card":   { "$type": "typography", "$value": { "fontFamily": "{typography.fontFamily.ui}", "fontSize": "16px", "fontWeight": 700 } },
+      "h2-sheet":  { "$type": "typography", "$value": { "fontFamily": "{typography.fontFamily.ui}", "fontSize": "18px", "fontWeight": 800, "lineHeight": 1.2 } },
+      "h3-row":    { "$type": "typography", "$value": { "fontFamily": "{typography.fontFamily.ui}", "fontSize": "14px", "fontWeight": 600 } },
+      "body":      { "$type": "typography", "$value": { "fontFamily": "{typography.fontFamily.ui}", "fontSize": "14px", "fontWeight": 500, "lineHeight": 1.4 } },
+      "lede":      { "$type": "typography", "$value": { "fontFamily": "{typography.fontFamily.ui}", "fontSize": "14px", "fontWeight": 500, "lineHeight": 1.45, "color": "{color.role.ink-2}" } },
+      "caption":   { "$type": "typography", "$value": { "fontFamily": "{typography.fontFamily.ui}", "fontSize": "12px", "fontWeight": 500, "color": "{color.role.ink-2}" } },
+      "button":    { "$type": "typography", "$value": { "fontFamily": "{typography.fontFamily.ui}", "fontSize": "13px", "fontWeight": 800 } },
+      "eyebrow":   { "$type": "typography", "$value": { "fontFamily": "{typography.fontFamily.ui}", "fontSize": "11px", "fontWeight": 800, "letterSpacing": "0.06em", "textTransform": "uppercase", "color": "{color.role.ink-2}" } },
+      "numeric":   { "$type": "typography", "$value": { "fontFamily": "{typography.fontFamily.ui}", "fontWeight": 700, "fontVariantNumeric": "tabular-nums" }, "$description": "Steppers, counters, timers, crop dimensions, hex readouts." },
+      "away-message": { "$type": "typography", "$value": { "fontFamily": "{typography.fontFamily.ui}", "fontSize": "34px", "fontWeight": 800, "lineHeight": 1.18, "letterSpacing": "-0.015em" } }
+    },
+    "rendering": { "$type": "string", "$value": "-webkit-font-smoothing: antialiased; user-select: none (text inputs re-enable it)" }
+  },
+
+  "space": {
+    "$description": "Spacing in px. There's no strict scale; these are the gaps and paddings that come up again and again.",
+    "2":  { "$type": "dimension", "$value": "2px" },
+    "3":  { "$type": "dimension", "$value": "3px",  "$description": "Stepper/pill track inset." },
+    "4":  { "$type": "dimension", "$value": "4px",  "$description": "Segmented control inset." },
+    "6":  { "$type": "dimension", "$value": "6px",  "$description": "Tile row gap, dot gap." },
+    "8":  { "$type": "dimension", "$value": "8px",  "$description": "Small gaps, menu padding." },
+    "10": { "$type": "dimension", "$value": "10px", "$description": "Icon-to-label gap, keys gap." },
+    "12": { "$type": "dimension", "$value": "12px", "$description": "Swatch gap, section top margin." },
+    "14": { "$type": "dimension", "$value": "14px", "$description": "Row column gap, keyrow gap." },
+    "16": { "$type": "dimension", "$value": "16px", "$description": "Callout padding, block spacing." },
+    "18": { "$type": "dimension", "$value": "18px", "$description": "Card vertical padding, power row margin." },
+    "20": { "$type": "dimension", "$value": "20px", "$description": "Card horizontal padding." },
+    "22": { "$type": "dimension", "$value": "22px", "$description": "Sheet horizontal padding." },
+    "30": { "$type": "dimension", "$value": "30px", "$description": "Column gap between the settings window's two columns." },
+    "38": { "$type": "dimension", "$value": "38px", "$description": "Settings window side padding." },
+    "48": { "$type": "dimension", "$value": "48px", "$description": "Settings window top padding (clears the tool switcher)." }
+  },
+
+  "layout": {
+    "settings-window": {
+      "width":        { "$type": "dimension", "$value": "900px" },
+      "columns":      { "$type": "string",    "$value": "340px 452px" },
+      "column-gap":   { "$type": "dimension", "$value": "30px" },
+      "padding":      { "$type": "string",    "$value": "48px 38px 20px" },
+      "edge-grip":    { "$type": "dimension", "$value": "8px", "$description": "Invisible resize strips at the top and bottom edges." }
+    },
+    "sheet-width": {
+      "demo":   { "$type": "dimension", "$value": "600px" },
+      "update": { "$type": "dimension", "$value": "440px" },
+      "switch-menu": { "$type": "dimension", "$value": "286px" },
+      "tips":   { "$type": "dimension", "$value": "340px" }
+    },
+    "editor-window": { "$type": "string", "$value": "grid rows: 52px toolbar / 1fr mat / auto timeline" }
+  },
+
+  "radius": {
+    "$description": "Corner radii. Shapes get rounder as they get bigger. Pills are always height ÷ 2 or 999px.",
+    "xs":    { "$type": "dimension", "$value": "6px",  "$description": "kbd, inline code." },
+    "sm":    { "$type": "dimension", "$value": "8px",  "$description": "Version chip, small editor buttons, Away preview windows (9px)." },
+    "md":    { "$type": "dimension", "$value": "12px", "$description": "Inputs (ID field), focus ring, play button." },
+    "keycap":{ "$type": "dimension", "$value": "14px", "$description": "Keycaps (13px in the demo), tool-menu glyph tiles." },
+    "lg":    { "$type": "dimension", "$value": "16px", "$description": "Textareas, tool-menu items, note previews." },
+    "tile":  { "$type": "dimension", "$value": "18px", "$description": "Feature tiles, now-playing row, update notes well." },
+    "xl":    { "$type": "dimension", "$value": "20px", "$description": "Callout, preview screens, demo stage." },
+    "2xl":   { "$type": "dimension", "$value": "22px", "$description": "Keywells, switch menu, color loupe." },
+    "card-tips": { "$type": "dimension", "$value": "24px", "$description": "Tips card." },
+    "card":  { "$type": "dimension", "$value": "28px", "$description": "Main settings card." },
+    "sheet": { "$type": "dimension", "$value": "30px", "$description": "Modal sheets, Jot note." },
+    "away-note": { "$type": "dimension", "$value": "34px", "$description": "Away's lock-screen note." },
+    "pill":  { "$type": "dimension", "$value": "999px" },
+    "circle":{ "$type": "string",    "$value": "50%" },
+    "theme-override": {
+      "$description": "Tool personality. Applied with [data-theme] selectors in settings.html.",
+      "jot":   { "card": "36px", "tips": "30px", "callout": "26px", "tip-icon": "15px", "try-button": "999px" },
+      "tweak": { "card": "22px", "tips": "20px", "callout": "18px", "keywell": "16px", "keycap": "12px" }
+    }
+  },
+
+  "elevation": {
+    "$description": "The 'lip' system: box-shadow: 0 <lip> 0 <lip-color>. No blur. Use card-lip under card surfaces and accent-lip under accent surfaces. Overlays and floating sheets add one soft blurred shadow on top of the lip.",
+    "lip": {
+      "1":  { "$type": "dimension", "$value": "1px", "$description": "The pressed (:active) state of any lipped control." },
+      "2":  { "$type": "dimension", "$value": "2px", "$description": "Small chips, a selected swatch (pressed in), switch thumb." },
+      "3":  { "$type": "dimension", "$value": "3px", "$description": "Mini buttons, tool switcher, swatch at rest, segmented thumb." },
+      "4":  { "$type": "dimension", "$value": "4px", "$description": "Pill/primary buttons, power button, note previews." },
+      "5":  { "$type": "dimension", "$value": "5px", "$description": "Callout, tips, selected tile, preview screens." },
+      "6":  { "$type": "dimension", "$value": "6px", "$description": "Keycaps (accent lip), switch menu." },
+      "7":  { "$type": "dimension", "$value": "7px", "$description": "Main card, Jot note." },
+      "8":  { "$type": "dimension", "$value": "8px", "$description": "Modal sheets." },
+      "9":  { "$type": "dimension", "$value": "9px", "$description": "Away's full-screen note." },
+      "12": { "$type": "dimension", "$value": "12px", "$description": "A tile being dragged." }
+    },
+    "interaction": {
+      "$description": "How the lip changes as a control is used.",
+      "hover":  { "$type": "string", "$value": "translateY(-1px…-2px); lip +1…2px" },
+      "active": { "$type": "string", "$value": "translateY(+2px…+5px); lip → 1px (accent controls use accent-lip at 1px)" },
+      "selected-tile": { "$type": "shadow", "$value": "0 5px 0 var(--card-lip), inset 0 0 0 3px var(--accent)" },
+      "selected-list-item": { "$type": "shadow", "$value": "inset 0 0 0 2.5px var(--accent)" }
+    },
+    "float": {
+      "menu":      { "$type": "shadow", "$value": "0 6px 0 var(--card-lip), 0 22px 44px rgba(43, 39, 51, 0.18)" },
+      "sheet":     { "$type": "shadow", "$value": "0 8px 0 var(--card-lip), 0 30px 70px rgba(20, 18, 28, 0.25)" },
+      "away-note": { "$type": "shadow", "$value": "0 9px 0 var(--card-lip), 0 30px 80px rgba(22, 19, 28, 0.28)" },
+      "jot-note":  { "$type": "shadow", "$value": "0 7px 0 var(--card-lip), 0 22px 40px -12px rgba(10, 26, 32, 0.34), 0 0 0 1px rgba(23, 48, 58, 0.05)" },
+      "dragging":  { "$type": "shadow", "$value": "0 12px 0 var(--card-lip), 0 18px 30px rgba(43, 39, 51, 0.16)" },
+      "wheel":     { "$type": "shadow", "$value": "drop-shadow(0 8px 18px rgba(38, 43, 54, 0.2))", "$description": "A filter, not a box-shadow, so it follows the wheel's SVG shape." },
+      "tooltip":   { "$type": "shadow", "$value": "0 4px 0 var(--ink-lip), 0 12px 24px rgba(38, 43, 54, 0.25)", "$description": "Dark ink tooltips and hints." },
+      "editor-frame": { "$type": "shadow", "$value": "0 18px 40px -16px rgba(5, 6, 20, 0.7)" }
+    },
+    "focus-ring": { "$type": "shadow", "$value": "0 0 0 3px var(--accent-soft)", "$description": "Shown on :focus-visible only, and added on top of any lip. Inputs show focus as inset 0 0 0 3px var(--accent) on a card fill instead." },
+    "zIndex": {
+      "grip":       { "$type": "number", "$value": 50 },
+      "update":     { "$type": "number", "$value": 40 },
+      "demo":       { "$type": "number", "$value": 30 },
+      "switcher":   { "$type": "number", "$value": 10 },
+      "upd-corner": { "$type": "number", "$value": 9 }
+    }
+  },
+
+  "motion": {
+    "easing": {
+      "bouncy": { "$type": "cubicBezier", "$value": "linear(0, 0.055, 0.192, 0.373, 0.565, 0.745, 0.898, 1.016, 1.098, 1.144, 1.162, 1.158, 1.138, 1.11, 1.079, 1.049, 1.023, 1.002, 0.987, 0.978, 0.974, 0.974, 0.976, 0.981, 0.986, 0.991, 0.995, 0.999, 1)", "$description": "--bouncy. A damped spring at ζ 0.5 that overshoots by about 16%. Used for transforms: press, pop, scale, rotate." },
+      "smooth": { "$type": "cubicBezier", "$value": "linear(0, 0.067, 0.217, 0.391, 0.558, 0.7, 0.811, 0.893, 0.95, 0.985, 1.006, 1.016, 1.02, 1.019, 1.016, 1.013, 1.01, 1.007, 1.004, 1.003, 1.001, 1, 1)", "$description": "--smooth. A damped spring at ζ 0.78 that overshoots by about 2%. Used for reveals, collapses, layout." },
+      "exit":   { "$type": "cubicBezier", "$value": [0.5, 0, 0.9, 0.4], "$description": "Accelerating exit for the wheel shrinking back into the cursor." },
+      "fade":   { "$type": "cubicBezier", "$value": "ease", "$description": "Color, opacity and background changes." }
+    },
+    "duration": {
+      "instant":  { "$type": "duration", "$value": "120ms", "$description": "Opacity in/out, hub icon fade." },
+      "color":    { "$type": "duration", "$value": "140ms", "$description": "Fill and background color changes on hover." },
+      "fast":     { "$type": "duration", "$value": "160ms", "$description": "Hover backgrounds, the wheel closing (170ms)." },
+      "press":    { "$type": "duration", "$value": "180ms", "$description": "Pill/mini button press and lift." },
+      "button":   { "$type": "duration", "$value": "200ms", "$description": "Power and switcher buttons, sheet scrim fade." },
+      "spring":   { "$type": "duration", "$value": "300ms", "$description": "Default bouncy transform for tiles, swatches, icons." },
+      "wheel-in": { "$type": "duration", "$value": "380ms", "$description": "Wheel springing out of the cursor." },
+      "toggle":   { "$type": "duration", "$value": "420ms", "$description": "Switch thumb, swatch ring, collapse." },
+      "sheet":    { "$type": "duration", "$value": "460ms", "$description": "Modal sheet rising in." },
+      "rise":     { "$type": "duration", "$value": "560ms", "$description": "Page entrance (smooth)." },
+      "pop":      { "$type": "duration", "$value": "620ms", "$description": "Page entrance (bouncy)." },
+      "theme":    { "$type": "duration", "$value": "320ms", "$description": "Background and ink crossfade when switching tools." },
+      "record":   { "$type": "duration", "$value": "3.6s",  "$description": "One turn of a playing record." }
+    },
+    "stagger": {
+      "wheel-slice": { "$type": "duration", "$value": "28ms", "$description": "calc(var(--i) * 28ms)" },
+      "color-dot":   { "$type": "duration", "$value": "22ms" },
+      "spin-bead":   { "$type": "duration", "$value": "24ms" },
+      "menu-item":   { "$type": "duration", "$value": "40ms", "$description": "Plus a 40ms base delay." }
+    },
+    "pattern": {
+      "rise":   { "$type": "string", "$value": "from { opacity: 0; translateY(14px) } — 560ms smooth" },
+      "pop":    { "$type": "string", "$value": "from { opacity: 0; translateY(10px) scale(0.5) } — 620ms bouncy" },
+      "sheet-in": { "$type": "string", "$value": "translateY(18px) scale(0.92) → none — 460ms bouncy; scrim fades in over 200ms" },
+      "wheel-in": { "$type": "string", "$value": "scale(0.35) rotate(-40deg) → none — 380ms bouncy" },
+      "wheel-out": { "$type": "string", "$value": "→ scale(0.4) rotate(18deg) opacity 0 — 170ms exit" },
+      "hot-slice": { "$type": "string", "$value": "face translateY(var(--press)); fill accent; lip accent-lip; icon scale(1.18)" },
+      "nope":   { "$type": "string", "$value": "Horizontal shake -5/5/-3/2px over 360ms for a refused action." },
+      "close-x": { "$type": "string", "$value": "Close buttons rotate 90° on hover." },
+      "ping":   { "$type": "string", "$value": "Status ring scale 0.5→1.5, fading out, every 2.4s." }
+    },
+    "reducedMotion": { "$type": "string", "$value": "prefers-reduced-motion: wheel animations and transitions shrink to 1ms; spinning records stop." }
+  },
+
+  "opacity": {
+    "disabled":      { "$type": "number", "$value": 0.6 },
+    "tool-off":      { "$type": "number", "$value": 0.6, "$description": "When a tool is turned off its controls step back: opacity 0.6 plus saturate(0.5)." },
+    "glyph-idle":    { "$type": "number", "$value": 0.45, "$description": "Unselected tile glyphs, also desaturated with saturate(0)." },
+    "placeholder":   { "$type": "number", "$value": 0.7 },
+    "hub-dim":       { "$type": "number", "$value": 0.32 }
+  },
+
+  "size": {
+    "$description": "Control sizes in px.",
+    "control": {
+      "mini":       { "$type": "dimension", "$value": "28px" },
+      "pill":       { "$type": "dimension", "$value": "30px", "$description": "Pill, try, switcher, segmented items." },
+      "demo-btn":   { "$type": "dimension", "$value": "32px" },
+      "sheet-btn":  { "$type": "dimension", "$value": "34px", "$description": "Buttons in sheet footers, ID input." },
+      "power":      { "$type": "dimension", "$value": "42px" },
+      "keycap":     { "$type": "dimension", "$value": "48px", "$description": "min-width 52px" },
+      "keywell":    { "$type": "dimension", "$value": "78px" },
+      "tile":       { "$type": "dimension", "$value": "84px", "$description": "72px for app tiles, 58px for slice tiles." }
+    },
+    "switch": {
+      "default": { "$type": "string", "$value": "46×26, 18px thumb, 4px inset, 20px travel" },
+      "small":   { "$type": "string", "$value": "36×21, 15px thumb, 3px inset, 15px travel" }
+    },
+    "swatch":  { "$type": "dimension", "$value": "22px", "$description": "Selection ring 35px, 2.5px ink stroke." },
+    "status-dot": { "$type": "dimension", "$value": "10px" },
+    "check-badge": { "$type": "dimension", "$value": "20px", "$description": "accent-lip circle, top-right offset -5px, springs in from scale 0." },
+    "close":   { "$type": "dimension", "$value": "32px", "$description": "26px in Jot, 24px in list rows." },
+    "icon":    { "$type": "string", "$value": "16px inline / 24px menu glyph / stroke 2.2, round caps and joins" }
+  },
+
+  "component": {
+    "$description": "How the main components are put together, written in terms of the tokens above.",
+    "card":       { "$type": "string", "$value": "fill card · radius card (28) · lip 7 card-lip · padding 18/20" },
+    "callout":    { "$type": "string", "$value": "fill card · radius xl (20) · lip 5 card-lip · padding 16" },
+    "tips":       { "$type": "string", "$value": "fill card · radius 24 · lip 5 · icon 30px accent-soft on accent-lip with a 2px accent lip" },
+    "button-primary": { "$type": "string", "$value": "fill accent · ink text · radius pill · lip 4 accent-lip · weight 700–800 · 12–13px" },
+    "button-secondary": { "$type": "string", "$value": "fill card · lip 3–4 card-lip (or an accent lip for featured actions like 'Show me how')" },
+    "button-tertiary": { "$type": "string", "$value": "fill well · lip 4 edge (the update sheet's 'Later')" },
+    "text-link":  { "$type": "string", "$value": "12px 700 · accent-ink or ink-2 · underline on hover with 2px offset" },
+    "keycap":     { "$type": "string", "$value": "fill card · radius 14 · lip 6 accent · 26px 700 glyph; pressed = translateY(5px) with a 1px accent-lip" },
+    "tile":       { "$type": "string", "$value": "rest: well, no lip, glyph 45% desaturated · on: card, lip 5 card-lip, inset 3px accent ring, check badge · drag: scale 1.07, rotate -3deg, lip 12" },
+    "input":      { "$type": "string", "$value": "fill well · radius 16 (12 for single-line) · hover paper-deep · focus card plus inset 3px accent" },
+    "stepper":    { "$type": "string", "$value": "well pill track with 3px inset · 28×24 buttons that turn card on hover and scale(0.8) on press · tabular value" },
+    "segmented":  { "$type": "string", "$value": "well pill track with 4px inset · sliding card thumb with a 3px accent lip · 440ms bouncy translate" },
+    "switch":     { "$type": "string", "$value": "track well → accent when on · card thumb with 2px lip · thumb widens on press" },
+    "chip":       { "$type": "string", "$value": "well or accent-soft background · radius pill · 10–11px 700–800 · ink-2 or accent-ink" },
+    "sheet":      { "$type": "string", "$value": "scrim ink at 30% · card · radius 30 · float.sheet · enters with sheet-in" },
+    "wheel":      { "$type": "string", "$value": "SVG slices: top card / edge edge → hot: accent / accent-lip, pressed by --press · hub works like a button · drop-shadow filter" },
+    "tooltip-dark": { "$type": "string", "$value": "fill ink · text #ECEDFB · lip 4 ink-lip · radius 14–16" }
+  },
+
+  "brand": {
+    "$description": "Tool glyph palettes (tools.js). Each glyph is drawn in the tool's ink, accent and secondary colors, each with a lip.",
+    "tools": {
+      "scrawl": { "$type": "string", "$value": "Draw on your screen.",                "bg": "#E3E8EF" },
+      "away":   { "$type": "string", "$value": "Blur your screen while you’re away.",  "bg": "#ECE6DD" },
+      "spin":   { "$type": "string", "$value": "Run your music from a wheel.",         "bg": "#E4ECE3" },
+      "jot":    { "$type": "string", "$value": "Quick notes that remind you later.",   "bg": "#DFEDF0" },
+      "tweak":  { "$type": "string", "$value": "Point at a file and edit it.",         "bg": "#E4E5F3" }
+    },
+    "voice": { "$type": "string", "$value": "Plain, short, friendly sentence case: 'Show me how', 'Good to know', 'Coming up'. No jargon, and no exclamation marks in the UI." }
+  }
+}

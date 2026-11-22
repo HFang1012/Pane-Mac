@@ -749,16 +749,21 @@
   .who-pic img { display: block; width: 100%; height: 100%; border-radius: 24px; object-fit: cover; }
   .who-pic::after { content: ""; position: absolute; left: 12px; top: 10px; width: 18px; height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.7); rotate: -32deg; }
   .who.open .who-pic { opacity: 1; scale: 1; rotate: -5deg; transition: opacity 160ms ease 80ms, scale 700ms var(--bouncy) 80ms, rotate 700ms var(--bouncy) 80ms; }
-  .who.woke .who-pic { animation: hop 560ms var(--bouncy); }
-  @keyframes hop { 30% { translate: 0 -8px; rotate: 4deg; } }
+  .who-pic { z-index: 2; } /* sits above the text when it blasts out */
+  /* Waking up throws shooting stars: a rounded streak with a soft star riding its head. */
+  .who-streak, .who-twinkle { position: absolute; z-index: 3; left: 0; top: 0; pointer-events: none; will-change: transform, opacity; }
+  .who-streak { height: 7px; border-radius: 999px; transform-origin: 0 50%; background: linear-gradient(90deg, transparent, var(--c) 85%); }
+  .who-twinkle { width: 16px; height: 16px; overflow: visible; }
 
   .who-info > * { opacity: 0; translate: 0 8px; transition: opacity 120ms ease, translate 160ms ease; }
   .who.open .who-info > * { opacity: 1; translate: 0 0; transition: opacity 220ms ease var(--w), translate 520ms var(--bouncy) var(--w); }
-  .who-title { display: block; color: var(--blue-ink); font-size: 22px; font-weight: 800; line-height: 1.15; letter-spacing: -0.01em; padding-right: 48px; margin-bottom: 4px; --w: 120ms; }
+  .who-title { display: block; color: #F7C531; text-shadow: 1px 2px 0 rgba(90, 108, 196, 0.6), 0 4px 10px rgba(90, 108, 196, 0.25); font-size: 22px; font-weight: 800; line-height: 1.15; letter-spacing: -0.01em; padding-right: 48px; margin-bottom: 4px; --w: 120ms; }
   .who-row { display: grid; grid-template-columns: 80px auto; align-items: center; font-size: 14px; font-weight: 700; margin-top: 6px; }
   .who-row:nth-child(2) { --w: 170ms; }
   .who-row:nth-child(3) { --w: 220ms; }
   .who-k { justify-self: start; font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--blue-ink); background: var(--blue-soft); padding: 1px 7px; border-radius: 999px; }
+  .who-k.discord { color: #4A55C8; background: #E2E5FE; } /* a light take on Discord's blurple */
+  .who-k.email { color: #9A6A00; background: var(--yellow-soft); }
   .who-v { justify-self: start; font-weight: 700; text-decoration: underline 2px transparent; text-underline-offset: 3px; transition: text-decoration-color 140ms ease, color 140ms ease; }
   .who-v:hover { text-decoration-color: var(--yellow); }
   .who-info { min-width: 0; }
@@ -840,8 +845,8 @@
       <span class="who-pic"><img src="hucklberi.webp" alt="hucklberi’s profile picture" width="84" height="84"></span>
       <span class="who-info">
         <strong class="who-title">hucklberi</strong>
-        <span class="who-row"><span class="who-k">Discord</span><button class="who-v who-copy" type="button" data-copy="basicallyahucklberi" title="Copy username">basicallyahucklberi</button></span>
-        <span class="who-row"><span class="who-k">Email</span><a class="who-v" href="mailto:hfanggamedev@gmail.com">hfanggamedev@gmail.com</a></span>
+        <span class="who-row"><span class="who-k discord">Discord</span><button class="who-v who-copy" type="button" data-copy="basicallyahucklberi" title="Copy username">basicallyahucklberi</button></span>
+        <span class="who-row"><span class="who-k email">Email</span><a class="who-v" href="mailto:hfanggamedev@gmail.com">hfanggamedev@gmail.com</a></span>
       </span>
       <button class="nap" type="button" aria-label="Wake it up" aria-pressed="false">
         <span class="z z1" aria-hidden="true">z</span><span class="z z2" aria-hidden="true">z</span><span class="z z3" aria-hidden="true">z</span>
@@ -1160,12 +1165,84 @@
     document.addEventListener('pointerdown', e => { if (!who.contains(e.target)) close(); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && who.classList.contains('open')) { close(); name.focus(); } });
 
-    nap.addEventListener('click', () => {
-      const awake = nap.classList.toggle('awake');
+    // The star only stays up for 3 seconds, then dozes back off into z's.
+    let napTimer = 0;
+    const setAwake = awake => {
+      clearTimeout(napTimer);
+      nap.classList.toggle('awake', awake);
       nap.setAttribute('aria-pressed', String(awake));
       nap.setAttribute('aria-label', awake ? 'Let it sleep' : 'Wake it up');
       who.classList.toggle('woke', awake);
-    });
+      if (awake) {
+        if (!reduce) blast();
+        napTimer = setTimeout(() => setAwake(false), 3000);
+      }
+    };
+    nap.addEventListener('click', () => setAwake(!nap.classList.contains('awake')));
+
+    // Waking up: the picture bursts out of its frame, shakes, and settles back, throwing confetti.
+    const pic = who.querySelector('.who-pic');
+    const card = who.querySelector('.who-card');
+    const streakColors = [['#FFD45C', '#E9A93A'], ['#7C8FE0', '#5A6CC4'], ['#FFC94D', '#E9A93A'], ['#B9C4F5', '#7C8FE0']];
+    const starPath = 'M20 5 L24.1 14.3 L34.3 15.4 L26.7 22.2 L28.8 32.1 L20 27 L11.2 32.1 L13.3 22.2 L5.7 15.4 L15.9 14.3 Z';
+    function blast() {
+      pic.animate([
+        { scale: 1, rotate: '-5deg', translate: '0 0', offset: 0 },
+        { scale: 0.86, rotate: '-5deg', translate: '0 3px', offset: 0.08 },   // a little wind-up squash
+        { scale: 1.42, rotate: '7deg', translate: '0 -12px', offset: 0.2 },    // BLAST
+        { scale: 1.36, rotate: '-9deg', translate: '-3px -11px', offset: 0.28 },
+        { scale: 1.36, rotate: '8deg', translate: '3px -11px', offset: 0.36 },
+        { scale: 1.32, rotate: '-7deg', translate: '-2px -10px', offset: 0.44 },
+        { scale: 1.28, rotate: '5deg', translate: '2px -9px', offset: 0.52 },
+        { scale: 1.2, rotate: '-3deg', translate: '0 -6px', offset: 0.62 },
+        { scale: 0.94, rotate: '-6deg', translate: '0 2px', offset: 0.8 },     // drops back into place
+        { scale: 1.03, rotate: '-4.5deg', translate: '0 -1px', offset: 0.9 },
+        { scale: 1, rotate: '-5deg', translate: '0 0', offset: 1 },
+      ], { duration: 1100, easing: 'ease-out' });
+
+      // shooting stars, thrown from the picture's middle (offsetLeft/Top ignore transforms, so the card's own bounce doesn't skew them)
+      const cx = pic.offsetLeft + pic.offsetWidth / 2, cy = pic.offsetTop + pic.offsetHeight / 2;
+      const count = 12;
+      for (let i = 0; i < count; i++) {
+        const [fill, edge] = streakColors[i % streakColors.length];
+        const angle = (i / count) * 360 + (Math.random() - 0.5) * 18;
+        const len = 40 + Math.random() * 24;               // streak length at full stretch
+        const reach = 92 + Math.random() * 44;            // where the star ends up
+        const start = 30;                                 // start just outside the frame
+        const timing = { duration: 900 + Math.random() * 300, delay: 150 + Math.random() * 90, fill: 'backwards' }; // eased per keyframe below
+        const burst = 'cubic-bezier(.2,.9,.35,1)', drift = 'cubic-bezier(.45,0,.55,1)';
+        const along = (x, extra = '') => `translate(${cx}px, ${cy}px) rotate(${angle}deg) translateX(${x}px)${extra}`;
+
+        // the streak stretches out, then its tail catches up with its head
+        const streak = document.createElement('span');
+        streak.className = 'who-streak';
+        streak.style.width = len + 'px';
+        streak.style.setProperty('--c', fill);
+        streak.style.marginTop = '-3.5px';
+        card.append(streak);
+        streak.animate([
+          { transform: along(start, ' scaleX(0.05)'), opacity: 0.9, easing: burst },
+          { transform: along(start + 18, ' scaleX(1)'), opacity: 1, offset: 0.4, easing: drift },
+          { transform: along(reach - 6, ' scaleX(0.05)'), opacity: 0 },
+        ], timing).finished.then(() => streak.remove(), () => streak.remove());
+
+        // a soft, rounded star rides the head of every streak, spinning as it goes
+        const star = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        star.setAttribute('viewBox', '0 0 40 40');
+        star.classList.add('who-twinkle');
+        const size = 16 + Math.random() * 8;
+        star.style.width = star.style.height = size + 'px';
+        star.style.margin = `${-size / 2}px 0 0 ${-size / 2}px`;
+        star.innerHTML = `<path d="${starPath}" fill="${fill}" stroke="${edge}" stroke-width="4" stroke-linejoin="round"/>`;
+        card.append(star);
+        const spin = (Math.random() < 0.5 ? -1 : 1) * (200 + Math.random() * 160);
+        star.animate([
+          { transform: along(start + len * 0.05, ` rotate(${-angle}deg) scale(0.3)`), opacity: 1, easing: burst },
+          { transform: along(start + 18 + len, ` rotate(${-angle + spin * 0.6}deg) scale(1.1)`), opacity: 1, offset: 0.4, easing: drift },
+          { transform: along(reach, ` rotate(${-angle + spin}deg) scale(0.4)`), opacity: 0 },
+        ], timing).finished.then(() => star.remove(), () => star.remove());
+      }
+    }
 
     copy.addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(copy.dataset.copy); } catch { return; }

@@ -222,12 +222,13 @@ async function settle(src, tmp, p, { trash, trashItem }) {
   if (p.inPlace) {
     if (trash) {
       const keep = path.join(await fsp.mkdtemp(path.join(os.tmpdir(), 'pane-tweak-old-')), path.basename(src));
-      await fsp.copyFile(src, keep);
+      await fsp.copyFile(src, keep, fs.constants.COPYFILE_FICLONE); // a clone on APFS: instant, whatever the size
       await trashItem(keep); // it shows in the Trash under the file's own name
       fsp.rm(path.dirname(keep), { recursive: true, force: true }).catch(() => {});
     }
     // 'w' empties the same file and writes into it; it doesn't make a new one.
-    await pipeline(fs.createReadStream(tmp), fs.createWriteStream(src, { flags: 'w' }));
+    const chunk = 8 * 1024 * 1024; // big pieces: a large video writes back several times faster than in 64 KB ones
+    await pipeline(fs.createReadStream(tmp, { highWaterMark: chunk }), fs.createWriteStream(src, { flags: 'w', highWaterMark: chunk }));
     await fsp.rm(tmp, { force: true });
   } else {
     await fsp.rename(tmp, p.dest);

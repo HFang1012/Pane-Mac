@@ -302,6 +302,25 @@ func media(_ json: String) {
   // Smaller video: written frame by frame at a bit rate Pane picks (the export presets choose their own,
   // which barely shrinks anything).
   let fileType: AVFileType = audioOut ? .m4a : (o.format == "mov" ? .mov : o.format == "m4v" ? .m4v : .mp4)
+
+  // Nothing to redraw (only trimmed, or moved to another of the same kinds of file): copy the frames and
+  // sound as they are instead of encoding them again. For a big video that's seconds instead of minutes.
+  let cropped = (o.crop?.count ?? 0) == 4 && (o.crop![2] > 4 && o.crop![3] > 4)
+  let untouched = !cropped && ((o.rotate ?? 0) % 360 + 360) % 360 == 0 && o.flipH != true && o.flipV != true &&
+    (o.volume ?? 1) >= 0.999 && (o.size ?? "full") == "full"
+  if untouched && ["mp4", "mov", "m4v", "m4a"].contains(o.format) {
+    if let v = srcVideo { compVideo?.preferredTransform = v.preferredTransform } // a phone video stays upright
+    if let ex = AVAssetExportSession(asset: comp, presetName: AVAssetExportPresetPassthrough), ex.supportedFileTypes.contains(fileType) {
+      ex.outputURL = outURL
+      ex.outputFileType = fileType
+      let done = DispatchSemaphore(value: 0)
+      ex.exportAsynchronously { done.signal() }
+      while done.wait(timeout: .now() + 0.25) == .timedOut { emit(["progress": Double(ex.progress)]) }
+      if ex.status == .completed { emit(["ok": true]); return }
+      try? FileManager.default.removeItem(at: outURL) // couldn't copy as is: encode it the usual way below
+      compVideo?.preferredTransform = .identity // the encoders below apply the turn themselves
+    }
+  }
   if !audioOut, let vc = videoComp, o.size == "smaller" || o.size == "smallest" {
     squeezeVideo(comp, vc, mix, smallest: o.size == "smallest", fileType: fileType, out: outURL)
     return

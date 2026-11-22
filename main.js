@@ -1737,6 +1737,17 @@ ipcMain.handle('tweak:rename', async (e, job) => {
     return { ok: true, path: dest, name: path.basename(dest) };
   } catch (err) { return { error: err.message || 'Couldn’t rename it.' }; }
 });
+// "Save a copy" with nothing inside changed: a plain copy, not a rebuilt file. On APFS it's a clone, so even
+// a huge video copies at once (and takes no extra space until one of them changes).
+ipcMain.handle('tweak:copy', async (e, job) => {
+  const w = editorFor(e);
+  if (!w || !job || typeof job.ext !== 'string' || !TweakFiles.ENDING.test(job.ext)) return { error: 'Nothing to copy.' };
+  try {
+    const { dest } = TweakFiles.plan(w.filePath, { stem: job.stem, ext: job.ext, copy: true });
+    await fs.promises.copyFile(w.filePath, dest, fs.constants.COPYFILE_EXCL | fs.constants.COPYFILE_FICLONE);
+    return { ok: true, path: dest, name: path.basename(dest), size: fs.statSync(dest).size };
+  } catch (err) { return { error: err.message || 'Couldn’t copy it.' }; }
+});
 // A folder's contents, its totals, and Finder's own thumbnails, for the editor's folder views.
 const okDir = (p) => typeof p === 'string' && path.isAbsolute(p);
 ipcMain.handle('tweak:list', async (e, dir) => {

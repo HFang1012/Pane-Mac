@@ -1306,6 +1306,25 @@ async function save() {
   btn.classList.add('busy');
   $('fill').style.width = '8%';
   try {
+    // Nothing inside changed and it stays the type it is: no need to build the file again. A new name was
+    // already given above, a new ending is a rename, and a copy is a plain (cloned) copy. Instant at any size.
+    const inside = K.dirty ? K.dirty() : JSON.stringify(state) !== base;
+    if (!inside && fmt() === F.own) {
+      const end = ending();
+      let r;
+      if (mode === 'copy') {
+        r = await scrawl.invoke('tweak:copy', { stem: F.stem, ext: end });
+        if (r?.ok) toast(`Saved ${r.name} · ${fmtSize(r.size)}`, r.path); else toast(r?.error || 'Couldn’t copy it.', null, true);
+      } else if (end !== F.own && end !== F.ext) {
+        r = await scrawl.invoke('tweak:rename', { stem: F.stem, ext: end });
+        if (r?.ok) { renamed(r); toast(`Saved ${r.name}`, r.path); await start(true); } else toast(r?.error || 'Couldn’t rename it.', null, true);
+      } else {
+        toast(`Saved ${F.name}`, F.path);
+      }
+      $('fill').style.width = '100%';
+      changed();
+      return;
+    }
     const job = { ...(await K.job(fmt())), ext: fmt(), stem: F.stem, copy: mode === 'copy' };
     if (isOther()) job.ending = typed();
     const r = await scrawl.invoke('tweak:save', job);

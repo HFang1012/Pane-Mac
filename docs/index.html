@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pane</title>
 <meta name="author" content="hucklberi">
-<meta name="description" content="Pane for Mac: Scrawl draws on your screen, Away blurs it while you're gone, Spin runs your music from a wheel, Jot reminds you of quick notes.">
+<meta name="description" content="Pane for Mac: a box of tools for your everyday life">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="icon.png">
 <meta property="og:title" content="Pane">
@@ -109,20 +109,36 @@
   .stage .v3 { left: 72%; top: 9%; width: 22%; height: 32%; background: var(--dark); }
   .stage .v3::before { background: color-mix(in srgb, var(--dark) 80%, white); }
   .stage .ink { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-  .stage .ink path { fill: none; stroke: #3A7BEA; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+  .stage .ink path { fill: none; stroke: var(--pen, #E5484D); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
   .stage .wheel { position: absolute; left: 0; top: 0; filter: drop-shadow(0 6px 12px rgba(20, 18, 28, 0.2)); overflow: visible; }
-  .wheel .slice { transform-box: view-box; transform-origin: 60px 60px; }
+  .wheel .slice, .wheel .wheel-body { transform-box: view-box; transform-origin: var(--cx, 60px) var(--cy, 60px); }
   .wheel .top { fill: var(--card); transition: fill 140ms ease; }
   .wheel .edge { fill: var(--edge); transition: fill 140ms ease; }
   .wheel .face { transition: transform 240ms var(--bouncy); }
   .wheel .hot .top { fill: var(--accent); }
   .wheel .hot .edge { fill: var(--accent-lip); }
   .wheel .hot .face { transform: translateY(2.5px); }
-  .wheel .ico { color: var(--ink); }
+  .wheel .ico { color: var(--ink); transform-box: fill-box; transform-origin: center; transition: transform 300ms var(--bouncy); }
+  .wheel .hot .ico { transform: scale(1.18); }
+  /* The middle shows what you point at, as in the app. */
+  .wheel .hub-ico { transform-box: fill-box; transform-origin: center; color: var(--ink); opacity: 0; transform: scale(0.3) rotate(-25deg); transition: opacity 120ms ease, transform 320ms var(--bouncy), color 140ms ease; }
+  .wheel .hub-ico.on { opacity: 1; transform: none; }
+  .wheel .hub-ico.on.dim { opacity: 0.32; }
+  /* The pencil's colors fan out beside the pencil, with the color picker (an eyedropper) last. */
+  .wheel .colors .dot { transform-box: fill-box; transform-origin: center; opacity: 0; transform: scale(0.2); transition: opacity 120ms ease, transform 300ms var(--bouncy); }
+  .wheel .colors.show .dot { opacity: 1; transform: none; transition-delay: calc(var(--k) * 22ms); }
+  .wheel .colors.show .dot.hot { transform: scale(1.32); transition-delay: 0ms; }
+  .wheel .colors .sel { fill: none; stroke: var(--ink); stroke-width: 1.8; }
+  .wheel .colors .pick-top { fill: var(--card); transition: fill 140ms ease; }
+  .wheel .colors .pick-edge { fill: var(--edge); transition: fill 140ms ease; }
+  .wheel .colors .pick-ico { color: var(--ink); }
+  .wheel .colors .pick.hot .pick-top { fill: var(--accent); }
+  .wheel .colors .pick.hot .pick-edge { fill: var(--accent-lip); }
+  .demo.trying .stage.picker { cursor: crosshair; }
   .wheel .hub-top { fill: var(--card); }
   .wheel .hub-edge { fill: var(--edge); }
-  .wheel.in { animation: wheel-in 380ms var(--bouncy) both; transform-origin: 60px 60px; transform-box: view-box; }
-  .wheel.out { animation: wheel-out 170ms cubic-bezier(.5, 0, .9, .4) both; transform-origin: 60px 60px; transform-box: view-box; }
+  .wheel.in { animation: wheel-in 380ms var(--bouncy) both; transform-origin: var(--cx, 60px) var(--cy, 60px); transform-box: view-box; }
+  .wheel.out { animation: wheel-out 170ms cubic-bezier(.5, 0, .9, .4) both; transform-origin: var(--cx, 60px) var(--cy, 60px); transform-box: view-box; }
   @keyframes wheel-in { from { transform: scale(0.35) rotate(-40deg); opacity: 0; } }
   @keyframes wheel-out { to { transform: scale(0.4) rotate(18deg); opacity: 0; } }
 
@@ -443,8 +459,8 @@
   }
   .stage .jnote.open { opacity: 1; scale: 1; rotate: 0deg; }
   .stage.live .jnote.open { pointer-events: auto; }
-  .stage .jnote.sent { transform-origin: calc(100% - 30px) calc(100% - 30px); animation: jfold 480ms cubic-bezier(.6, 0, .8, .3) forwards; }
-  @keyframes jfold { 30% { transform: scale(1.03, 0.96); } to { transform: scale(0.1) rotate(18deg); opacity: 0; } }
+  .stage .jnote.sent { transform-origin: calc(100% - 30px) calc(100% - 30px); animation: jfold 480ms cubic-bezier(.55, 0, .35, 1) 220ms forwards; }
+  @keyframes jfold { to { transform: scale(0.6) translate(10px, -6px); opacity: 0; } }
   .jnote .grip { height: 22px; display: flex; align-items: center; justify-content: space-between; cursor: grab; }
   .jnote .grip b { font-size: 11px; font-weight: 800; color: var(--ink-2); }
   .jnote .grip i { display: flex; gap: 3px; }
@@ -463,13 +479,16 @@
   .jnote .jfoot { display: flex; align-items: center; justify-content: space-between; margin-top: 9px; }
   .jnote .jfoot small { font-size: 11px; font-weight: 700; color: var(--ink-2); }
   .jsend {
-    width: 40px; height: 40px; border-radius: 20px; display: grid; place-items: center; margin: 0 0 4px auto;
-    background: var(--accent); box-shadow: 0 4px 0 var(--accent-lip); transition: transform 220ms var(--bouncy), box-shadow 220ms var(--bouncy);
+    width: 38px; height: 38px; border-radius: 19px; display: grid; place-items: center; margin: 0 0 4px auto; color: var(--ink);
+    background: var(--accent); box-shadow: 0 4px 0 var(--accent-lip); transition: transform 320ms var(--smooth), box-shadow 320ms var(--smooth);
   }
-  .jsend svg { width: 20px; height: 20px; overflow: visible; transition: transform 400ms var(--bouncy); }
-  .jsend:hover { transform: translateY(-2px) rotate(-6deg); box-shadow: 0 6px 0 var(--accent-lip); }
-  .jsend:hover svg { transform: translate(2px, -2px) rotate(-8deg); }
-  .jsend.press, .jsend:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--accent-lip); }
+  .jsend svg { width: 17px; height: 17px; overflow: visible; transition: transform 380ms var(--smooth); }
+  .jsend:hover { transform: translateY(-2px); box-shadow: 0 6px 0 var(--accent-lip); }
+  .jsend:hover svg { transform: translate(1.5px, -1.5px); }
+  .jsend.press, .jsend:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--accent-lip); transition-duration: 120ms; }
+  /* Sent: the plane glides out of the button, then the note eases away, as in the app. */
+  .jnote.sent .jsend svg { animation: jglide 520ms cubic-bezier(.5, 0, .2, 1) forwards; }
+  @keyframes jglide { 35% { transform: translate(-2px, 2px); } to { transform: translate(24px, -24px); opacity: 0; } }
   .stage .jfly { position: absolute; left: 0; top: 0; z-index: 4; width: 22px; height: 22px; pointer-events: none; filter: drop-shadow(0 4px 4px rgba(10, 26, 32, 0.25)); }
   .stage .jtoast {
     position: absolute; left: 3%; top: 5%; z-index: 3; width: min(46%, 230px); padding: 9px 10px 10px; border-radius: 20px; background: var(--card);
@@ -498,7 +517,7 @@
     .stage .jnote { width: 62%; padding: 2px 8px 8px; border-radius: 18px; }
     .jnote textarea { height: 40px; font-size: 12px; padding: 6px 8px; }
     .jpills button { font-size: 10px; height: 20px; } .jpills .thumb { height: 20px; }
-    .jsend { width: 32px; height: 32px; } .jsend svg { width: 16px; height: 16px; }
+    .jsend { width: 32px; height: 32px; } .jsend svg { width: 15px; height: 15px; }
     .jnote .jfoot small { display: none; }
     .stage .jtoast { width: 54%; }
   }
@@ -619,7 +638,7 @@
           </div>
           <svg class="ink"><path/></svg>
           <div class="wheel-box"></div>
-          <div class="cursor"><svg class="arrow" width="20" height="28" viewBox="0 0 20 28"><path d="M3 3.1C3 2.2 4 1.8 4.6 2.4L17 14.1C17.6 14.7 17.2 15.7 16.4 15.7H11.6L14.2 21.8C14.4 22.4 14.2 23 13.6 23.2L11.9 23.9C11.3 24.1 10.7 23.9 10.5 23.3L7.9 17.2L4.6 20.4C4 21 3 20.6 3 19.7Z" fill="#0E0F12" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke"/></svg><span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#262B36" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1.2-4.4L15.6 5.2a2 2 0 0 1 2.8 0l.4.4a2 2 0 0 1 0 2.8L8.4 18.8z"/><path d="M13.5 7.3l3.2 3.2"/></svg></span></div>
+          <div class="cursor"><svg class="arrow" width="20" height="28" viewBox="0 0 20 28"><path d="M3 3.1C3 2.2 4 1.8 4.6 2.4L17 14.1C17.6 14.7 17.2 15.7 16.4 15.7H11.6L14.2 21.8C14.4 22.4 14.2 23 13.6 23.2L11.9 23.9C11.3 24.1 10.7 23.9 10.5 23.3L7.9 17.2L4.6 20.4C4 21 3 20.6 3 19.7Z" fill="#0E0F12" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke"/></svg><span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--pen, #E5484D)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1.2-4.4L15.6 5.2a2 2 0 0 1 2.8 0l.4.4a2 2 0 0 1 0 2.8L8.4 18.8z"/><path d="M13.5 7.3l3.2 3.2"/></svg></span></div>
         </div>
         <div class="keys"></div>
         <p class="step" aria-live="polite"></p>
@@ -713,7 +732,7 @@
             <div class="grip"><b>New note</b><i><span></span></i></div>
             <textarea maxlength="80" spellcheck="false" placeholder="What do you want to remember?" tabindex="-1"></textarea>
             <div class="jpills"><span class="thumb"></span><button type="button" data-m="5">5m</button><button type="button" data-m="15">15m</button><button type="button" data-m="30">30m</button><button type="button" data-m="60">1h</button></div>
-            <div class="jfoot"><small class="jat"></small><button type="button" class="jsend" aria-label="Send"><svg viewBox="0 0 26 26"><path d="M2.5 12.6 L23 3.5 L18 22.5 L12.6 16.4 Z" fill="#FBF8F3" stroke="#17303A" stroke-width="2" stroke-linejoin="round"/><path d="M12.6 16.4 L23 3.5 L10.8 18.8 Z" fill="#17303A"/></svg></button></div>
+            <div class="jfoot"><small class="jat"></small><button type="button" class="jsend" aria-label="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 3.5 10.6 13.4"/><path d="M20.5 3.5 14.2 20.5l-3.6-7.1-7.1-3.6z"/></svg></button></div>
           </div>
           <div class="cursor"><svg class="arrow" width="20" height="28" viewBox="0 0 20 28"><path d="M3 3.1C3 2.2 4 1.8 4.6 2.4L17 14.1C17.6 14.7 17.2 15.7 16.4 15.7H11.6L14.2 21.8C14.4 22.4 14.2 23 13.6 23.2L11.9 23.9C11.3 24.1 10.7 23.9 10.5 23.3L7.9 17.2L4.6 20.4C4 21 3 20.6 3 19.7Z" fill="#0E0F12" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke"/></svg></div>
         </div>
@@ -729,7 +748,7 @@
         </button>
         <p class="toy-cap" aria-live="polite"><span>Hold, then let go to throw</span></p>
       </div>
-      <p class="switch-note" style="margin-top:16px">Add a screenshot or what you copied. Drag a note by its top to move it. Snooze a reminder, or mark it done.</p>
+      <p class="switch-note" style="margin-top:16px">Add a screenshot, or take it off again. Drag a note by its top to move it. Snooze a reminder, or mark it done.</p>
     </article>
     <p class="switch-note">Every shortcut can be changed, in Pane and right here: click a key under any demo and hold new ones. Switch tools from the button in the corner of Pane’s window.</p>
   </section>
@@ -815,6 +834,7 @@
   Pane is free. <a id="source" href="https://github.com/">See the code on GitHub</a>.
 </footer>
 
+<script src="wheel.js"></script>
 <script src="spin.js"></script>
 <script>
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -899,28 +919,17 @@
     clear: '<path d="M4 7h16"/><path d="M9.5 7V4.5h5V7"/><path d="M6.2 7l.9 12.5h9.8L17.8 7"/><path d="M10 11v5"/><path d="M14 11v5"/>',
   };
   // Scrawl's wheel, as it opens around the pointer: pencil on top and a bit bigger, undo and redo half-size.
-  const WHEEL = [['pencil', 1.4], ['undo', 0.5], ['redo', 0.5], ['eraser', 1], ['hide', 1], ['clear', 1]];
-  function wheelSvg() {
-    const cx = 60, cy = 56, R = 50, r = 20, depth = 4, gap = 2.2;
-    const total = WHEEL.reduce((s, [, w]) => s + w, 0), unit = (Math.PI * 2) / total;
-    let a = -Math.PI / 2 - (WHEEL[0][1] * unit) / 2;
-    const pt = (rad, t) => `${(cx + rad * Math.cos(t)).toFixed(2)},${(cy + rad * Math.sin(t)).toFixed(2)}`;
-    let out = '';
-    const spans = [];
-    for (const [id, w] of WHEEL) {
-      const s = a, e = a + w * unit; a = e;
-      spans.push({ id, s, e });
-      const a0 = s + gap / R, a1 = e - gap / R, b0 = s + gap / r, b1 = e - gap / r;
-      const d = `M${pt(R, a0)}A${R},${R} 0 0 1 ${pt(R, a1)}L${pt(r, b1)}A${r},${r} 0 0 0 ${pt(r, b0)}Z`;
-      const m = (s + e) / 2, ir = (R + r) / 2, size = id === 'pencil' ? 16 : w < 1 ? 11 : 13;
-      const ix = cx + ir * Math.cos(m) - size / 2, iy = cy + ir * Math.sin(m) - size / 2;
-      out += `<g class="slice" data-id="${id}"><path class="edge" d="${d}" transform="translate(0 ${depth})"/><g class="face"><path class="top" d="${d}"/>` +
-        `<g transform="translate(${ix.toFixed(1)} ${iy.toFixed(1)}) scale(${(size / 24).toFixed(3)})" class="ico" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${ICONS[id]}</g></g></g>`;
-    }
-    out += `<circle class="hub-edge" cx="${cx}" cy="${cy + 3}" r="${r - 4}"/><circle class="hub-top" cx="${cx}" cy="${cy}" r="${r - 4}"/>`;
-    const pencilMid = -Math.PI / 2;
-    return { html: `<svg class="wheel in" width="120" height="120" viewBox="0 0 120 120">${out}</svg>`, cx, cy, spans, pick: { dx: ((R + r) / 2) * Math.cos(pencilMid), dy: ((R + r) / 2) * Math.sin(pencilMid) } };
+  const WHEEL = [['pencil', 1.4], ['eraser', 1], ['clear', 1], ['undo', 0.5], ['redo', 0.5], ['hide', 1]];
+  // The demos use the app's own wheel (wheel.js): same slices, same order, the pencil's colors and the picker.
+  const ITEMS = ['pencil', 'eraser', 'clear', 'undo', 'redo', 'toggle'];
+  const WSIZE = 50;
+  const PEN = Wheel.COLORS[0].hex; // the app's default pencil: red
+  function wheelSvg(color, visible = true) {
+    const m = Wheel.metrics(WSIZE);
+    const html = Wheel.build({ items: ITEMS, size: WSIZE, visible, pencilColor: color, enter: false }).replace('class="wheel"', 'class="wheel in"');
+    return { html, cx: m.cx, cy: m.cy };
   }
+  const dotAt = (color, ci) => Wheel.colorRing(WSIZE, ITEMS, color).dots.find((x) => x.ci === ci);
 
   // ---------- keys you can change ----------
   // The same rule as Pane's settings: click a key, hold one or a few together, and letting go of any sets them.
@@ -1220,22 +1229,29 @@
     d.keys(['wheel', 'draw', 'esc']);
     const wk = d.combo('wheel'), dk = d.combo('draw');
     const c = { x: Math.round(W * 0.34), y: Math.round(H * 0.52) };
-    const w = wheelSvg();
-    const pick = { x: c.x + w.pick.dx, y: c.y + w.pick.dy };
+    const BLUE = Wheel.COLORS.findIndex((x) => x.name === 'Blue');
+    const w = wheelSvg(PEN);
+    const seg = Wheel.layout(ITEMS)[0], ir = (Wheel.metrics(WSIZE).R + Wheel.metrics(WSIZE).r) / 2;
+    const pencil = { x: c.x + ir * Math.cos(seg.mid), y: c.y + ir * Math.sin(seg.mid) };
+    const dot = dotAt(PEN, BLUE), blue = { x: c.x + dot.x, y: c.y + dot.y };
+    stage.style.setProperty('--pen', PEN);
     const total = 4;
     d.start(W * 0.82, H * 0.82);
     d.say(0, total, `Hold ${wk} to open the wheel at your pointer.`);
     d.later(250, () => d.move(c.x, c.y, 700));
-    d.later(1050, () => { d.press(['wheel'], true); box.innerHTML = w.html; placeAt(box.firstChild, c.x - w.cx, c.y - w.cy); });
-    d.later(2300, () => { d.say(1, total, `Slide to the pencil, then let go of ${wk}.`); d.move(pick.x, pick.y, 450); });
-    d.later(2650, () => box.querySelector('[data-id="pencil"]')?.classList.add('hot'));
-    d.later(3500, () => {
+    d.later(1050, () => { d.press(['wheel'], true); box.innerHTML = w.html; placeAt(box.firstChild, c.x - w.cx, c.y - w.cy); Wheel.setHover(box.firstChild, -1, ITEMS, true, null); });
+    d.later(2300, () => { d.say(1, total, `Slide to the pencil, pick a color, then let go of ${wk}.`); d.move(pencil.x, pencil.y, 450); });
+    d.later(2650, () => Wheel.setHover(box.firstChild, 0, ITEMS, true, null));
+    d.later(3150, () => d.move(blue.x, blue.y, 420));
+    d.later(3500, () => Wheel.setHover(box.firstChild, Wheel.COLOR_HOVER + BLUE, ITEMS, true, null));
+    d.later(4000, () => {
       d.press(['wheel'], false);
+      stage.style.setProperty('--pen', Wheel.COLORS[BLUE].hex);
       const svg = box.firstChild; svg?.classList.remove('in'); svg?.classList.add('out');
       cursor.classList.add('holding');
       setTimeout(() => { box.innerHTML = ''; }, 200);
     });
-    d.later(4400, () => {
+    d.later(4700, () => {
       d.say(2, total, `Drag to draw, or hold ${dk} and move.`);
       d.press(['draw'], true);
       const s = Math.min(1.4, W / 520);
@@ -1253,10 +1269,10 @@
       };
       d.setFrame(requestAnimationFrame(step));
     });
-    d.later(6500, () => d.press(['draw'], false));
-    d.later(7200, () => { d.say(3, total, 'Press Esc to put the pencil down.'); d.press(['esc'], true); });
-    d.later(7500, () => { d.press(['esc'], false); cursor.classList.remove('holding'); });
-    d.later(10000, () => d.play());
+    d.later(6800, () => d.press(['draw'], false));
+    d.later(7500, () => { d.say(3, total, 'Press Esc to put the pencil down.'); d.press(['esc'], true); });
+    d.later(7800, () => { d.press(['esc'], false); cursor.classList.remove('holding'); });
+    d.later(10300, () => d.play());
   }
 
   // Your turn: the real wheel at your pointer, a pencil, an eraser, undo, redo, hide and clear.
@@ -1269,6 +1285,8 @@
     box.innerHTML = '';
     d.keys(['wheel', 'draw', 'esc']);
     let tool = null, wheel = null, hot = null, stroke = null, dragging = false, pen = false, hidden = false, cancelPress = () => {}, touchWheel = false;
+    let color = PEN;
+    stage.style.setProperty('--pen', color);
     const strokes = [], undone = [];
     const wk = () => d.combo('wheel'), dk = () => d.combo('draw');
 
@@ -1276,12 +1294,27 @@
       if (wheel) return d.tell(touchWheel ? 'Slide to a tool and lift your finger.' : `Slide to a tool, then let go of ${wk()}.`);
       if (tool === 'pencil') return d.tell(touchOnly ? 'Drag to draw. Press and hold for the wheel.' : `Drag to draw, or hold ${dk()} and move. Esc puts it down.`);
       if (tool === 'eraser') return d.tell(touchOnly ? 'Drag over a line to rub it out.' : 'Drag over a line to rub it out. Esc puts it down.');
+      if (tool === 'picker') return d.tell(touchOnly ? 'Tap anything on the screen to take its color.' : 'Click anything on the screen to take its color. Esc cancels.');
       d.tell(touchOnly ? 'Press and hold the screen to open the wheel.' : `Point at the screen and hold ${wk()}.`);
     };
     const setTool = (t) => {
       tool = t;
       stage.classList.toggle('pencil', t === 'pencil');
       stage.classList.toggle('eraser', t === 'eraser');
+      stage.classList.toggle('picker', t === 'picker');
+    };
+    const setColor = (hex) => { color = hex; stage.style.setProperty('--pen', hex); };
+    // The color picker: the color of whatever is under the pointer on the pretend screen.
+    const hex = (c) => { const m = c.match(/[\d.]+/g); return m && (m.length < 4 || +m[3] > 0) ? '#' + m.slice(0, 3).map((v) => Math.round(+v).toString(16).padStart(2, '0')).join('').toUpperCase() : null; };
+    const takeColor = () => {
+      const r = stage.getBoundingClientRect();
+      let el = document.elementFromPoint(r.left + ptr.x, r.top + ptr.y), c = null;
+      const line = strokes.find((s) => s.pts.some((q) => Math.hypot(q.x - ptr.x, q.y - ptr.y) < 6));
+      if (line) c = line.color;
+      while (!c && el && stage.contains(el)) { c = hex(getComputedStyle(el).backgroundColor); el = el.parentElement; }
+      if (!c) c = hex(getComputedStyle(stage).backgroundColor) || color;
+      setColor(c); setTool('pencil');
+      d.note(`Picked ${c}. The pencil draws in it now.`, 2200);
     };
 
     // Ink: smooth curves through the points you drew.
@@ -1296,8 +1329,9 @@
     const startStroke = () => {
       if (hidden) { hidden = false; svgInk.classList.remove('hidden'); }
       const el = document.createElementNS(NS, 'path');
+      el.style.stroke = color;
       svgInk.append(el);
-      stroke = { el, pts: [{ x: ptr.x, y: ptr.y }] }; draw(stroke);
+      stroke = { el, color, pts: [{ x: ptr.x, y: ptr.y }] }; draw(stroke);
       undone.length = 0;
     };
     const addPoint = () => {
@@ -1329,33 +1363,30 @@
       if (wheel) return;
       if (!ptr.in) return d.tell(`Point at the screen first, then hold ${wk()}.`);
       endStroke(); dragging = false; pen = false;
-      const w = wheelSvg();
+      const w = wheelSvg(color, !hidden);
       box.innerHTML = w.html;
       const el = box.firstChild; placeAt(el, ptr.x - w.cx, ptr.y - w.cy);
       wheel = { w, el, c: { x: ptr.x, y: ptr.y } }; hot = null; touchWheel = byTouch;
+      Wheel.setHover(el, -1, ITEMS, !hidden, tool);
       guide();
     };
+    // What's under the pointer, by the app's own hit test: a slice, a pencil color, the picker, or the middle.
     const hoverWheel = () => {
       if (!wheel) return;
-      const dx = ptr.x - wheel.c.x, dy = ptr.y - wheel.c.y;
-      let id = null;
-      if (Math.hypot(dx, dy) >= 17) { // the middle cancels
-        const s0 = wheel.w.spans[0].s;
-        let a = Math.atan2(dy, dx);
-        while (a < s0) a += Math.PI * 2;
-        while (a >= s0 + Math.PI * 2) a -= Math.PI * 2;
-        id = wheel.w.spans.find((sp) => a >= sp.s && a < sp.e)?.id ?? null;
-      }
-      if (id === hot) return;
-      hot = id;
-      wheel.el.querySelectorAll('.slice').forEach((g) => g.classList.toggle('hot', g.dataset.id === id));
+      const h = Wheel.hitTest(WSIZE, ITEMS, ptr.x - wheel.c.x, ptr.y - wheel.c.y, color);
+      if (h === hot) return;
+      hot = h;
+      Wheel.setHover(wheel.el, h, ITEMS, !hidden, tool);
     };
     const closeWheel = (act) => {
       if (!wheel) return;
-      const { el } = wheel, id = hot;
+      const { el } = wheel, h = hot;
       wheel = null; hot = null; touchWheel = false;
       el.classList.remove('in'); el.classList.add('out'); setTimeout(() => el.remove(), 200);
-      if (!act || !id) return guide();
+      if (!act || h == null || h < 0) return guide();
+      if (h === Wheel.PICK_HOVER) { setTool('picker'); return guide(); }
+      if (h >= Wheel.COLOR_HOVER) { setColor(Wheel.COLORS[h - Wheel.COLOR_HOVER].hex); setTool('pencil'); return guide(); }
+      const id = ITEMS[h] === 'toggle' ? 'hide' : ITEMS[h];
       if (id === 'pencil' || id === 'eraser') { setTool(id); return guide(); }
       if (id === 'undo') undo();
       else if (id === 'redo') redo();
@@ -1380,6 +1411,7 @@
             if (wheel) return closeWheel(false);
             if (!tool) return d.note(`Pick the pencil from the wheel first. Hold ${wk()}.`, 2200);
             if (!ptr.in) return;
+            if (tool === 'picker') return takeColor();
             pen = true; if (tool === 'pencil') startStroke(); else rub();
           } else { pen = false; if (!dragging) endStroke(); }
         }
@@ -1410,6 +1442,7 @@
           if (wheel) hoverWheel();
         });
         if (!tool) return;
+        if (tool === 'picker') { cancelPress(); return takeColor(); }
         try { stage.setPointerCapture(e.pointerId); } catch {}
         dragging = true;
         if (tool === 'pencil') startStroke(); else rub();
@@ -1717,7 +1750,6 @@
       rule: (keys) => (keys.length === 1 && isMod(keys[0].code) ? null : 'Pick one of ⌃, ⌥, ⇧ or ⌘ on its own.'),
     },
   };
-  const JOT_PLANE = '<svg viewBox="0 0 26 26" width="22" height="22" style="overflow:visible"><path d="M2.5 12.6 L23 3.5 L18 22.5 L12.6 16.4 Z" fill="#FBF8F3" stroke="#17303A" stroke-width="2" stroke-linejoin="round"/><path d="M12.6 16.4 L23 3.5 L10.8 18.8 Z" fill="#17303A"/></svg>';
   const clockAt = (min) => new Date(Date.now() + min * 60000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
   // The pretend note and reminder, shared by Watch and Try it.
@@ -1752,22 +1784,10 @@
         note.style.top = `${Math.max(6, Math.min(y - 10, H - h - 10))}px`;
         requestAnimationFrame(() => { note.classList.add('open'); k.pick(minutes, false); });
       },
-      // A paper airplane leaves Send and climbs away while the note folds up.
+      // The plane glides out of Send, then the note eases away.
       fly() {
-        const p = rel(send), { W } = d.size();
-        const plane = document.createElement('span');
-        plane.className = 'jfly'; plane.innerHTML = JOT_PLANE;
-        stage.append(plane);
-        const x0 = p.x - 11, y0 = p.y - 11;
-        if (!reduce) plane.animate([
-          { transform: `translate(${x0}px, ${y0}px)` },
-          { transform: `translate(${x0 - 30}px, ${y0 + 4}px) rotate(-14deg) scale(1.1)`, offset: 0.22 },
-          { transform: `translate(${x0 - 6}px, ${y0 - 60}px) rotate(-30deg) scale(1.15)`, offset: 0.55 },
-          { transform: `translate(${W + 30}px, -40px) rotate(-20deg) scale(0.8)` },
-        ], { duration: 900, easing: 'cubic-bezier(.45,.05,.4,1)', fill: 'forwards' });
-        setTimeout(() => plane.remove(), 950);
         note.classList.add('sent');
-        setTimeout(() => note.classList.remove('open', 'sent'), 500);
+        setTimeout(() => note.classList.remove('open', 'sent'), 720);
       },
       showToast(msg, sub) {
         toast.classList.remove('leave', 'doze', 'show');

@@ -477,6 +477,112 @@
   [data-theme="tweak"] .tool-head svg .crop { transform-box: fill-box; transform-origin: center; transition: transform 420ms var(--bouncy); }
   [data-theme="tweak"]:hover .tool-head svg .crop { transform: scale(0.86); }
 
+
+  /* Debug's theme: blush paper, near-black ink, a tomato-red bug, leaf green for "all good". */
+  [data-theme="debug"] {
+    --paper: #F1E6E3; --paper-deep: #E6D6D2; --card: #FDF9F8; --card-lip: #E9DAD6; --well: #F6EEEC; --edge: #DCC8C3;
+    --ink: #2A1F24; --ink-2: #74636A;
+    --accent: #F25C54; --accent-lip: #C93A36; --accent-soft: #FDDEDB; --accent-ink: #B32C27; --leaf: #8CCB7E; --leaf-lip: #5FA552; --warn: #F5B53F; --warn-lip: #D18E14;
+    --stage-bg: radial-gradient(130% 120% at 100% 0%, #E9D3CF, #F3E7E4 55%, #E4DCD6); --win: #FFFFFF; --bar: #F2E8E6; --line: #E6D9D6; --dark: #2A1F24;
+  }
+  .tool[data-theme="debug"] { border-radius: 30px; }
+  [data-theme="debug"] .tool-head svg .legs { transform-box: fill-box; transform-origin: center; }
+  [data-theme="debug"]:hover .tool-head svg .legs { animation: scuttle 360ms ease-in-out 2; }
+  @keyframes scuttle { 25% { transform: translateY(-1.5px) scaleY(0.9); } 75% { transform: translateY(1.5px) scaleY(1.06); } }
+
+  /* ---------- Debug's demo: a pretend Mac with a busy app and a full disk. Fix it, watch the score climb. ---------- */
+  .ddemo { margin-top: 18px; background: var(--card); border-radius: 26px; box-shadow: 0 7px 0 var(--card-lip); padding: 16px 16px 18px; }
+  .dstage { position: relative; min-height: 530px; border-radius: 20px; overflow: hidden; isolation: isolate; box-shadow: 0 5px 0 var(--card-lip); background: var(--stage-bg); }
+  .dstage .win { position: absolute; border-radius: 10px; background: var(--win); box-shadow: 0 8px 18px rgba(20, 18, 28, 0.12); overflow: hidden; transition: opacity 500ms ease, transform 500ms var(--bouncy); }
+  .dstage .win::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 16px; background: var(--bar); }
+  .dstage .win i { position: absolute; height: 9px; border-radius: 5px; background: var(--line); }
+  .dstage .w1 { left: 5%; top: 9%; width: 40%; height: 52%; }
+  .dstage .w1 .film { position: absolute; left: 8%; right: 8%; top: 28px; bottom: 30px; border-radius: 6px; background: linear-gradient(120deg, #3B2F45, #6A4D5E); }
+  .dstage .w1 .film::after { content: ""; position: absolute; left: 0; right: 0; bottom: -18px; height: 10px; border-radius: 4px; background: repeating-linear-gradient(90deg, #E6D9D6 0 14px, #D2C1BD 14px 16px); }
+  .dstage .w1.gone { opacity: 0; transform: scale(0.85) translateY(12px); }
+  .dstage .w2 { left: 9%; top: 52%; width: 34%; height: 28%; }
+  .dstage .hint { position: absolute; left: 5%; bottom: 14px; font-size: 13px; font-weight: 800; color: var(--ink-2); }
+  .dstage kbd { font: inherit; background: var(--card); border-radius: 6px; padding: 0 6px; box-shadow: 0 2px 0 var(--card-lip); color: var(--ink); }
+
+  .dpanel {
+    position: absolute; right: 14px; top: 14px; width: 318px; padding-bottom: 10px; border-radius: 22px; background: var(--card);
+    box-shadow: 0 6px 0 var(--card-lip), 0 20px 36px -12px rgba(42, 20, 24, 0.34); font-size: 12px; text-align: left;
+  }
+  .dpanel .bar { display: flex; align-items: center; gap: 7px; height: 42px; padding: 0 10px 0 12px; }
+  .dpanel .bar svg { height: 18px; width: auto; }
+  .dpanel .bar b { font-size: 13.5px; font-weight: 800; }
+  .dpanel .grow { flex: 1; }
+  .dh { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px 0 4px; border-radius: 13px; background: var(--well); font-size: 11px; font-weight: 800; white-space: nowrap; }
+  .dh .sc { min-width: 22px; height: 19px; padding: 0 5px; border-radius: 10px; display: grid; place-items: center; font-variant-numeric: tabular-nums; background: var(--leaf); box-shadow: 0 2px 0 var(--leaf-lip); transition: background 300ms ease, box-shadow 300ms ease; }
+  .dh.warn .sc { background: var(--warn); box-shadow: 0 2px 0 var(--warn-lip); }
+  .dh.bad { background: var(--accent-soft); color: var(--accent-ink); }
+  .dh.bad .sc { background: var(--accent); color: #FFF; box-shadow: 0 2px 0 var(--accent-lip); }
+  .dh .sc.bump { animation: bump 520ms var(--bouncy); }
+  @keyframes bump { 40% { transform: scale(1.35); } }
+  .dpanel .ib { width: 24px; height: 24px; border-radius: 12px; display: grid; place-items: center; background: var(--well); color: var(--ink-2); }
+  .dpanel .ib svg { width: 12px; height: 12px; }
+  .dtabs { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; margin: 0 12px; padding: 3px; border-radius: 14px; background: var(--well); }
+  .dtabs button { position: relative; z-index: 1; height: 28px; border: 0; background: none; border-radius: 11px; font: inherit; font-size: 12px; font-weight: 800; color: var(--ink-2); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .dtabs button[aria-checked="true"] { color: var(--ink); }
+  .dtabs .th { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 4px); border-radius: 11px; background: var(--card); box-shadow: 0 3px 0 var(--accent); transition: translate 440ms var(--bouncy); }
+  .dtabs[data-v="mac"] .th { translate: calc(100% + 2px) 0; }
+  .dtabs .ai { width: 15px; height: 15px; border-radius: 4px; background: linear-gradient(135deg, #8E6BD8, #E0668F); }
+  .dbody { padding: 0 12px; }
+  .dverd { display: grid; grid-template-columns: 30px 1fr; gap: 9px; align-items: center; margin-top: 10px; padding: 8px 10px; border-radius: 15px; background: var(--well); }
+  .dverd .face { width: 30px; height: 30px; border-radius: 15px; display: grid; place-items: center; background: var(--leaf); box-shadow: 0 3px 0 var(--leaf-lip); transition: background 300ms ease, box-shadow 300ms ease; }
+  .dverd.warn .face { background: var(--warn); box-shadow: 0 3px 0 var(--warn-lip); }
+  .dverd.bad .face { background: var(--accent); box-shadow: 0 3px 0 var(--accent-lip); }
+  .dverd .face svg { width: 15px; height: 15px; fill: none; stroke: var(--ink); stroke-width: 3; stroke-linecap: round; }
+  .dverd b { display: block; font-size: 13px; font-weight: 800; }
+  .dverd small { display: block; font-size: 11px; font-weight: 600; color: var(--ink-2); }
+  .drings { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 8px; }
+  .dring { display: grid; justify-items: center; padding: 7px 0 6px; border-radius: 13px; background: var(--well); }
+  .dring .r { position: relative; width: 38px; height: 38px; }
+  .dring svg { width: 38px; height: 38px; transform: rotate(-90deg); }
+  .dring circle { fill: none; stroke-width: 5.5; }
+  .dring .t { stroke: var(--edge); opacity: 0.55; }
+  .dring .v { stroke: var(--leaf); stroke-linecap: round; stroke-dasharray: 100; transition: stroke-dashoffset 700ms var(--smooth), stroke 300ms ease; }
+  .dring.warn .v { stroke: var(--warn); } .dring.bad .v { stroke: var(--accent); }
+  .dring .r span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .dring b { font-size: 10px; font-weight: 800; margin-top: 2px; }
+  .dring small { font-size: 9.5px; font-weight: 700; color: var(--ink-2); white-space: nowrap; }
+  .dgraph { margin-top: 6px; padding: 6px 8px 4px; border-radius: 13px; background: var(--well); }
+  .dgraph svg { display: block; width: 100%; height: 30px; }
+  .dgraph .a { fill: var(--accent-soft); } .dgraph .l { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+  .dgraph div { display: flex; justify-content: space-between; font-size: 9.5px; font-weight: 700; color: var(--ink-2); }
+  .dfixes { display: grid; gap: 5px; margin-top: 8px; }
+  .dfix { padding: 8px 10px; border-radius: 14px; box-shadow: inset 0 0 0 1.5px var(--edge); animation: dfin 420ms var(--bouncy) both; }
+  .dfix.bad { box-shadow: inset 0 0 0 1.5px var(--accent-soft), 0 3px 0 var(--accent-soft); }
+  .dfix b { display: block; font-size: 12px; font-weight: 800; }
+  .dfix p { margin: 1px 0 0; font-size: 11px; font-weight: 600; color: var(--ink-2); line-height: 1.35; }
+  .dfix button { margin-top: 6px; height: 25px; padding: 0 11px; border: 0; border-radius: 13px; font: inherit; font-size: 11px; font-weight: 800; color: #FFF; background: var(--accent); box-shadow: 0 3px 0 var(--accent-lip); cursor: pointer; transition: transform 200ms var(--bouncy); }
+  .dfix button:hover { transform: translateY(-1px); }
+  .dfix button:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--accent-lip); }
+  .dfix button.sure { background: var(--ink); box-shadow: 0 3px 0 #140E11; }
+  .dfix .note { display: block; margin-top: 4px; font-size: 10.5px; font-weight: 700; color: var(--accent-ink); }
+  .dfix.out { animation: dfout 380ms ease-in forwards; }
+  .dok { padding: 10px; border-radius: 14px; background: var(--well); font-size: 11.5px; font-weight: 700; color: var(--ink-2); text-align: center; animation: dfin 420ms var(--bouncy) both; }
+  @keyframes dfin { from { opacity: 0; transform: scale(0.9) translateY(6px); } }
+  @keyframes dfout { to { opacity: 0; transform: translateX(26px) scale(0.95); } }
+  .ddemo .demo-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
+  .ddemo .step { margin: 0; font-size: 14px; font-weight: 700; color: var(--ink-2); }
+  @media (max-width: 640px) {
+    .dstage { min-height: 560px; }
+    .dpanel { left: 50%; right: auto; width: min(318px, calc(100% - 20px)); translate: -50% 0; top: 10px; }
+    .dstage .win, .dstage .hint { display: none; }
+  }
+
+  /* Catch the bug: it wanders the leaf and runs from your pointer. */
+  .bug-toy { position: relative; width: 180px; height: 150px; border-radius: 40% 60% 46% 54% / 52% 44% 56% 48%; background: radial-gradient(circle at 40% 35%, #B9E2AE, #8CCB7E 70%); box-shadow: 0 6px 0 #5FA552; cursor: crosshair; touch-action: none; overflow: hidden; }
+  .bug-toy::before { content: ""; position: absolute; left: 12%; right: 12%; top: 50%; height: 3px; margin-top: -1.5px; border-radius: 2px; background: #5FA552; opacity: 0.55; rotate: -18deg; }
+  .bug-toy .bug { position: absolute; left: 0; top: 0; width: 40px; height: 30px; margin: -15px 0 0 -20px; pointer-events: none; will-change: transform; }
+  .bug-toy .bug svg { display: block; width: 40px; height: 30px; overflow: visible; filter: drop-shadow(0 3px 2px rgba(42, 31, 36, 0.25)); }
+  .bug-toy .bug.walk .legs { animation: scuttle 220ms linear infinite; }
+  .bug-toy .bug.caught { transition: transform 420ms var(--bouncy), opacity 600ms ease 500ms; opacity: 0; }
+  .bug-toy .pop { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 17px; display: grid; place-items: center; background: var(--card); box-shadow: 0 3px 0 var(--card-lip); animation: popok 900ms var(--bouncy) forwards; pointer-events: none; }
+  .bug-toy .pop svg { width: 17px; height: 17px; fill: none; stroke: #5FA552; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+  @keyframes popok { 0% { transform: scale(0.2); } 30% { transform: scale(1.1); } 70% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-16px); } }
+
   /* ---------- Tweak's demo: point at a file on a little desktop, click it, edit, save ---------- */
   .tdemo { margin-top: 18px; background: var(--card); box-shadow: 0 7px 0 var(--card-lip); padding: 16px 16px 18px; }
   .tdemo .stage { background: var(--stage-bg); cursor: default; }
@@ -968,7 +1074,7 @@
         <span class="spark" style="--a:0deg"></span><span class="spark" style="--a:60deg"></span><span class="spark" style="--a:120deg"></span><span class="spark" style="--a:180deg"></span><span class="spark" style="--a:240deg"></span><span class="spark" style="--a:300deg"></span>
       </button>
     </span></span></p>
-    <p class="lede rise" style="--d:200ms">Five small tools for your Mac, each a shortcut away. Change any shortcut to keys you like.</p>
+    <p class="lede rise" style="--d:200ms">Six small tools for your Mac, each a shortcut away. Change any shortcut to keys you like.</p>
 
     <div class="quick pop" style="--d:300ms">
       <p class="label">Install with one command <span class="badge">Recommended</span></p>
@@ -1184,6 +1290,43 @@
         <p class="toy-cap" aria-live="polite"><span>Drag a corner, or click to turn</span></p>
       </div>
       <p class="switch-note" style="margin-top:16px">Crop, turn and resize pictures. Trim, crop or mute a video, pull out its sound, or save a frame. Trim songs. Find and replace in text. Rename anything, change any file’s type or give it an ending of your own, and save over it or as a copy. The old version goes to the Trash. Point at a folder to look inside it as icons, a list, columns or a gallery, see what’s in it, and tweak a file from there.</p>
+    </article>
+    <article class="tool" data-theme="debug">
+      <div class="tool-head">
+        <svg viewBox="0 0 60 44" aria-hidden="true"><g fill="none" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(0 1.6)" stroke="#140E11"><g class="legs"><path d="M18.5 22 L11 18"/><path d="M17.5 29 H9.5"/><path d="M18.5 36 L11 40"/><path d="M41.5 22 L49 18"/><path d="M42.5 29 H50.5"/><path d="M41.5 36 L49 40"/></g><path d="M25 9.5 L21.5 4"/><path d="M35 9.5 L38.5 4"/><path d="M24 15 Q24 9 30 9 Q36 9 36 15"/></g><g stroke="#2A1F24"><g class="legs"><path d="M18.5 22 L11 18"/><path d="M17.5 29 H9.5"/><path d="M18.5 36 L11 40"/><path d="M41.5 22 L49 18"/><path d="M42.5 29 H50.5"/><path d="M41.5 36 L49 40"/></g><path d="M25 9.5 L21.5 4"/><path d="M35 9.5 L38.5 4"/><path d="M24 15 Q24 9 30 9 Q36 9 36 15"/></g><g transform="translate(0 2.2)" stroke="#C93A36"><rect x="18.5" y="15" width="23" height="25.5" rx="11.5"/><path d="M30 20 V40"/></g><g stroke="#F25C54"><rect x="18.5" y="15" width="23" height="25.5" rx="11.5"/><path d="M30 20 V40"/></g></g></svg>
+        <h3>Debug</h3>
+        <p>See what’s slowing your Mac down.</p>
+      </div>
+      <div class="ddemo">
+        <div class="dstage" id="dstage">
+          <div class="win w1"><div class="film"></div></div>
+          <div class="win w2"><i style="left:8%;top:34%;width:70%"></i><i style="left:8%;top:52%;width:52%"></i><i style="left:8%;top:70%;width:62%"></i></div>
+          <div class="hint">Double-tap left <kbd>⇧</kbd> anywhere</div>
+          <div class="dpanel" aria-label="Debug, a pretend Mac">
+            <div class="bar"><svg viewBox="0 0 60 44" aria-hidden="true"><g fill="none" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(0 1.6)" stroke="#140E11"><g class="legs"><path d="M18.5 22 L11 18"/><path d="M17.5 29 H9.5"/><path d="M18.5 36 L11 40"/><path d="M41.5 22 L49 18"/><path d="M42.5 29 H50.5"/><path d="M41.5 36 L49 40"/></g><path d="M25 9.5 L21.5 4"/><path d="M35 9.5 L38.5 4"/><path d="M24 15 Q24 9 30 9 Q36 9 36 15"/></g><g stroke="#2A1F24"><g class="legs"><path d="M18.5 22 L11 18"/><path d="M17.5 29 H9.5"/><path d="M18.5 36 L11 40"/><path d="M41.5 22 L49 18"/><path d="M42.5 29 H50.5"/><path d="M41.5 36 L49 40"/></g><path d="M25 9.5 L21.5 4"/><path d="M35 9.5 L38.5 4"/><path d="M24 15 Q24 9 30 9 Q36 9 36 15"/></g><g transform="translate(0 2.2)" stroke="#C93A36"><rect x="18.5" y="15" width="23" height="25.5" rx="11.5"/><path d="M30 20 V40"/></g><g stroke="#F25C54"><rect x="18.5" y="15" width="23" height="25.5" rx="11.5"/><path d="M30 20 V40"/></g></g></svg><b>Debug</b><span class="grow"></span>
+              <span class="dh bad" id="dh"><span class="sc" id="dhs">48</span><span id="dhl">Needs debugging</span></span>
+              <span class="ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 12h12"/></svg></span>
+              <span class="ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M7 7l10 10M17 7 7 17"/></svg></span>
+            </div>
+            <div class="dtabs" id="dtabs" data-v="mac" role="radiogroup" aria-label="Show"><span class="th"></span>
+              <button type="button" role="radio" data-v="app" aria-checked="false"><span class="ai"></span><span id="dapp">Cutroom</span></button>
+              <button type="button" role="radio" data-v="mac" aria-checked="true">Whole Mac</button>
+            </div>
+            <div class="dbody">
+              <div class="dverd" id="dverd"><span class="face"></span><div><b></b><small></small></div></div>
+              <div class="drings" id="drings"></div>
+              <div class="dgraph"><svg viewBox="0 0 300 30" preserveAspectRatio="none"><path class="a" id="dga"/><path class="l" id="dgl"/></svg><div><span id="dgn">Processor use</span><span>last 15 seconds</span></div></div>
+              <div class="dfixes" id="dfixes" aria-live="polite"></div>
+            </div>
+          </div>
+        </div>
+        <div class="demo-foot"><p class="step" id="dstep">A busy app and a full disk. Click the fixes.</p><button class="replay" type="button" id="dreplay"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v4.5h4.5"/></svg>Replay</button></div>
+      </div>
+      <div class="toy r toy-bug" style="top: 120px">
+        <button class="bug-toy" type="button" aria-label="Catch the bug"><span class="bug walk"><svg viewBox="0 0 60 44" aria-hidden="true"><g fill="none" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(0 1.6)" stroke="#140E11"><g class="legs"><path d="M18.5 22 L11 18"/><path d="M17.5 29 H9.5"/><path d="M18.5 36 L11 40"/><path d="M41.5 22 L49 18"/><path d="M42.5 29 H50.5"/><path d="M41.5 36 L49 40"/></g><path d="M25 9.5 L21.5 4"/><path d="M35 9.5 L38.5 4"/><path d="M24 15 Q24 9 30 9 Q36 9 36 15"/></g><g stroke="#2A1F24"><g class="legs"><path d="M18.5 22 L11 18"/><path d="M17.5 29 H9.5"/><path d="M18.5 36 L11 40"/><path d="M41.5 22 L49 18"/><path d="M42.5 29 H50.5"/><path d="M41.5 36 L49 40"/></g><path d="M25 9.5 L21.5 4"/><path d="M35 9.5 L38.5 4"/><path d="M24 15 Q24 9 30 9 Q36 9 36 15"/></g><g transform="translate(0 2.2)" stroke="#C93A36"><rect x="18.5" y="15" width="23" height="25.5" rx="11.5"/><path d="M30 20 V40"/></g><g stroke="#F25C54"><rect x="18.5" y="15" width="23" height="25.5" rx="11.5"/><path d="M30 20 V40"/></g></g></svg></span></button>
+        <p class="toy-cap" aria-live="polite"><span>Catch the bug</span></p>
+      </div>
+      <p class="switch-note" style="margin-top:16px">Double-tap a key, hold it or press a shortcut, and a small panel opens over whatever you’re doing, on the app you’re in. A score tells you if your Mac needs debugging. See how hard the processor, memory, battery and storage are working, which apps are behind it, and click a fix: quit or reopen an app, close duplicate tabs, empty the Trash, restart Finder or the Dock. Fold it into a little pill that keeps watching.</p>
     </article>
     <p class="switch-note">Every shortcut can be changed, in Pane and right here: click a key under any demo and hold new ones. Switch tools from the button in the corner of Pane’s window.</p>
   </section>
@@ -3265,6 +3408,132 @@
       c = fit({ ...c, l: c.l + m[0], t: c.t + m[1] }, 'move', -1, false); show(c); say('Moved the crop');
     });
     show(c);
+  })();
+
+  // ---------- Debug's pretend Mac: a busy video app and a full disk. Each fix you click lifts the score. ----------
+  (function () {
+    const stage = document.getElementById('dstage'); if (!stage) return;
+    const $d = (id) => document.getElementById(id);
+    const FACE = { good: '<path d="M5 12.5l4.5 4.5L19 7.5" stroke-linejoin="round"/>', warn: '<path d="M12 6v7M12 17.5v.5"/>', bad: '<path d="M12 6v7M12 17.5v.5"/>' };
+    let st, view = 'mac', trail = [], timer = 0, sureTimer = 0;
+    const reset = () => { st = { busy: true, full: true }; view = 'mac'; trail = Array.from({ length: 16 }, () => 62 + Math.random() * 14); stage.querySelector('.w1').classList.remove('gone'); $d('dstep').textContent = 'A busy app and a full disk. Click the fixes.'; render(true); };
+    const health = () => {
+      let s = 100; const why = [];
+      if (st.busy) { s -= 22; why.push('busy'); }
+      if (st.full) { s -= 30; why.push('full'); }
+      return { score: s, level: s >= 80 ? 'good' : s >= 55 ? 'warn' : 'bad' };
+    };
+    const ring = (v, label, word, level, mid) => `<div class="dring ${level}"><div class="r"><svg viewBox="0 0 38 38"><circle class="t" cx="19" cy="19" r="15.5"/><circle class="v" cx="19" cy="19" r="15.5" pathLength="100" stroke-dashoffset="${100 - v}"/></svg><span>${mid}</span></div><b>${label}</b><small>${word}</small></div>`;
+    function render(fresh) {
+      const h = health(), cpu = Math.round(trail[trail.length - 1]);
+      const dh = $d('dh'); dh.className = `dh ${h.level}`;
+      if ($d('dhs').textContent !== String(h.score)) { $d('dhs').textContent = h.score; $d('dhs').classList.remove('bump'); void $d('dhs').offsetWidth; $d('dhs').classList.add('bump'); }
+      $d('dhl').textContent = { good: 'Healthy', warn: 'Worth a look', bad: 'Needs debugging' }[h.level];
+      const tabs = $d('dtabs'); tabs.dataset.v = view;
+      tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', b.dataset.v === view));
+      const app = view === 'app';
+      const fixes = [];
+      if (st.busy) fixes.push({ id: 'quit', level: 'bad', title: 'Cutroom is working hard', why: `It’s using ${Math.round(cpu * 0.8)}% of your Mac’s power, which slows everything else down.`, label: 'Quit Cutroom', confirm: 'Cutroom may ask you to save first.' });
+      if (st.full && !app) fixes.push({ id: 'trash', level: 'bad', title: 'Storage is almost full', why: 'Only 9 GB left. Your Mac needs free space to run smoothly.', label: 'Empty Trash', confirm: 'Everything in the Trash is deleted for good.' });
+      const v = $d('dverd'), top = fixes[0];
+      const level = top ? top.level : 'good';
+      v.className = `dverd ${level}`;
+      v.querySelector('.face').innerHTML = `<svg viewBox="0 0 24 24">${FACE[level]}</svg>`;
+      v.querySelector('b').textContent = top ? top.title : app ? 'Cutroom is closed' : 'Your Mac is running smoothly';
+      v.querySelector('small').textContent = top ? 'Here’s what to do about it.' : 'Nothing’s slowing it down right now.';
+      const free = st.full ? 9 : 51;
+      $d('drings').innerHTML = app
+        ? ring(st.busy ? cpu * 0.8 * 2 : 0, 'Processor', st.busy ? 'Working hard' : 'Closed', st.busy ? 'bad' : 'good', `${st.busy ? Math.round(cpu * 0.8) : 0}%`) + ring(st.busy ? 52 : 0, 'Memory', st.busy ? '3.1 GB' : '0 MB', st.busy ? 'warn' : 'good', st.busy ? '13%' : '0%') + ring(st.busy ? 92 : 0, 'Energy', st.busy ? 'High' : 'None', st.busy ? 'bad' : 'good', '⚡') + ring(st.busy ? 30 : 0, 'Parts', st.busy ? '9 running' : '0', 'good', '▦')
+        : ring(cpu, 'Processor', cpu >= 70 ? 'Maxed out' : cpu >= 35 ? 'Busy' : 'Calm', cpu >= 80 ? 'bad' : cpu >= 45 ? 'warn' : 'good', `${cpu}%`) + ring(st.busy ? 71 : 48, 'Memory', 'Plenty', 'good', st.busy ? '71%' : '48%') + ring(64, 'Battery', '3 hr left', 'good', '64%') + ring(100 - free / 5.12, 'Storage', `${free} GB free`, st.full ? 'bad' : 'good', `${Math.round(100 - free / 5.12)}%`);
+      const series = app ? trail.map((x) => (st.busy ? x * 0.8 : 0)) : trail;
+      const max = Math.max(30, ...series) * 1.1;
+      const pts = series.map((y, i) => [(i / (series.length - 1)) * 300, 30 - (y / max) * 27 - 1.5]);
+      const line = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+      $d('dgl').setAttribute('d', line); $d('dga').setAttribute('d', `${line} L300 30 L0 30 Z`);
+      $d('dgn').textContent = app ? 'Cutroom’s processor use' : 'Processor use';
+      const box = $d('dfixes');
+      if (box.querySelector('.sure')) return; // don't redraw under a "Sure?"
+      const sig = fixes.map((f) => f.id).join() + view;
+      if (box.dataset.sig === sig && !fresh) { fixes.forEach((f) => { const p = box.querySelector(`[data-id="${f.id}"] p`); if (p) p.textContent = f.why; }); return; }
+      box.dataset.sig = sig;
+      box.innerHTML = fixes.length ? fixes.map((f) => `<div class="dfix ${f.level}" data-id="${f.id}"><b>${f.title}</b><p>${f.why}</p><button type="button" data-fix="${f.id}" data-label="${f.label}" data-confirm="${f.confirm}">${f.label}</button></div>`).join('')
+        : '<div class="dok">All fixed. Your Mac is healthy again.</div>';
+    }
+    stage.addEventListener('click', (e) => {
+      const tab = e.target.closest('.dtabs button');
+      if (tab) { view = tab.dataset.v; render(true); return; }
+      const b = e.target.closest('[data-fix]'); if (!b) return;
+      // Ask first, right on the button, like the real one.
+      if (!b.classList.contains('sure')) {
+        b.classList.add('sure'); b.textContent = `Sure? ${b.dataset.label}`;
+        b.insertAdjacentHTML('afterend', `<span class="note">${b.dataset.confirm}</span>`);
+        clearTimeout(sureTimer); sureTimer = setTimeout(() => { b.classList.remove('sure'); b.textContent = b.dataset.label; b.nextElementSibling?.remove(); }, 4000);
+        return;
+      }
+      clearTimeout(sureTimer);
+      const card = b.closest('.dfix'); card.classList.add('out'); b.classList.remove('sure');
+      setTimeout(() => {
+        if (b.dataset.fix === 'quit') { st.busy = false; stage.querySelector('.w1').classList.add('gone'); trail = trail.map((x) => x * 0.3); }
+        else st.full = false;
+        const h = health();
+        $d('dstep').textContent = h.level === 'good' ? `Score ${h.score}: no debugging needed.` : `Score ${h.score}. One more to go.`;
+        render(true);
+      }, 380);
+    });
+    $d('dreplay').addEventListener('click', reset);
+    // A new reading every second, like the real panel: the graph scrolls through the last 15 seconds.
+    const tick = () => {
+      const base = st.busy ? 68 : 14;
+      trail.push(Math.max(3, Math.min(97, base + (Math.random() - 0.5) * 18))); trail.shift();
+      render(false);
+    };
+    reset();
+    new IntersectionObserver(([e]) => { clearInterval(timer); if (e.isIntersecting) timer = setInterval(tick, 1000); }).observe(stage);
+  })();
+
+  // Catch the bug. It wanders the leaf, and scurries off when your pointer comes close. Click it to catch it.
+  (function () {
+    const toy = document.querySelector('.toy-bug'); if (!toy) return;
+    const leaf = toy.querySelector('.bug-toy'), cap = toy.querySelector('.toy-cap');
+    let bug = leaf.querySelector('.bug');
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const W = 180, H = 150;
+    let x = 90, y = 75, a = Math.random() * Math.PI * 2, speed = 0.7, mx = -999, my = -999, caught = 0, busy = false, raf = 0;
+    const inLeaf = (px, py) => ((px - W / 2) / (W / 2 - 22)) ** 2 + ((py - H / 2) / (H / 2 - 20)) ** 2 <= 1;
+    const place = () => { bug.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) rotate(${(a + Math.PI / 2).toFixed(3)}rad)`; };
+    function step() {
+      raf = requestAnimationFrame(step);
+      if (busy) return;
+      const dx = x - mx, dy = y - my, d = Math.hypot(dx, dy);
+      if (d < 60) { a = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.6; speed = Math.min(3.4, speed + 0.25); } // run!
+      else { a += (Math.random() - 0.5) * 0.25; speed += (0.7 - speed) * 0.04; }
+      let nx = x + Math.cos(a) * speed, ny = y + Math.sin(a) * speed;
+      if (!inLeaf(nx, ny)) { a = Math.atan2(H / 2 - y, W / 2 - x) + (Math.random() - 0.5) * 1.2; nx = x; ny = y; }
+      x = nx; y = ny; place();
+    }
+    const pos = (e) => { const r = leaf.getBoundingClientRect(); return [(e.clientX - r.left) * (W / r.width), (e.clientY - r.top) * (H / r.height)]; };
+    leaf.addEventListener('pointermove', (e) => { [mx, my] = pos(e); });
+    leaf.addEventListener('pointerleave', () => { mx = my = -999; });
+    leaf.addEventListener('pointerdown', (e) => {
+      if (busy) return;
+      const [px, py] = pos(e);
+      if (Math.hypot(px - x, py - y) > 24) { sayTo(cap, ['Missed!', 'Too slow!', 'So close!'][Math.floor(Math.random() * 3)]); return; }
+      busy = true; caught++;
+      bug.classList.remove('walk'); bug.classList.add('caught');
+      bug.style.transform += ' scale(0.2) rotate(180deg)';
+      leaf.insertAdjacentHTML('beforeend', `<span class="pop" style="left:${x}px;top:${y}px"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>`);
+      sayTo(cap, caught === 1 ? 'Debugged! Caught 1 bug' : `Debugged! Caught ${caught} bugs`);
+      setTimeout(() => {
+        leaf.querySelector('.pop')?.remove();
+        const fresh = bug.cloneNode(true); fresh.className = reduce ? 'bug' : 'bug walk'; bug.replaceWith(fresh); bug = fresh;
+        do { x = 25 + Math.random() * (W - 50); y = 22 + Math.random() * (H - 44); } while (!inLeaf(x, y) || Math.hypot(x - mx, y - my) < 70);
+        speed = 0.7; place(); busy = false;
+      }, 1100);
+    });
+    leaf.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); mx = x; my = y; leaf.dispatchEvent(new PointerEvent('pointerdown', { clientX: leaf.getBoundingClientRect().left + x, clientY: leaf.getBoundingClientRect().top + y })); } });
+    place();
+    if (reduce) { bug.classList.remove('walk'); return; }
+    new IntersectionObserver(([e]) => { cancelAnimationFrame(raf); if (e.isIntersecting) raf = requestAnimationFrame(step); }).observe(leaf);
   })();
 
 </script>

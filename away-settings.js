@@ -47,9 +47,15 @@ function renderScreen() {
   const colors = Tools.mood(a.mood).colors;
   document.querySelectorAll('#screen .mblob').forEach((b, i) => b.style.setProperty('--c', colors[i]));
   document.getElementById('miniSince').classList.toggle('gone', !a.showTime);
+  // Redraw the icon only when it or the theme changed, so typing a message doesn't restart its animation.
+  const look = `${a.icon}/${a.mood}`;
+  const cup = document.getElementById('miniCup');
+  if (cup.dataset.look !== look) {
+    cup.dataset.look = look;
+    cup.innerHTML = Tools.glyph('away', 26, { icon: a.icon, mood: a.mood });
+    cup.animate([{ transform: 'scale(0.7)' }, { transform: 'none' }], { duration: 420, easing: BOUNCY });
+  }
 }
-document.getElementById('miniCup').innerHTML = Tools.glyph('away', 26);
-document.getElementById('miniSince').textContent = `Away since ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
 document.getElementById('tryAway').addEventListener('click', (e) => { e.currentTarget.blur(); cancelAwayListening(); scrawl.send('away:show'); });
 
 // ---------- message ----------
@@ -97,6 +103,29 @@ function renderMoods() {
   for (const b of box.children) b.setAttribute('aria-checked', b.dataset.mood === S.away.mood);
 }
 
+// ---------- icons: drawn in the chosen theme's colors ----------
+function renderIcons() {
+  const box = document.getElementById('awayIcons');
+  const look = S.away.mood;
+  if (box.dataset.look !== look) {
+    box.dataset.look = look;
+    box.replaceChildren(...Tools.AWAY_ICONS.map((ic) => {
+      const b = document.createElement('button');
+      b.className = 'icon-pick';
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-label', ic.name);
+      b.title = ic.name;
+      b.dataset.icon = ic.id;
+      b.innerHTML = Tools.glyph('away', 22, { icon: ic.id, mood: look });
+      b.addEventListener('click', () => saveAway({ icon: ic.id }));
+      return b;
+    }));
+  }
+  for (const b of box.children) b.setAttribute('aria-checked', b.dataset.icon === S.away.icon);
+  const chosen = Tools.AWAY_ICONS.find((ic) => ic.id === S.away.icon) || Tools.AWAY_ICONS[0];
+  document.getElementById('iconName').textContent = chosen.name;
+}
+
 // ---------- switches ----------
 for (const id of ['showTime', 'hidePointer']) {
   document.getElementById(id).addEventListener('click', () => saveAway({ [id]: !S.away[id] }));
@@ -117,6 +146,7 @@ function updateAway() {
   if (document.activeElement !== msgEl && msgEl.value !== S.away.message) msgEl.value = S.away.message;
   syncCount();
   renderMoods();
+  renderIcons();
   document.getElementById('showTime').setAttribute('aria-checked', S.away.showTime);
   document.getElementById('hidePointer').setAttribute('aria-checked', S.away.hidePointer);
   renderScreen();

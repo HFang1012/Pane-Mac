@@ -9,7 +9,6 @@ const keysEl = document.getElementById('demoKeys');
 const stepEl = document.getElementById('demoStep');
 const dotsEl = document.getElementById('demoDots');
 document.getElementById('stageChip').innerHTML = Wheel.icon('pencil', 12);
-document.getElementById('stageCup').innerHTML = Tools.glyph('away', 26);
 
 let demoTool = null;
 let demoRun = 0; // bumped on every restart or close, so stale timers do nothing
@@ -158,7 +157,8 @@ function playAway() {
   document.getElementById('stageMsg').textContent = a.message.trim() || Tools.DEFAULT_MESSAGE;
   const since = document.getElementById('stageSince');
   since.hidden = !a.showTime;
-  since.textContent = `Away since ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+  since.textContent = 'Away for 12 min';
+  document.getElementById('stageCup').innerHTML = Tools.glyph('away', 26, { icon: a.icon, mood: a.mood });
   Tools.mood(a.mood).colors.forEach((col, i) => stage.querySelectorAll('.dblob')[i]?.style.setProperty('--c', col));
   const total = 3;
 

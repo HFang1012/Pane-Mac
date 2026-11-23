@@ -11,17 +11,12 @@ const SPOTS = [
   { x: '12%', y: '88%', dx: '7vw', dy: '-5vh', t: '46s', delay: '-26s' },
 ];
 
-function since(t) {
-  const time = new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  const mins = Math.floor((Date.now() - t) / 60000);
-  if (mins < 1) return `Away since ${time}`;
-  const span = mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} hr${mins >= 120 ? 's' : ''}${mins % 60 ? ` ${mins % 60} min` : ''}`;
-  return `Away since ${time} · ${span}`;
-}
+const awayFor = (t) => { const span = Tools.awayFor(Date.now() - t); return span ? `Away for ${span}` : 'Just stepped away'; };
 
 scrawl.invoke('away:init').then((a) => {
   document.body.classList.toggle('no-pointer', !!a.hidePointer);
-  $('cup').innerHTML = Tools.glyph('away', 64);
+  $('cup').innerHTML = Tools.glyph('away', 64, { icon: a.icon, mood: a.mood.id });
+  document.body.style.setProperty('--dot', a.mood.icon.mainLip);
   $('msg').textContent = (a.message || '').trim() || Tools.DEFAULT_MESSAGE;
 
   const colors = a.mood.colors;
@@ -31,9 +26,9 @@ scrawl.invoke('away:init').then((a) => {
   if (a.showTime) {
     const el = $('since');
     el.hidden = false;
-    const tick = () => { $('sinceText').textContent = since(a.since); };
+    const tick = () => { $('sinceText').textContent = awayFor(a.since); };
     tick();
-    setInterval(tick, 15000);
+    setInterval(tick, 5000);
   }
 
   // How to come back: briefly, on the screen you were on. A preview closes with any key or click.

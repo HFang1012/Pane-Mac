@@ -40,10 +40,17 @@
   .card .cup svg { display: block; margin: 0 auto; }
   .cup .steam path { stroke-dasharray: 14; animation: steam 2.8s ease-in-out infinite; }
   .cup .steam .s2 { animation-delay: 1.1s; }
+  .cup .twinkle { transform-box: fill-box; transform-origin: center; animation: twinkle 3s ease-in-out infinite; }
+  .cup .twinkle.t2 { animation-delay: 1.4s; }
+  @keyframes twinkle { 50% { opacity: 0.45; transform: scale(0.72) rotate(18deg); } }
+  .cup .dots circle { animation: hop 1.6s ease-in-out infinite; }
+  .cup .dots .d2 { animation-delay: 0.18s; }
+  .cup .dots .d3 { animation-delay: 0.36s; }
+  @keyframes hop { 0%, 60%, 100% { transform: none; } 30% { transform: translateY(-2.5px); } }
   @keyframes steam { 0% { stroke-dashoffset: 14; opacity: 0; } 30% { opacity: 1; } 70% { opacity: 1; } 100% { stroke-dashoffset: -14; opacity: 0; } }
   .msg { font-size: 34px; line-height: 1.18; font-weight: 800; letter-spacing: -0.015em; margin: 0; overflow-wrap: anywhere; white-space: pre-line; }
   .since { display: inline-flex; align-items: center; gap: 8px; margin: 18px 0 0; padding: 6px 14px; border-radius: 999px; background: var(--well); color: var(--ink-2); font-size: 15px; font-weight: 700; }
-  .since .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--peach-lip); animation: breathe 3.2s ease-in-out infinite; }
+  .since .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dot, var(--peach-lip)); animation: breathe 3.2s ease-in-out infinite; }
   @keyframes breathe { 50% { opacity: 0.35; transform: scale(0.8); } }
   .since[hidden] { display: none; }
 
@@ -61,7 +68,7 @@
   @keyframes card-out { to { opacity: 0; transform: scale(0.92); } }
 
   @media (prefers-reduced-motion: reduce) {
-    .blob, .cup .steam path, .since .dot { animation: none; }
+    .blob, .cup .steam path, .cup .twinkle, .cup .dots circle, .since .dot { animation: none; }
     .card { animation-duration: 1ms; }
   }
 </style>

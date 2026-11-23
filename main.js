@@ -80,8 +80,9 @@ const DEFAULTS = {
     enabled: true,
   },
   debug: {
-    // Double-tap a key (left ⇧ to start), hold it, or press a shortcut, and Debug's panel opens over everything.
-    mode: 'double', // 'double' | 'hold' | 'shortcut'
+    // Press a shortcut (⌃⌘B to start), or double-tap or hold a key, and Debug's panel opens over everything.
+    mode: 'shortcut', // 'shortcut' | 'double' | 'hold'
+    modeV: 2, // settings from before Debug started on its shortcut get moved over to it once
     key: { codes: [UiohookKey.Shift], symbol: '⇧', name: 'Left Shift', side: 'left' },
     keys: { accelerator: 'Control+Command+B', symbols: ['⌃', '⌘', 'B'], name: 'Control Command B' },
     size: 'medium', // 'small' | 'medium' | 'large' (DEBUG_ZOOM)
@@ -1890,7 +1891,7 @@ function setTweakEnabled(on) {
 }
 
 // ---------- Debug: what's slowing your Mac down, and fixes you can click ----------
-// Double-tap the Debug key (left ⇧ to start), hold it, or press a shortcut, and a small panel opens over
+// Press Debug's shortcut (⌃⌘B to start), or double-tap or hold its key, and a small panel opens over
 // everything, on the app you were in. It shows how busy the Mac is (CPU, memory, battery, storage), which
 // apps are behind it, and fixes for what it finds. Its − folds it into a little pill that keeps watching.
 // It never takes the keyboard when it opens, so the app you're looking at stays the one in front.
@@ -1915,6 +1916,7 @@ function cleanDebug(d) {
   if (!['app', 'mac'].includes(out.start)) out.start = DEFAULTS.debug.start;
   if (!['corner', 'pointer', 'last'].includes(out.place)) out.place = DEFAULTS.debug.place;
   if (d?.placeV !== 2) { out.place = 'pointer'; out.placeV = 2; } // it used to open in the corner
+  if (d?.modeV !== 2) { out.mode = 'shortcut'; out.modeV = 2; } // it used to start on a double-tap
   if (!(out.at && Number.isFinite(out.at.x) && Number.isFinite(out.at.y))) out.at = null;
   out.confirm = out.confirm !== false;
   out.key = asCombo(out.key);

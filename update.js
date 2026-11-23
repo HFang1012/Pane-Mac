@@ -90,6 +90,8 @@ $u('updLater').addEventListener('click', dismissUpdate);
 $u('updClose').addEventListener('click', dismissUpdate);
 $u('updSkip').addEventListener('click', () => scrawl.send('update:skip'));
 updCorner.addEventListener('click', () => scrawl.send('update:open'));
+// The title bar button always asks GitHub again (and opens the sheet to show what it finds).
+$u('checkUpdates').addEventListener('click', (e) => { e.currentTarget.blur(); scrawl.send('update:check'); });
 updEl.addEventListener('pointerdown', (e) => { if (e.target === updEl) dismissUpdate(); });
 addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && updEl.classList.contains('open')) { e.preventDefault(); dismissUpdate(); }

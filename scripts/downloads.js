@@ -41,7 +41,7 @@ async function releases() {
   console.log(`Updates by patch:               ${total('updates')}`);
   console.log(`Releases:                       ${rows.length}`);
   console.log('\nThese count every download, bots and repeats too. One per person:');
-  console.log('  https://pane-mac.goatcounter.com  (app/install = new people, app/existing = earlier users; plus site visits)');
+  console.log('  https://hfang1012.github.io/Pane-Mac/stats/  (npm run stats)');
 })().catch((err) => {
   console.error(`Couldn't read the download counts: ${err.message}`);
   process.exit(1);

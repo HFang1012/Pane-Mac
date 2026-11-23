@@ -14,7 +14,8 @@
     "ship": "npm version patch -m \"Release %s\" && git push --follow-tags",
     "ship:minor": "npm version minor -m \"Release %s\" && git push --follow-tags",
     "ship:major": "npm version major -m \"Release %s\" && git push --follow-tags",
-    "downloads": "node scripts/downloads.js"
+    "downloads": "node scripts/downloads.js",
+    "stats": "open https://hfang1012.github.io/Pane-Mac/stats/"
   },
   "dependencies": {
     "uiohook-napi": "^1.5.5"

@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pane Stats</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/png" href="../favicon.png">
+<style>
+  /* Pane's website palette (Away's warm theme), with its own dark steps. */
+  :root {
+    --paper: #ECE6DD; --card: #FBF8F3; --card-lip: #E4DBCE; --well: #F2EDE5; --line: #E3DBCF; --edge: #D3C9BB;
+    --ink: #2B2733; --ink-2: #6A6272; --ink-3: #8F8796;
+    --accent: #B9A5F4; --accent-lip: #8E76DC; --accent-soft: #E8E0FC; --accent-ink: #6A50C4;
+    --site: #7A5FD6; --install: #2E9E6B; --warn-bg: #FFF0C4; --warn-ink: #7A5600;
+    --font: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, sans-serif;
+    --bouncy: linear(0, 0.055, 0.192, 0.373, 0.565, 0.745, 0.898, 1.016, 1.098, 1.144, 1.162, 1.158, 1.138, 1.11, 1.079, 1.049, 1.023, 1.002, 0.987, 0.978, 0.974, 0.974, 0.976, 0.981, 0.986, 0.991, 0.995, 0.999, 1);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #1F1C24; --card: #2A2631; --card-lip: #17151B; --well: #332E3B; --line: #3A3543; --edge: #4A4454;
+      --ink: #F1ECF6; --ink-2: #ADA5B6; --ink-3: #8A8293;
+      --accent: #B9A5F4; --accent-lip: #8E76DC; --accent-soft: #3A3150; --accent-ink: #CBBBFA;
+      --site: #8C72E6; --install: #36A56F; --warn-bg: #4A3D17; --warn-ink: #FFE29A;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #1F1C24; --card: #2A2631; --card-lip: #17151B; --well: #332E3B; --line: #3A3543; --edge: #4A4454;
+    --ink: #F1ECF6; --ink-2: #ADA5B6; --ink-3: #8A8293;
+    --accent: #B9A5F4; --accent-lip: #8E76DC; --accent-soft: #3A3150; --accent-ink: #CBBBFA;
+    --site: #8C72E6; --install: #36A56F; --warn-bg: #4A3D17; --warn-ink: #FFE29A;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--paper); }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+  button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--accent-lip); outline-offset: 3px; border-radius: 8px; }
+  main { max-width: 1040px; margin: 0 auto; padding: 36px 24px 56px; }
+  [hidden] { display: none !important; }
+
+  /* ---------- header ---------- */
+  header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  header img { width: 48px; height: 48px; filter: drop-shadow(0 6px 10px rgba(43, 39, 51, 0.2)); }
+  .title { flex: 1; min-width: 160px; }
+  h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.01em; line-height: 1.1; margin: 0; }
+  .sub { color: var(--ink-2); font-size: 14px; font-weight: 700; margin-top: 2px; }
+  .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .range { display: inline-flex; background: var(--card); border-radius: 999px; padding: 4px; box-shadow: 0 4px 0 var(--card-lip); }
+  .range button { font-size: 14px; font-weight: 800; padding: 6px 14px; border-radius: 999px; color: var(--ink-2); transition: background 160ms, color 160ms; }
+  .range button[aria-pressed="true"] { background: var(--accent); color: #2B2733; }
+  .pill { font-size: 14px; font-weight: 800; height: 38px; padding: 0 16px; border-radius: 19px; display: inline-flex; align-items: center; gap: 8px; background: var(--card); box-shadow: 0 4px 0 var(--card-lip); text-decoration: none; margin-bottom: 4px; transition: transform 180ms var(--bouncy), box-shadow 180ms var(--bouncy); }
+  .pill:hover { transform: translateY(-1px); box-shadow: 0 5px 0 var(--card-lip); }
+  .pill:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--card-lip); }
+  .pill svg { width: 15px; height: 15px; }
+  .pill.spin svg { animation: spin 700ms linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .note { margin-top: 18px; padding: 10px 16px; border-radius: 14px; font-size: 14px; font-weight: 700; background: var(--warn-bg); color: var(--warn-ink); }
+
+  /* ---------- cards ---------- */
+  .card { background: var(--card); border-radius: 24px; box-shadow: 0 6px 0 var(--card-lip); padding: 20px 22px; min-width: 0; }
+  .card h2 { font-size: 16px; font-weight: 800; margin: 0; }
+  .card .hint { color: var(--ink-2); font-size: 13px; font-weight: 600; margin: 2px 0 0; }
+  .card-head { display: flex; align-items: flex-start; gap: 12px; }
+  .card-head > div { flex: 1; min-width: 0; }
+  .table-toggle { font-size: 12px; font-weight: 800; color: var(--ink-2); padding: 4px 10px; border-radius: 999px; background: var(--well); }
+  .table-toggle[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); }
+
+  .top { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 2fr); gap: 18px; margin-top: 26px; }
+  .hero { display: flex; flex-direction: column; justify-content: space-between; gap: 14px; }
+  .hero .label { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 800; }
+  .key { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .hero .value { font-size: 64px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+  .hero .what { color: var(--ink-2); font-size: 14px; font-weight: 600; margin: 6px 0 0; }
+  .hero .also { font-size: 13px; font-weight: 700; color: var(--ink-2); background: var(--well); border-radius: 12px; padding: 8px 12px; }
+
+  .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+  .tile .label { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; color: var(--ink-2); }
+  .tile .value { font-size: 34px; font-weight: 800; line-height: 1.1; margin-top: 6px; }
+  .tile .what { color: var(--ink-3); font-size: 12px; font-weight: 700; margin-top: 2px; }
+
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 18px; }
+  .wide { margin-top: 18px; }
+
+  /* ---------- charts ---------- */
+  .chart { position: relative; margin-top: 14px; }
+  .chart svg { display: block; width: 100%; overflow: visible; }
+  .chart .grid line { stroke: var(--line); stroke-width: 1; }
+  .chart .axis text { fill: var(--ink-3); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .chart .cross { stroke: var(--ink-3); stroke-width: 1; }
+  .chart .hover-dot { stroke: var(--card); stroke-width: 2; }
+  .chart .hit { fill: transparent; cursor: crosshair; }
+  .empty-chart { position: absolute; inset: 0 0 26px 36px; display: grid; place-items: center; color: var(--ink-3); font-size: 14px; font-weight: 700; pointer-events: none; }
+  .tip { position: absolute; top: 0; pointer-events: none; background: var(--ink); color: var(--card); font-size: 13px; font-weight: 700; padding: 6px 10px; border-radius: 10px; white-space: nowrap; transform: translate(-50%, calc(-100% - 6px)); opacity: 0; transition: opacity 120ms; z-index: 2; }
+  .tip b { font-weight: 800; }
+  .tip.on { opacity: 1; }
+
+  .data-table { margin-top: 14px; max-height: 260px; overflow: auto; border-radius: 12px; background: var(--well); }
+  .data-table table { width: 100%; border-collapse: collapse; font-size: 13px; font-weight: 700; }
+  .data-table th, .data-table td { text-align: left; padding: 6px 12px; border-bottom: 1px solid var(--line); }
+  .data-table th { position: sticky; top: 0; background: var(--well); color: var(--ink-2); font-weight: 800; }
+  .data-table td.num, .data-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* ---------- funnel and lists ---------- */
+  .steps { margin-top: 16px; display: grid; gap: 14px; }
+  .step .row, .item .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; font-weight: 700; }
+  .step .row span:first-child, .item .row span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .step .num, .item .num { font-variant-numeric: tabular-nums; font-weight: 800; flex: none; }
+  .step .num small { color: var(--ink-2); font-weight: 700; font-size: 12px; margin-left: 6px; }
+  .track { height: 10px; margin-top: 6px; border-radius: 5px; background: var(--well); overflow: hidden; }
+  .track i { display: block; height: 100%; border-radius: 5px; width: 0; transition: width 600ms var(--bouncy); }
+  .items { margin-top: 14px; display: grid; gap: 10px; }
+  .item .track { height: 8px; margin-top: 4px; }
+  .nothing { color: var(--ink-3); font-size: 14px; font-weight: 700; margin-top: 14px; }
+
+  .gh { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+  .gh .value { font-size: 26px; font-weight: 800; line-height: 1.1; }
+  .gh .what { color: var(--ink-2); font-size: 12px; font-weight: 700; }
+
+  footer { margin-top: 30px; text-align: center; color: var(--ink-2); font-size: 13px; font-weight: 600; }
+
+  /* ---------- key setup ---------- */
+  .setup { max-width: 560px; margin: 40px auto 0; }
+  .setup ol { margin: 14px 0 0; padding-left: 22px; font-size: 15px; font-weight: 600; color: var(--ink-2); }
+  .setup ol li { margin: 6px 0; }
+  .setup ol b { color: var(--ink); }
+  .setup form { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+  .setup input { flex: 1; min-width: 200px; height: 44px; border-radius: 14px; border: 2px solid var(--edge); background: var(--well); color: var(--ink); font: 600 14px ui-monospace, "SF Mono", Menlo, monospace; padding: 0 14px; }
+  .setup input:focus { outline: none; border-color: var(--accent-lip); }
+  .go { font-size: 15px; font-weight: 800; height: 44px; padding: 0 20px; border-radius: 22px; background: var(--accent); color: #2B2733; box-shadow: 0 5px 0 var(--accent-lip); margin-bottom: 5px; transition: transform 180ms var(--bouncy), box-shadow 180ms var(--bouncy); }
+  .go:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--accent-lip); }
+  .go:disabled { opacity: 0.6; cursor: default; }
+  .error { color: #B54563; font-size: 14px; font-weight: 700; margin-top: 10px; }
+  .fine { color: var(--ink-3); font-size: 12px; font-weight: 700; margin-top: 12px; }
+
+  .loading { opacity: 0.55; transition: opacity 200ms; }
+
+  @media (max-width: 760px) {
+    main { padding: 24px 16px 40px; }
+    .top, .grid2 { grid-template-columns: minmax(0, 1fr); }
+    .hero .value { font-size: 52px; }
+    .tile .value { font-size: 28px; }
+    .gh { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="../icon.png" alt="">
+    <div class="title">
+      <h1>Pane stats</h1>
+      <div class="sub" id="sub">Visits, downloads and installs</div>
+    </div>
+    <div class="controls" id="controls" hidden>
+      <div class="range" role="group" aria-label="Time range">
+        <button type="button" data-days="7">7 days</button>
+        <button type="button" data-days="30">30 days</button>
+        <button type="button" data-days="90">90 days</button>
+        <button type="button" data-days="365">1 year</button>
+      </div>
+      <button class="pill" type="button" id="refresh" title="Fetch the latest numbers">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg>
+        Refresh
+      </button>
+      <button class="pill" type="button" id="signout" title="Forget the token in this browser">Sign out</button>
+    </div>
+  </header>
+
+  <div class="note" id="note" hidden></div>
+
+  <!-- First run: connect GoatCounter. -->
+  <section class="card setup" id="setup" hidden>
+    <h2>Connect GoatCounter</h2>
+    <p class="hint">Only people with Pane’s GoatCounter token can see these numbers.</p>
+    <ol>
+      <li>Open <a id="api-link" href="https://pane-mac.goatcounter.com/user/api" target="_blank" rel="noopener">GoatCounter’s API page</a> and scroll to <b>Add new API Token</b>.</li>
+      <li>Name it <b>Pane stats</b>, tick only <b>Read statistics</b>, and click <b>Add new</b>.</li>
+      <li>Copy the token from the <b>API tokens</b> list at the top and paste it here.</li>
+    </ol>
+    <form id="key-form" autocomplete="off">
+      <input id="key" type="password" placeholder="Paste the API token" aria-label="GoatCounter API token" spellcheck="false" autocomplete="off">
+      <button class="go" type="submit" id="key-save">Connect</button>
+    </form>
+    <div class="error" id="key-error" hidden></div>
+    <p class="fine">The token is kept only in this browser, so you won’t be asked again here. It never goes to GitHub or into the website’s files. Use Sign out to remove it.</p>
+  </section>
+
+  <!-- The dashboard. -->
+  <div id="dash" hidden>
+    <div class="top">
+      <section class="card hero" aria-labelledby="hero-label">
+        <div>
+          <div class="label" id="hero-label"><span class="key" style="background: var(--install)"></span>New installs</div>
+          <div class="value" id="installs">–</div>
+          <p class="what">People who opened Pane for the first time. Each Mac counts once, never on updates.</p>
+        </div>
+        <div class="also" id="existing"></div>
+      </section>
+      <div class="tiles">
+        <section class="card tile"><div class="label"><span class="key" style="background: var(--site)"></span>Site visitors</div><div class="value" id="t-visitors">–</div><div class="what">Different people on the website</div></section>
+        <section class="card tile"><div class="label">Download clicks</div><div class="value" id="t-dmg">–</div><div class="what">“Download Pane.dmg” button</div></section>
+        <section class="card tile"><div class="label">Copied the command</div><div class="value" id="t-copy">–</div><div class="what">The Terminal install, either Copy button</div></section>
+        <section class="card tile"><div class="label">Install rate</div><div class="value" id="t-rate">–</div><div class="what">New installs per site visitor</div></section>
+      </div>
+    </div>
+
+    <section class="card wide" id="visitors-card">
+      <div class="card-head">
+        <div><h2>Site visitors per day</h2><p class="hint" id="visitors-hint"></p></div>
+        <button class="table-toggle" type="button" aria-pressed="false" data-table="visitors">Table</button>
+      </div>
+      <div class="chart" id="visitors-chart"></div>
+      <div class="data-table" id="visitors-table" hidden></div>
+    </section>
+
+    <div class="grid2">
+      <section class="card" id="installs-card">
+        <div class="card-head">
+          <div><h2>New installs per day</h2><p class="hint" id="installs-hint"></p></div>
+          <button class="table-toggle" type="button" aria-pressed="false" data-table="installs">Table</button>
+        </div>
+        <div class="chart" id="installs-chart"></div>
+        <div class="data-table" id="installs-table" hidden></div>
+      </section>
+      <section class="card">
+        <h2>From visit to install</h2>
+        <p class="hint">Share of site visitors who got to each step.</p>
+        <div class="steps" id="funnel"></div>
+      </section>
+    </div>
+
+    <div class="grid2">
+      <section class="card"><h2>Where visitors came from</h2><p class="hint">The page that linked to the site</p><div id="l-referrers"></div></section>
+      <section class="card"><h2>Countries</h2><p class="hint">From the visitor’s network, not stored</p><div id="l-countries"></div></section>
+      <section class="card"><h2>Systems</h2><p class="hint">Visitors on a Mac can install right away</p><div id="l-systems"></div></section>
+      <section class="card"><h2>Browsers</h2><p class="hint">What visitors used</p><div id="l-browsers"></div></section>
+    </div>
+
+    <section class="card wide">
+      <h2>GitHub downloads, all time</h2>
+      <p class="hint">GitHub counts every download, including bots and repeats, so these run higher than real people.</p>
+      <div class="gh">
+        <div><div class="value" id="g-dmg">–</div><div class="what">Pane.dmg downloads</div></div>
+        <div><div class="value" id="g-patch">–</div><div class="what">Update patches</div></div>
+        <div><div class="value" id="g-latest">–</div><div class="what" id="g-latest-what">Latest release</div></div>
+      </div>
+    </section>
+
+    <footer id="footer"></footer>
+  </div>
+</main>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } }, remove(k) { try { localStorage.removeItem(k); } catch {} } };
+  const fmt = (n) => (n >= 10000 ? new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(n) : n.toLocaleString('en'));
+  const pct = (a, b) => (b > 0 ? `${Math.round((a / b) * 100)}%` : '–');
+  const dayLabel = (d, long) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en', long ? { weekday: 'short', month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric' });
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs = {}, parent) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (parent) parent.appendChild(n); return n; };
+
+  let days = [7, 30, 90, 365].includes(Number(store.get('pane-stats-days'))) ? Number(store.get('pane-stats-days')) : 30;
+  let data = null;
+
+  // ---------- charts ----------
+  function niceMax(max) {
+    if (max <= 4) return 4;
+    const raw = max / 4, mag = 10 ** Math.floor(Math.log10(raw));
+    const step = [1, 2, 5, 10].map((m) => m * mag).find((s) => s >= raw); // whole steps: these count people
+    return step * 4;
+  }
+
+  // A single-series daily chart: a 2px line over a light wash, or columns. Hover shows the day.
+  function drawChart(host, { list, values, color, kind, noun, empty }) {
+    host.innerHTML = '';
+    const W = Math.max(280, host.clientWidth), H = kind === 'line' ? 230 : 200;
+    const pad = { l: 36, r: 10, t: 10, b: 26 };
+    const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+    const top = niceMax(Math.max(0, ...values));
+    const y = (v) => pad.t + ih - (v / top) * ih;
+    const band = iw / list.length;
+    const x = (i) => pad.l + band * (i + 0.5);
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, height: H, role: 'img', 'aria-label': `${noun} per day, ${list.length} days, total ${values.reduce((a, b) => a + b, 0)}` }, host);
+
+    const grid = el('g', { class: 'grid' }, svg), axis = el('g', { class: 'axis' }, svg);
+    for (let k = 0; k <= 4; k++) {
+      const v = (top / 4) * k, yy = Math.round(y(v)) + 0.5;
+      el('line', { x1: pad.l, x2: W - pad.r, y1: yy, y2: yy }, grid);
+      el('text', { x: pad.l - 8, y: yy + 4, 'text-anchor': 'end' }, axis).textContent = fmt(v);
+    }
+    // Day labels at an even step, counted back from today so the latest day is always named.
+    const step = Math.max(1, Math.ceil(70 / band));
+    const last = list.length - 1;
+    for (let i = last; i >= 0; i -= step) {
+      if (i !== last && x(i) - pad.l < 30) break; // too close to the left edge to fit
+      const t = el('text', { x: x(i), y: H - 6, 'text-anchor': i === last ? 'end' : 'middle' }, axis);
+      if (i === last) t.setAttribute('x', x(i) + Math.min(band / 2, 4));
+      t.textContent = dayLabel(list[i]);
+    }
+
+    if (kind === 'line') {
+      const pts = values.map((v, i) => [x(i), y(v)]);
+      const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join('');
+      el('path', { d: `${line}L${pts.at(-1)[0].toFixed(1)},${y(0)}L${pts[0][0].toFixed(1)},${y(0)}Z`, fill: color, 'fill-opacity': 0.1 }, svg);
+      el('path', { d: line, fill: 'none', stroke: color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
+      const last = pts.at(-1);
+      el('circle', { cx: last[0], cy: last[1], r: 4, fill: color, class: 'hover-dot' }, svg);
+    } else {
+      const w = Math.max(1, Math.min(24, band - 2));
+      const r = Math.min(4, w / 2);
+      values.forEach((v, i) => {
+        if (!v) return;
+        const x0 = x(i) - w / 2, y0 = y(v), y1 = y(0), rr = Math.min(r, y1 - y0);
+        el('path', { d: `M${x0},${y1}V${y0 + rr}Q${x0},${y0} ${x0 + rr},${y0}H${x0 + w - rr}Q${x0 + w},${y0} ${x0 + w},${y0 + rr}V${y1}Z`, fill: color }, svg);
+      });
+    }
+
+    if (!values.some(Boolean)) {
+      const e = document.createElement('div');
+      e.className = 'empty-chart';
+      e.textContent = empty;
+      host.appendChild(e);
+    }
+
+    // Hover: a crosshair (and dot) on the nearest day, with its count.
+    const cross = el('line', { class: 'cross', y1: pad.t, y2: pad.t + ih, visibility: 'hidden' }, svg);
+    const dot = kind === 'line' ? el('circle', { r: 5, fill: color, class: 'hover-dot', visibility: 'hidden' }, svg) : null;
+    const tip = document.createElement('div');
+    tip.className = 'tip';
+    host.appendChild(tip);
+    const hit = el('rect', { class: 'hit', x: pad.l, y: pad.t, width: iw, height: ih + pad.b }, svg);
+    const show = (clientX) => {
+      const box = svg.getBoundingClientRect();
+      const px = ((clientX - box.left) / box.width) * W;
+      const i = Math.max(0, Math.min(list.length - 1, Math.floor((px - pad.l) / band)));
+      const cx = x(i), cy = y(values[i]);
+      cross.setAttribute('x1', cx); cross.setAttribute('x2', cx); cross.setAttribute('visibility', 'visible');
+      if (dot) { dot.setAttribute('cx', cx); dot.setAttribute('cy', cy); dot.setAttribute('visibility', 'visible'); }
+      tip.innerHTML = `${dayLabel(list[i], true)} · <b>${fmt(values[i])}</b> ${values[i] === 1 ? noun.replace(/s$/, '') : noun}`;
+      const left = (cx / W) * box.width;
+      tip.style.left = `${Math.max(tip.offsetWidth / 2, Math.min(box.width - tip.offsetWidth / 2, left))}px`;
+      tip.style.top = `${(Math.min(cy, pad.t + ih - 4) / H) * box.height}px`;
+      tip.classList.add('on');
+    };
+    const hide = () => { cross.setAttribute('visibility', 'hidden'); dot?.setAttribute('visibility', 'hidden'); tip.classList.remove('on'); };
+    hit.addEventListener('pointermove', (e) => show(e.clientX));
+    hit.addEventListener('pointerdown', (e) => show(e.clientX));
+    hit.addEventListener('pointerleave', hide);
+  }
+
+  function drawTable(host, list, values, noun) {
+    const rows = list.map((d, i) => `<tr><td>${dayLabel(d, true)}</td><td class="num">${fmt(values[i])}</td></tr>`).reverse().join('');
+    host.innerHTML = `<table><thead><tr><th>Day</th><th class="num">${noun}</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  function drawList(host, items, color) {
+    if (!items || !items.length) { host.innerHTML = '<p class="nothing">Nothing yet.</p>'; return; }
+    const max = Math.max(...items.map((i) => i.count), 1);
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    host.innerHTML = `<div class="items">${items.map((i) => `
+      <div class="item"><div class="row"><span title="${esc(i.name)}">${esc(i.name)}</span><span class="num">${fmt(i.count)}</span></div>
+      <div class="track"><i style="background:${color}" data-w="${(i.count / max) * 100}"></i></div></div>`).join('')}</div>`;
+    requestAnimationFrame(() => host.querySelectorAll('i[data-w]').forEach((b) => { b.style.width = `${b.dataset.w}%`; }));
+  }
+
+  // ---------- the page ----------
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+  function render() {
+    if (!data) return;
+    const ev = data.events;
+    const visitors = data.visitors.total, installs = ev['app/install'].total;
+    const dmg = ev['download-dmg'].total, copies = ev['copy-install-command'].total, existing = ev['app/existing'].total;
+    const range = days === 365 ? 'the last year' : `the last ${days} days`;
+
+    $('#sub').textContent = `${data.site.replace(/^https?:\/\//, '')} · ${range}`;
+    $('#installs').textContent = fmt(installs);
+    $('#existing').textContent = existing
+      ? `Plus ${fmt(existing)} ${existing === 1 ? 'person' : 'people'} who already had Pane, counted once when they updated.`
+      : 'People who had Pane before counting started show up here once they update.';
+    $('#t-visitors').textContent = fmt(visitors);
+    $('#t-dmg').textContent = fmt(dmg);
+    $('#t-copy').textContent = fmt(copies);
+    $('#t-rate').textContent = pct(Math.min(installs, visitors), visitors);
+
+    const site = css('--site'), inst = css('--install');
+    $('#visitors-hint').textContent = `${fmt(visitors)} in ${range}. Hover a day for its count.`;
+    $('#installs-hint').textContent = `${fmt(installs)} in ${range}`;
+    drawChart($('#visitors-chart'), { list: data.days, values: data.visitors.daily, color: site, kind: 'line', noun: 'visitors', empty: 'No visits yet in this range' });
+    drawChart($('#installs-chart'), { list: data.days, values: ev['app/install'].daily, color: inst, kind: 'columns', noun: 'installs', empty: 'No installs yet in this range' });
+    drawTable($('#visitors-table'), data.days, data.visitors.daily, 'Visitors');
+    drawTable($('#installs-table'), data.days, ev['app/install'].daily, 'Installs');
+
+    const tried = dmg + copies;
+    const steps = [
+      { name: 'Visited the site', n: visitors, color: site },
+      { name: 'Clicked download or copied the command', n: tried, color: site },
+      { name: 'Installed and opened Pane', n: installs, color: inst },
+    ];
+    $('#funnel').innerHTML = steps.map((s) => `
+      <div class="step"><div class="row"><span>${s.name}</span><span class="num">${fmt(s.n)}<small>${visitors ? pct(Math.min(s.n, visitors), visitors) : ''}</small></span></div>
+      <div class="track"><i style="background:${s.color}" data-w="${visitors ? Math.min(100, (s.n / visitors) * 100) : 0}"></i></div></div>`).join('')
+      + '<p class="fine">Installs also come from people who never visit, like friends sent the Terminal command, so the last step can run higher.</p>';
+    requestAnimationFrame(() => $('#funnel').querySelectorAll('i[data-w]').forEach((b) => { b.style.width = `${b.dataset.w}%`; }));
+
+    drawList($('#l-referrers'), data.lists.referrers, site);
+    drawList($('#l-countries'), data.lists.countries, site);
+    drawList($('#l-systems'), data.lists.systems, site);
+    drawList($('#l-browsers'), data.lists.browsers, site);
+
+    const gh = data.github;
+    if (gh && !gh.error) {
+      $('#g-dmg').textContent = fmt(gh.dmg);
+      $('#g-patch').textContent = fmt(gh.patches);
+      $('#g-latest').textContent = gh.latest ? gh.latest.version : '–';
+      $('#g-latest-what').textContent = gh.latest ? `Latest release, ${fmt(gh.latest.dmg)} Pane.dmg downloads` : 'Latest release';
+    } else if (!gh) {
+      $('#g-latest-what').textContent = 'Loading from GitHub…';
+    } else {
+      $('#g-latest-what').textContent = `Couldn’t reach GitHub: ${gh.error}`;
+    }
+
+    const at = new Date(data.at).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' });
+    $('#footer').innerHTML = `Updated ${at} · from <a href="${data.site}" target="_blank" rel="noopener">GoatCounter</a> and GitHub`;
+  }
+
+  // ---------- where the numbers come from ----------
+  // Straight from GoatCounter's API (it lets pages on other sites call it) and GitHub's public release counts.
+  // The token is kept in this browser's localStorage, not a cookie: a cookie would ride along on every request
+  // to github.io, and localStorage never leaves the browser.
+  const SITE = 'https://pane-mac.goatcounter.com';
+  const REPO = 'HFang1012/Pane-Mac';
+  const EVENTS = ['app/install', 'app/existing', 'download-dmg', 'copy-install-command', 'github-source'];
+  const TOKEN = 'pane-stats-token';
+  const DEMO = new URLSearchParams(location.search).has('demo');
+  let memToken = ''; // when the browser won't store it (a private window), keep it for this visit
+  const getToken = () => store.get(TOKEN) || memToken;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  async function goat(token, route, params = {}) {
+    const url = `${SITE}/api/v0/${route}?${new URLSearchParams(params)}`;
+    for (let attempt = 0; ; attempt++) {
+      let res;
+      try { res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }); }
+      catch { throw new Error('Couldn’t reach GoatCounter. Check the connection, or whether an ad blocker is blocking goatcounter.com.'); }
+      if (res.status === 429 && attempt < 3) { await sleep(1100 * (attempt + 1)); continue; } // 4 requests a second at most
+      if (res.status === 401 || res.status === 403) throw Object.assign(new Error('GoatCounter didn’t accept that token. Make sure it has “Read statistics” ticked.'), { rejected: true });
+      if (!res.ok) throw new Error(`GoatCounter said ${res.status}`);
+      return res.json();
+    }
+  }
+
+  const dayOf = (d) => d.toISOString().slice(0, 10);
+  function rangeFor(n) {
+    const end = new Date();
+    const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate() - (n - 1)));
+    const list = [];
+    for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) list.push(dayOf(d));
+    const iso = (d) => d.toISOString().replace(/\.\d+Z$/, 'Z');
+    return { start: iso(start), end: iso(end), list };
+  }
+  // A day's count from GoatCounter's per-day stats, whichever shape it comes in.
+  const dayCount = (s) => (typeof s.daily === 'number' ? s.daily : Array.isArray(s.hourly) ? s.hourly.reduce((a, b) => a + b, 0) : 0);
+  function series(list, statsArrays) {
+    const byDay = Object.fromEntries(list.map((d) => [d, 0]));
+    for (const stats of statsArrays) for (const s of stats || []) if (s.day in byDay) byDay[s.day] += dayCount(s);
+    return list.map((d) => byDay[d]);
+  }
+
+  async function fromGoat(token, n) {
+    const { start, end, list } = rangeFor(n);
+    const span = { start, end };
+    const hits = await goat(token, 'stats/hits', { ...span, limit: 100 });
+    const listOf = async (page) => {
+      try {
+        const r = await goat(token, `stats/${page}`, { ...span, limit: 8 });
+        return (r.stats || []).map((s) => ({ name: s.name || s.id || '(direct)', count: s.count || 0 }));
+      } catch (err) { if (err.rejected) throw err; return []; }
+    };
+    // One after another: GoatCounter's API doesn't like bursts.
+    const referrers = await listOf('toprefs');
+    const countries = await listOf('locations');
+    const systems = await listOf('systems');
+    const browsers = await listOf('browsers');
+    const rows = hits.hits || [];
+    const clean = (p) => String(p || '').replace(/^\/+/, '');
+    const pages = rows.filter((h) => !h.event);
+    const events = {};
+    for (const name of EVENTS) {
+      const match = rows.filter((h) => h.event && clean(h.path) === name);
+      events[name] = { total: match.reduce((t, h) => t + (h.count || 0), 0), daily: series(list, match.map((h) => h.stats)) };
+    }
+    return {
+      days: list,
+      visitors: { total: pages.reduce((t, h) => t + (h.count || 0), 0), daily: series(list, pages.map((h) => h.stats)) },
+      events,
+      lists: { referrers, countries, systems, browsers },
+    };
+  }
+
+  let github = null;
+  async function fromGitHub(fresh) {
+    if (!fresh && github && Date.now() - github.at < 5 * 60_000) return github.data;
+    const releases = [];
+    for (let page = 1; page < 10; page++) {
+      const res = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=100&page=${page}`, { headers: { Accept: 'application/vnd.github+json' } });
+      if (!res.ok) throw new Error(res.status === 403 ? 'GitHub’s hourly limit, try again later' : `GitHub said ${res.status}`);
+      const batch = await res.json();
+      releases.push(...batch);
+      if (batch.length < 100) break;
+    }
+    const sum = (r, test) => r.assets.filter((a) => test(a.name)).reduce((t, a) => t + a.download_count, 0);
+    const isDmg = (n) => n.toLowerCase().endsWith('.dmg');
+    const data = {
+      dmg: releases.reduce((t, r) => t + sum(r, isDmg), 0),
+      patches: releases.reduce((t, r) => t + sum(r, (n) => n.endsWith('.patch')), 0),
+      latest: releases[0] ? { version: releases[0].tag_name.replace(/^v/, ''), dmg: sum(releases[0], isDmg) } : null,
+    };
+    github = { at: Date.now(), data };
+    return data;
+  }
+
+  // Made-up numbers for working on this page without a token: add ?demo to the address.
+  function demo(n) {
+    const { list } = rangeFor(n);
+    let seed = 7;
+    const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const visitors = list.map((_, i) => Math.round(18 + 10 * Math.sin(i / 3) + rand() * 14 + i * 0.4));
+    const pick = (arr, rate) => arr.map((v) => Math.round(v * rate * (0.6 + rand() * 0.8)));
+    const ev = (a) => ({ total: a.reduce((x, y) => x + y, 0), daily: a });
+    const named = (rows) => rows.map(([name, count]) => ({ name, count }));
+    return {
+      days: list,
+      visitors: ev(visitors),
+      events: { 'app/install': ev(pick(visitors, 0.17)), 'app/existing': ev(list.map((_, i) => (i < 3 ? Math.round(rand() * 6) : 0))), 'download-dmg': ev(pick(visitors, 0.12)), 'copy-install-command': ev(pick(visitors, 0.18)), 'github-source': ev(pick(visitors, 0.05)) },
+      lists: {
+        referrers: named([['(direct)', 120], ['news.ycombinator.com', 64], ['reddit.com', 41], ['github.com', 22], ['x.com', 9]]),
+        countries: named([['United States', 110], ['Germany', 31], ['United Kingdom', 24], ['Canada', 18], ['Japan', 11], ['France', 8]]),
+        systems: named([['macOS', 190], ['iOS', 30], ['Windows', 18], ['Linux', 9]]),
+        browsers: named([['Safari', 104], ['Chrome', 98], ['Firefox', 25], ['Arc', 14]]),
+      },
+    };
+  }
+
+  const cache = new Map();
+  async function fetchStats(fresh) {
+    const hit = cache.get(days);
+    if (!fresh && hit && Date.now() - hit.at < 60_000) return hit.data;
+    const goatData = DEMO ? demo(days) : await fromGoat(getToken(), days);
+    const result = { ...goatData, github: null, demo: DEMO, site: SITE, at: new Date().toISOString() };
+    cache.set(days, { at: Date.now(), data: result });
+    return result;
+  }
+
+  // ---------- showing it ----------
+  function note(text) { const n = $('#note'); n.textContent = text || ''; n.hidden = !text; }
+
+  async function load(fresh) {
+    const btn = $('#refresh');
+    btn.classList.add('spin');
+    $('#dash').classList.add('loading');
+    try {
+      data = await fetchStats(fresh);
+      note(data.demo ? 'Made-up numbers, because the address ends in ?demo.' : '');
+      $('#dash').hidden = false;
+      render();
+      // GitHub's counts can be slow: show GoatCounter's first, then fill these in.
+      const shown = data;
+      const gh = await fromGitHub(fresh).catch((err) => ({ error: err.message }));
+      if (data === shown) { data.github = gh; render(); }
+    } catch (err) {
+      if (err.rejected) { forget(); showSetup('GoatCounter no longer accepts the saved token. Paste a new one.'); return; }
+      note(`Couldn’t load the numbers: ${err.message}`);
+    } finally {
+      btn.classList.remove('spin');
+      $('#dash').classList.remove('loading');
+    }
+  }
+
+  function forget() { store.remove(TOKEN); memToken = ''; cache.clear(); data = null; }
+
+  function showSetup(why) {
+    $('#setup').hidden = false;
+    $('#dash').hidden = true;
+    $('#controls').hidden = true;
+    note('');
+    $('#sub').textContent = 'Visits, downloads and installs';
+    const err = $('#key-error');
+    err.textContent = why || '';
+    err.hidden = !why;
+    $('#key').focus();
+  }
+
+  function showDash() {
+    $('#setup').hidden = true;
+    $('#controls').hidden = false;
+    $('#signout').hidden = DEMO;
+    document.querySelectorAll('.range button').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.days) === days)));
+    load(false);
+  }
+
+  document.querySelectorAll('.range button').forEach((b) => b.addEventListener('click', () => {
+    days = Number(b.dataset.days);
+    store.set('pane-stats-days', String(days));
+    document.querySelectorAll('.range button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    load(false);
+  }));
+  $('#refresh').addEventListener('click', () => load(true));
+  $('#signout').addEventListener('click', () => { forget(); showSetup(); });
+  document.querySelectorAll('.table-toggle').forEach((b) => b.addEventListener('click', () => {
+    const on = b.getAttribute('aria-pressed') !== 'true';
+    b.setAttribute('aria-pressed', String(on));
+    $(`#${b.dataset.table}-table`).hidden = !on;
+  }));
+
+  $('#key-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const token = $('#key').value.trim();
+    const err = $('#key-error');
+    err.hidden = true;
+    if (!token) return;
+    if (!/^[\w-]{10,200}$/.test(token)) { err.textContent = 'That doesn’t look like a GoatCounter API token.'; err.hidden = false; return; }
+    $('#key-save').disabled = true;
+    $('#key-save').textContent = 'Checking…';
+    try {
+      const { start, end } = rangeFor(1);
+      await goat(token, 'stats/hits', { start, end, limit: 1 });
+      if (!store.set(TOKEN, token)) memToken = token;
+      $('#key').value = '';
+      showDash();
+    } catch (ex) {
+      err.textContent = ex.message;
+      err.hidden = false;
+    } finally {
+      $('#key-save').disabled = false;
+      $('#key-save').textContent = 'Connect';
+    }
+  });
+
+  // Redraw the charts to fit when the window changes size or the system switches light/dark.
+  let resizeTimer;
+  new ResizeObserver(() => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 120); }).observe($('main'));
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+
+  if (DEMO || getToken()) showDash(); else showSetup();
+})();
+</script>
+</body>
+</html>

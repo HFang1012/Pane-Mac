@@ -7,6 +7,7 @@ const Tools = require('./tools.js'); // Pane's tools and Away's moods
 const Spin = require('./spin.js'); // Spin's music wheel: same geometry for drawing and hit-testing
 const Music = require('./music.js'); // Spin's link to Spotify, Music or the media keys
 const Updater = require('./updater.js'); // checks GitHub for a newer Pane and offers to install it
+const InstallCount = require('./install-count.js'); // counts each Mac once, anonymously, the first time Pane opens
 const { execFile, spawn } = require('child_process');
 const { pathToFileURL } = require('url');
 
@@ -2291,6 +2292,8 @@ ipcMain.on('tool:drop', dropTool);
 
 // ---------- lifecycle ----------
 app.whenReady().then(() => {
+  // Checked before the move from Scrawl, which would make settings appear.
+  const fresh = !fs.existsSync(file('settings.json')) && !fs.existsSync(path.join(app.getPath('appData'), 'Scrawl', 'settings.json'));
   migrateFromScrawl();
   settings = { ...DEFAULTS, ...readJSON('settings.json', {}) };
   settings.away = cleanAway(settings.away);
@@ -2338,6 +2341,7 @@ app.whenReady().then(() => {
 
   createOverlays();
   createSettings();
+  InstallCount.countOnce({ dir: app.getPath('userData'), fresh, packaged: app.isPackaged }).catch(() => {});
   for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) {
     screen.on(ev, refreshOverlays);
   }

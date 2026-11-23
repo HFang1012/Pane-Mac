@@ -40,7 +40,8 @@ async function releases() {
   console.log(`\nPane.dmg (mostly new installs): ${total('dmg')}`);
   console.log(`Updates by patch:               ${total('updates')}`);
   console.log(`Releases:                       ${rows.length}`);
-  console.log('\nWebsite visits and clicks: https://pane-mac.goatcounter.com');
+  console.log('\nThese count every download, bots and repeats too. One per person:');
+  console.log('  https://pane-mac.goatcounter.com  (app/install = new people, app/existing = earlier users; plus site visits)');
 })().catch((err) => {
   console.error(`Couldn't read the download counts: ${err.message}`);
   process.exit(1);

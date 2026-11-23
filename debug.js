@@ -182,6 +182,16 @@ function macSuggestions(s) {
   return out;
 }
 
+// How much memory is fine for an app. `normal`: nothing to say below it. `heavy`: too much.
+// Browsers: up to a quarter of the Mac's memory (at least 4 GB) is normal, past 35% (at least 6 GB) too much.
+// Other apps: past 15% (at least 2 GB) is a lot, past a quarter too much. Graphics: up to 6% (at least 1.5 GB).
+const GB = 1073741824;
+function memLimits(a, s) {
+  const t = s.mem.total;
+  return BROWSERS.includes(a.bundle)
+    ? { normal: Math.max(4 * GB, t * 0.25), heavy: Math.max(6 * GB, t * 0.35), gpu: Math.max(1.5 * GB, t * 0.06) }
+    : { normal: Math.max(2 * GB, t * 0.15), heavy: Math.max(3 * GB, t * 0.25), gpu: Math.max(1.5 * GB, t * 0.06) };
+}
 function appSuggestions(s, a) {
   const out = [];
   if (a.system) {
@@ -207,20 +217,44 @@ function appSuggestions(s, a) {
       acts: [quitAct(a), ...(share < 20 ? [{ label: 'Force quit', kind: 'force', app: a, confirm: 'Anything you haven’t saved is lost.' }] : [])],
     });
   }
-  if (a.mem > Math.max(2 * 1073741824, s.mem.total * 0.15)) {
+  // Memory. Browsers get a higher bar: every tab is its own little app, so lots of memory is normal for
+  // them. And an app's graphics (GPU) part is judged on its own. Each is only flagged once it's too much.
+  const lim = memLimits(a, s);
+  const browser = BROWSERS.includes(a.bundle);
+  const tabsAct = { label: 'Close duplicate tabs', kind: 'tabs', app: a, confirm: 'Tabs showing a page that’s already open in another tab will close.' };
+  const reopenAct = { label: `Reopen ${short(a.name)}`, kind: 'reopen', app: a, confirm: cfg?.confirm ? 'It quits, then opens again.' : null };
+  const tight = s.mem.pressure !== 'normal';
+  if (a.mem > lim.heavy) {
     out.push({
-      id: `mem:${a.key}`, level: s.mem.pressure !== 'normal' || a.mem / s.mem.total >= 0.25 ? 'warn' : 'tip',
+      id: `mem:${a.key}`, level: 'warn',
+      title: `${short(a.name)} is using too much memory`,
+      why: `About ${bytes(a.mem)}, more than ${browser ? 'even a busy browser needs' : 'it should'}. ${browser ? 'Closing tabs you’re done with, or reopening it, frees it up.' : 'Apps build up memory over time. Reopening it starts it fresh.'}`,
+      acts: browser ? [tabsAct, reopenAct] : [reopenAct],
+    });
+  } else if (a.mem > lim.normal) {
+    out.push({
+      id: `mem:${a.key}`, level: tight ? 'warn' : 'tip',
       title: `${short(a.name)} is using a lot of memory`,
-      why: `About ${bytes(a.mem)}. Apps build up memory over time. Reopening it starts it fresh.`,
-      acts: [{ label: `Reopen ${short(a.name)}`, kind: 'reopen', app: a, confirm: cfg?.confirm ? 'It quits, then opens again.' : null }],
+      why: browser
+        ? `About ${bytes(a.mem)}. Every tab uses memory, even ones you can’t see. ${CHROMIUM.includes(a.bundle) ? `To find the heaviest, open Window › Task Manager in ${short(a.name)}.` : 'Closing ones you’re done with helps.'}`
+        : `About ${bytes(a.mem)}. Apps build up memory over time. Reopening it starts it fresh.`,
+      acts: browser ? [tabsAct] : [reopenAct],
+    });
+  } else if (browser && a.mem > 1073741824) {
+    out.push({
+      id: `memok:${a.key}`, level: 'ok',
+      title: 'Normal for a browser',
+      why: `${bytes(a.mem)} sounds like a lot, but every tab is its own little app, so browsers always use plenty. ${a.mem > lim.normal * 0.85 ? 'It’s getting close to too much, though: closing a few tabs keeps it there.' : `It’s fine up to about ${bytes(lim.normal)}.`}`,
+      acts: [],
     });
   }
-  if (BROWSERS.includes(a.bundle)) {
+  // Graphics memory: some is normal for anything that draws on screen.
+  if (a.gpu > lim.gpu) {
     out.push({
-      id: `tabs:${a.key}`, level: 'tip',
-      title: 'Lots of tabs?',
-      why: `Every tab uses memory, even ones you can’t see. ${CHROMIUM.includes(a.bundle) ? `To find the one that’s busiest, open Window › Task Manager in ${short(a.name)}.` : 'Closing ones you’re done with helps.'}`,
-      acts: [{ label: 'Close duplicate tabs', kind: 'tabs', app: a, confirm: 'Tabs showing a page that’s already open in another tab will close.' }],
+      id: `gpu:${a.key}`, level: a.gpu > lim.gpu * 2 || tight ? 'warn' : 'tip',
+      title: 'Its graphics memory is high',
+      why: `${short(a.name)}’s graphics (GPU) part holds ${bytes(a.gpu)}. Some is normal, this much isn’t. ${browser ? 'A video or game in a tab can do it; closing that tab or reopening the browser clears it.' : 'Reopening it clears it.'}`,
+      acts: [reopenAct],
     });
   }
   if (a.awake.length) {
@@ -247,7 +281,7 @@ function tilesFor(s, a) {
     const energy = recent(a.history) >= 25 ? 'High' : recent(a.history) >= 6 ? 'Medium' : 'Low';
     return [
       ring(share, 'Processor', share >= 35 ? 'Working hard' : share >= 10 ? 'Busy' : 'Calm', lvl(share, 15, 35), pct(share)), // a full ring is the whole Mac
-      ring(memPct, 'Memory', bytes(a.mem), lvl(memPct, 12, 25), pct(memPct)), // a full ring is all of its memory
+      ring(memPct, 'Memory', bytes(a.mem), a.mem > memLimits(a, s).heavy ? 'bad' : a.mem > memLimits(a, s).normal ? 'warn' : 'good', pct(memPct)), // a full ring is all of its memory
       ring({ Low: 18, Medium: 55, High: 92 }[energy], 'Energy', energy, { Low: 'good', Medium: 'warn', High: 'bad' }[energy], iconFor('Energy')),
       ring(Math.min(100, a.procs * 3), a.system ? 'Tasks' : 'Parts', `${a.procs} running`, 'good', iconFor('Parts')),
     ];
@@ -515,6 +549,7 @@ function renderFacts(a) {
     rows = [
       ['Uses now', `${Math.round(recent(a.history, 2))}% of your Mac`],
       ['Memory', bytes(a.mem)],
+      ...(a.gpu ? [['Graphics (GPU)', `${bytes(a.gpu)} · ${a.gpu > memLimits(a, s).gpu ? 'High' : 'Normal'}`]] : []),
       ['Parts running', `${a.procs}`],
       ['Keeps Mac awake', a.awake.length ? 'Yes' : 'No'],
     ];
@@ -591,7 +626,8 @@ function render() {
   renderTiles(tilesFor(snap, a));
   $('graphLabel').textContent = a ? `${short(a.name)}’s processor use` : 'Processor use';
   renderSpark(a ? a.trail : snap.cpu.trail, snap.at);
-  renderFixes(list.sort((x, y) => ({ bad: 0, warn: 1, tip: 2 }[x.level] - { bad: 0, warn: 1, tip: 2 }[y.level])));
+  const RANK = { bad: 0, warn: 1, tip: 2, ok: 3 }; // reassurances (\u201cnormal for a browser\u201d) go last
+  renderFixes(list.sort((x, y) => RANK[x.level] - RANK[y.level]));
   renderList(a);
   renderFacts(a);
   renderChips(a);

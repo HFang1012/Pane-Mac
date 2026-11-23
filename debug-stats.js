@@ -198,9 +198,19 @@ async function sleepBlockers() {
     const forPid = /Created for PID: (\d+)/.exec(lines[i + 1] || '')?.[1];
     if (forPid) pid = Number(forPid);
     else if (['powerd', 'coreaudiod', 'WindowServer'].includes(m[2])) return;
-    list.push({ pid, display: /Display/.test(m[3]), what: m[4] });
+    list.push({ pid, display: /Display/.test(m[3]), what: plainReason(m[4]) });
   });
   return list;
+}
+
+// What macOS calls the reason ("com.apple.audio…preventuseridlesleep", "Video Wake Lock"), in plain words.
+function plainReason(what) {
+  if (/audio|sound/i.test(what)) return 'playing sound';
+  if (/video|media|playback/i.test(what)) return 'playing a video';
+  if (/download|upload|transfer|sync/i.test(what)) return 'transferring files';
+  if (/call|meeting|webrtc|camera/i.test(what)) return 'a call';
+  if (/wake ?lock|display|screen/i.test(what)) return 'keeping the screen on';
+  return 'something it’s doing'; // the rest are internal names ("Electron", "NoIdleSleepAssertion")
 }
 
 async function slowStats() {
@@ -216,12 +226,15 @@ const push = (arr, v) => { arr.push(v); if (arr.length > HISTORY) arr.shift(); r
 // One look at the whole Mac. `selfPids` are Pane's own processes (kept apart, as "Pane").
 async function sample({ selfPid } = {}) {
   startTicker();
-  const [psOut, appsOut, mem, slow] = await Promise.all([
+  const [psOut, appsOut, mem, slow, gpuOut] = await Promise.all([
     run('ps', ['-Axo', 'pid=,ppid=,pcpu=,time=,rss=,comm=']),
     run('lsappinfo', ['list']),
     memory(),
     slowStats(),
+    // Graphics (GPU) parts of Chrome and Electron apps: marked by how they were started, not by name.
+    run('pgrep', ['-f', '--', '--type=gpu-process']),
   ]);
+  const gpuPids = new Set(gpuOut.split('\n').map(Number).filter(Boolean));
   const now = Date.now();
   const procs = parsePs(psOut);
   const apps = parseApps(appsOut);
@@ -266,7 +279,7 @@ async function sample({ selfPid } = {}) {
     if (safari && /com\.apple\.WebKit\.(WebContent|Networking|GPU)/.test(p.exe)) return safari;
     return null;
   };
-  const groups = new Map(apps.map((a) => [a.pid, { ...a, cpu: 0, mem: 0, procs: 0 }]));
+  const groups = new Map(apps.map((a) => [a.pid, { ...a, cpu: 0, mem: 0, gpu: 0, procs: 0 }]));
   const system = new Map(); // process name -> { cpu, mem, count }
   let systemCpu = 0, systemMem = 0;
   for (const p of procs.values()) {
@@ -275,6 +288,7 @@ async function sample({ selfPid } = {}) {
     if (a) {
       const g = groups.get(a.pid);
       g.cpu += c; g.mem += p.rss; g.procs++;
+      if (gpuPids.has(p.pid)) g.gpu += p.rss;
       continue;
     }
     const name = path.basename(p.exe);
@@ -300,7 +314,7 @@ async function sample({ selfPid } = {}) {
     S.appHistory.set(key, hist);
     return {
       key, pid: g.pid, name: g.name, bundle: g.bundle, path: g.path,
-      cpu: Math.round(share(g.cpu) * 10) / 10, core: Math.round(g.cpu), mem: g.mem, procs: g.procs,
+      cpu: Math.round(share(g.cpu) * 10) / 10, core: Math.round(g.cpu), mem: g.mem, gpu: g.gpu, procs: g.procs,
       history: hist.map((p) => p.v), trail: trailOf(hist, now), icon: iconFor(g.path), self: g.pid === selfPid,
       awake: [...new Set(blockersByPid.get(g.pid) || [])],
     };

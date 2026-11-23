@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, screen, systemPreferences, shell, globalShortcut, desktopCapturer, clipboard, nativeImage, dialog } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, screen, systemPreferences, shell, globalShortcut, desktopCapturer, clipboard, nativeImage, dialog, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { uIOhook, UiohookKey } = require('uiohook-napi');
@@ -2352,6 +2352,7 @@ app.whenReady().then(() => {
   // in System Settings takes effect without a restart.
   startHook();
   hookTimer = setInterval(startHook, 1500);
+  for (const ev of ['resume', 'unlock-screen']) powerMonitor.on(ev, () => freshAfterWake(ev));
   // For trying Tweak from a terminal: PANE_TWEAK_OPEN=<file> opens it in the editor, PANE_TWEAK_TARGET=1 points.
   if (process.env.PANE_TWEAK_OPEN) setTimeout(() => openEditor(process.env.PANE_TWEAK_OPEN), 800);
   if (process.env.PANE_TWEAK_TARGET) setTimeout(startTarget, 1200);
@@ -2395,6 +2396,28 @@ function startHook() {
   } catch (err) {
     console.warn('Key hook not started:', err.message);
   }
+}
+
+// After the Mac sleeps or locks, macOS can quietly switch off Pane's key tap (the lock screen takes
+// secure input, and the tap isn't always handed back), and a key let go while asleep never sends its
+// key-up. So on wake and unlock: forget what was held, and start the tap and the shortcuts fresh.
+let wakeTimer = null;
+function freshAfterWake(why) {
+  clearTimeout(wakeTimer);
+  wakeTimer = setTimeout(() => {
+    debug('fresh keys after', why);
+    down.clear();
+    hotkeyBlocked = spinBlocked = holding = false;
+    clearTimeout(wheelWait); clearTimeout(drawWait); wheelWait = drawWait = null;
+    for (const t of tappers()) t.reset();
+    if (hookOn) {
+      try { uIOhook.stop(); } catch {}
+      hookOn = false;
+    }
+    startHook();
+    if (!hookOn) { clearInterval(hookTimer); hookTimer = setInterval(startHook, 1500); }
+    registerShortcuts();
+  }, 1000); // give the session a moment to come back before tapping it again
 }
 
 function buildMenu() {

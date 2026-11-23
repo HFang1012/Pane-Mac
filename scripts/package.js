@@ -105,6 +105,7 @@ function sign(app) {
   fs.rmSync(path.join(build, '.tmp'), { recursive: true, force: true });
 
   require('./native.js').build({ force: true }); // Tweak's helper (native/pane-files)
+  require('./uiohook.js').build(); // the key hook, without mouse-move and scroll events
 
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
   const [appDir] = await packager({

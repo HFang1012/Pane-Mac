@@ -232,6 +232,11 @@ function createOverlays() {
     });
     w.displayId = String(d.id);
     w.setIgnoreMouseEvents(true); // from the very start: an idle layer must never catch a click
+    // Chromium still hands the layer every pointer move on its screen, even with clicks ignored, and each
+    // one woke its page. Only a tool in hand or an open wheel needs them, so an idle layer's page never sees them.
+    w.webContents.on('before-mouse-event', (event, m) => {
+      if (m.type === 'mouseMove' && !activeTool && !menu.open && !spin.open) event.preventDefault();
+    });
     // Mark the layer as a background window, not one of Pane's real windows. Without this, a layer on
     // every Space (full-screen apps included) makes macOS treat Pane as present wherever you swipe: with
     // Pane in front, swiping into a full-screen app bounced you straight back to Pane's window.

@@ -16,10 +16,12 @@
   }
   button, .tile, .swatch, .switch { -webkit-app-region: no-drag; font: inherit; color: inherit; }
   button { border: 0; background: none; padding: 0; cursor: pointer; }
+  /* While the tool menu is open the whole window takes clicks (not drags), so a click anywhere closes it. */
+  body.menu-open { -webkit-app-region: no-drag; }
   button:focus { outline: none; }
   button:focus-visible { box-shadow: 0 0 0 3px var(--accent-soft); border-radius: 12px; }
 
-  .page { display: grid; grid-template-columns: 340px 452px; gap: 30px; padding: 48px 38px 20px; width: 900px; align-items: start; }
+  .page { display: grid; grid-template-columns: 340px 452px; gap: 30px; padding: 48px 38px 20px; width: 900px; margin: 0 auto; align-items: start; }
   /* The window is one fixed size (the tallest page); shorter pages start at the top like the rest.
      The top padding keeps the cards clear of the tool button in the corner. */
 
@@ -200,6 +202,11 @@
   .stepper button:disabled { color: var(--edge); cursor: default; }
   .stepper .val { min-width: 58px; height: 24px; text-align: center; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; overflow: hidden; position: relative; }
   .stepper .val span { position: absolute; inset: 0; display: grid; place-items: center; }
+  /* A stepper you can also type into: click its value. */
+  .stepper[data-free] .val { cursor: text; -webkit-app-region: no-drag; border-radius: 999px; transition: background 140ms ease; }
+  .stepper[data-free] .val:hover { background: var(--card); }
+  .stepper .val input { position: absolute; inset: 0; width: 100%; border: 0; outline: none; background: var(--card); border-radius: 999px; text-align: center; font: inherit; color: inherit; padding: 0; -webkit-app-region: no-drag; user-select: text; }
+  .stepper .val input::-webkit-inner-spin-button { display: none; }
 
   .switch { width: 46px; height: 26px; border-radius: 13px; background: var(--well); position: relative; transition: background 200ms ease; }
   .switch::after {
@@ -217,15 +224,31 @@
 
   .page[hidden] { display: none; }
 
-  /* Grab strips along the top and bottom edges. macOS only gives a few points at the very edge to resize,
-     and the window's drag area covers the rest, so these make the edge easy to catch (see switcher.js). */
-  .grip { position: fixed; left: 0; right: 0; height: 8px; z-index: 50; cursor: ns-resize; -webkit-app-region: no-drag; }
-  .grip.top { top: 0; } .grip.bottom { bottom: 0; }
+  /* Grab strips along every edge, and squares in the corners. macOS only gives a few points at the very edge
+     to resize, and the window's drag area covers the rest, so these make the edge easy to catch (see switcher.js). */
+  .grip { position: fixed; z-index: 50; -webkit-app-region: no-drag; }
+  .grip.top, .grip.bottom { left: 0; right: 0; height: 8px; cursor: ns-resize; }
+  .grip.left, .grip.right { top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+  .grip.top { top: 0; } .grip.bottom { bottom: 0; } .grip.left { left: 0; } .grip.right { right: 0; }
+  .grip.corner { width: 14px; height: 14px; }
+  .grip.top-left { top: 0; left: 0; cursor: nwse-resize; } .grip.bottom-right { bottom: 0; right: 0; cursor: nwse-resize; }
+  .grip.top-right { top: 0; right: 0; cursor: nesw-resize; } .grip.bottom-left { bottom: 0; left: 0; cursor: nesw-resize; }
 
   /* ---------- tool switcher: top right, clear of the traffic lights ---------- */
   /* It sits last in the page: Electron applies drag and no-drag areas in page order, so anything
      earlier would be painted over by the draggable page underneath and stop taking clicks. */
-  .switcher { position: fixed; top: 9px; right: 16px; z-index: 10; -webkit-app-region: no-drag; }
+  .switcher { position: fixed; top: 9px; right: 16px; z-index: 10; -webkit-app-region: no-drag; display: flex; align-items: center; gap: 8px; }
+  /* Check for updates: beside the tool button in the title bar strip, which the pages keep clear (their 48px top padding). */
+  .check-btn {
+    height: 30px; padding: 0 12px 0 9px; border-radius: 15px; display: inline-flex; align-items: center; gap: 6px;
+    background: var(--card); box-shadow: 0 3px 0 var(--card-lip); font-size: 12px; font-weight: 800; color: var(--ink-2);
+    transition: transform 200ms var(--bouncy), box-shadow 200ms var(--bouncy), color 160ms ease;
+  }
+  .check-btn svg { transition: rotate 520ms var(--bouncy); }
+  .check-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 0 var(--card-lip); color: var(--ink); }
+  .check-btn:hover svg { rotate: 180deg; }
+  .check-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-lip); }
+  .check-btn:focus-visible { box-shadow: 0 3px 0 var(--card-lip), 0 0 0 3px var(--accent-soft); border-radius: 15px; }
   .switch-btn {
     height: 30px; padding: 0 10px 0 9px; border-radius: 15px; display: inline-flex; align-items: center; gap: 7px;
     background: var(--card); box-shadow: 0 3px 0 var(--card-lip); font-size: 13px; font-weight: 800;
@@ -301,6 +324,18 @@
   .screen .note small { display: inline-block; margin-top: 7px; padding: 2px 8px; border-radius: 999px; background: var(--well); color: var(--ink-2); font-size: 10px; font-weight: 700; transition: opacity 200ms ease, transform 300ms var(--bouncy); }
   .screen .note small.gone { opacity: 0; transform: scale(0.6); }
   .screen-wrap { position: relative; }
+  /* Away's icons: little keys, the chosen one pressed in. */
+  .icon-picks { display: flex; gap: 6px; padding: 4px; border-radius: 14px; background: var(--well); }
+  .icon-pick {
+    width: 40px; height: 34px; display: grid; place-items: center; border-radius: 10px; cursor: pointer;
+    -webkit-app-region: no-drag; transition: transform 300ms var(--bouncy), background 160ms ease, box-shadow 300ms var(--bouncy);
+  }
+  .icon-pick svg { display: block; transition: transform 300ms var(--bouncy); }
+  .icon-pick:hover { background: var(--card); box-shadow: 0 2px 0 var(--card-lip); }
+  .icon-pick:hover svg { transform: translateY(-1px) scale(1.06); }
+  .icon-pick:active { transform: scale(0.9); }
+  .icon-pick[aria-checked="true"] { background: var(--card); box-shadow: 0 3px 0 var(--card-lip), inset 0 0 0 2px var(--ink); }
+  .icon-pick:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
   .try {
     position: absolute; right: 12px; bottom: 12px; height: 30px; padding: 0 14px; border-radius: 15px; font-size: 12px; font-weight: 800;
     background: var(--accent); box-shadow: 0 4px 0 var(--accent-lip); display: inline-flex; align-items: center; gap: 6px;
@@ -702,6 +737,70 @@
   [data-theme="tweak"] .brand .mark svg .crop { transition: transform 420ms var(--bouncy); transform-box: fill-box; transform-origin: center; }
   [data-theme="tweak"] .brand:hover .mark svg .crop { transform: scale(0.86); }
 
+
+  /* ---------- Debug page ---------- */
+  [data-theme="debug"] .card { --r: 28px; }
+  [data-theme="debug"] .tips { --r: 24px; }
+  [data-theme="debug"] .callout { --r: 22px; }
+  [data-theme="debug"] .brand .mark svg .legs { transform-box: fill-box; transform-origin: center; }
+  [data-theme="debug"] .brand:hover .mark svg .legs { animation: scuttle 360ms ease-in-out 2; }
+  @keyframes scuttle { 25% { transform: translateY(-1.5px) scaleY(0.9); } 75% { transform: translateY(1.5px) scaleY(1.06); } }
+
+  /* Right now: the same score the panel shows. */
+  .dhealth { padding: 10px 12px 10px 14px; border-radius: 18px; background: var(--well); }
+  .dhealth h3 { font-weight: 800; }
+  .dscore { min-width: 44px; height: 32px; padding: 0 10px; border-radius: 16px; display: grid; place-items: center; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; background: var(--peach); box-shadow: 0 3px 0 var(--peach-lip); transition: background 300ms ease, box-shadow 300ms ease; }
+  .dhealth.warn .dscore { background: var(--warn); box-shadow: 0 3px 0 var(--warn-lip); }
+  .dhealth.bad .dscore { background: var(--accent); color: #FFF; box-shadow: 0 3px 0 var(--accent-lip); }
+  .dhealth.bad h3 { color: var(--accent-ink); }
+
+  /* Choices that aren't numbers: a row of small pills, the chosen one raised. */
+  .picks { display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--well); -webkit-app-region: no-drag; }
+  .picks button { height: 26px; padding: 0 11px; border-radius: 999px; font-size: 12px; font-weight: 800; color: var(--ink-2); transition: background 160ms ease, color 160ms ease, transform 220ms var(--bouncy), box-shadow 160ms ease; }
+  .picks button:hover { color: var(--ink); }
+  .picks button:active { transform: scale(0.92); }
+  .picks button[aria-checked="true"] { background: var(--card); color: var(--ink); box-shadow: 0 2px 0 var(--accent); }
+
+  /* A little panel that plays on its own: the rings fill, a fix shows up, it's clicked, all is well. */
+  .ddesk {
+    position: relative; height: 210px; margin-top: 14px; border-radius: 22px; overflow: hidden; isolation: isolate;
+    background: radial-gradient(130% 120% at 100% 0%, #E9D3CF, #F3E7E4 55%, #E4DCD6); box-shadow: 0 5px 0 var(--card-lip);
+  }
+  .ddesk .dwin { position: absolute; left: 18px; top: 22px; width: 150px; height: 120px; border-radius: 12px; background: #FFFFFF; opacity: 0.7; box-shadow: 0 6px 14px -8px rgba(42, 20, 24, 0.3); }
+  .ddesk .dwin::before { content: ""; position: absolute; left: 10px; right: 10px; top: 10px; height: 8px; border-radius: 4px; background: var(--edge); }
+  .ddesk .dwin i { position: absolute; left: 10px; height: 6px; border-radius: 3px; background: var(--well); }
+  .ddesk .dp {
+    position: absolute; right: 16px; top: 14px; width: 196px; padding: 10px; border-radius: 18px; background: var(--card);
+    box-shadow: 0 5px 0 var(--card-lip), 0 14px 26px -8px rgba(42, 20, 24, 0.3); transform-origin: 90% 0; animation: dpin 7s var(--bouncy) infinite;
+  }
+  @keyframes dpin { 0%, 3% { opacity: 0; transform: scale(0.4); } 9%, 92% { opacity: 1; transform: none; } 98%, 100% { opacity: 0; transform: scale(0.6); } }
+  .dp-top { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; }
+  .dp-top svg { height: 13px; width: auto; }
+  .dp-v { display: grid; grid-template-columns: 18px 1fr; gap: 7px; align-items: center; margin-top: 8px; padding: 6px 8px; border-radius: 12px; background: var(--well); font-size: 10.5px; font-weight: 800; }
+  .dp-v span { width: 18px; height: 18px; border-radius: 9px; background: var(--accent); animation: dpface 7s ease infinite; }
+  @keyframes dpface { 0%, 62% { background: var(--accent); } 66%, 100% { background: var(--peach); } }
+  .dp-v b { position: relative; height: 13px; overflow: hidden; }
+  .dp-v b em { position: absolute; inset: 0; font-style: normal; white-space: nowrap; animation: dpw1 7s ease infinite; }
+  .dp-v b em + em { animation-name: dpw2; }
+  @keyframes dpw1 { 0%, 62% { transform: none; opacity: 1; } 66%, 100% { transform: translateY(-12px); opacity: 0; } }
+  @keyframes dpw2 { 0%, 62% { transform: translateY(12px); opacity: 0; } 66%, 100% { transform: none; opacity: 1; } }
+  .dp-rings { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 7px; }
+  .dp-rings svg { width: 100%; height: 34px; transform: rotate(-90deg); }
+  .dp-rings circle { fill: none; stroke-width: 6; }
+  .dp-rings .t { stroke: var(--edge); opacity: 0.5; }
+  .dp-rings .v { stroke: var(--peach); stroke-linecap: round; stroke-dasharray: 100; animation: dpring 7s var(--smooth) infinite; }
+  .dp-rings svg:first-child .v { stroke: var(--accent); animation-name: dpring1; }
+  @keyframes dpring { 0%, 8% { stroke-dashoffset: 100; } 20%, 100% { stroke-dashoffset: var(--o); } }
+  @keyframes dpring1 { 0%, 8% { stroke-dashoffset: 100; } 20%, 62% { stroke-dashoffset: 12; } 70%, 100% { stroke-dashoffset: 78; stroke: var(--peach); } }
+  .dp-fix { margin-top: 7px; padding: 7px 8px; border-radius: 12px; box-shadow: inset 0 0 0 1.5px var(--accent-soft); animation: dpfix 7s var(--bouncy) infinite; }
+  @keyframes dpfix { 0%, 24% { opacity: 0; transform: translateY(8px) scale(0.9); } 30%, 58% { opacity: 1; transform: none; } 64%, 100% { opacity: 0; transform: translateX(30px); } }
+  .dp-fix i { display: block; width: 80%; height: 5px; border-radius: 3px; background: var(--well); }
+  .dp-fix i + i { width: 60%; margin-top: 4px; }
+  .dp-fix b { display: inline-block; margin-top: 6px; padding: 3px 9px; border-radius: 8px; background: var(--accent); color: #FFF; font-size: 9.5px; font-weight: 800; box-shadow: 0 2px 0 var(--accent-lip); animation: dpbtn 7s ease infinite; }
+  @keyframes dpbtn { 0%, 50% { transform: none; } 52% { transform: translateY(2px); box-shadow: 0 0 0 var(--accent-lip); } 55%, 100% { transform: none; } }
+  .ddesk .dcur { position: absolute; width: 15px; height: 21px; left: 60px; top: 170px; animation: dcur 7s cubic-bezier(.45, .05, .4, 1) infinite; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2)); }
+  @keyframes dcur { 0%, 30% { transform: none; } 46%, 54% { transform: translate(158px, -20px); } 70%, 100% { transform: translate(60px, 20px); } }
+
   /* A little desktop: crop marks hop between files, one is clicked, and the editor opens over it. */
   .tdesk {
     position: relative; height: 210px; margin-top: 14px; border-radius: 18px; overflow: hidden; isolation: isolate;
@@ -926,7 +1025,7 @@
       </div>
       <div class="tint"></div>
       <div class="mblob"></div><div class="mblob"></div><div class="mblob"></div>
-      <div class="note"><span class="mcup" id="miniCup"></span><b id="miniMsg"></b><small id="miniSince">Away since 3:42 PM</small></div>
+      <div class="note"><span class="mcup" id="miniCup"></span><b id="miniMsg"></b><small id="miniSince">Away for 12 min</small></div>
     </div>
     <button class="try" id="tryAway">
       <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 2.2v7.6L9.8 6z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
@@ -943,14 +1042,18 @@
         </div>
       </div>
       <div class="row rise" style="--d:340ms">
-        <div><h3>Colors</h3><p>The soft glow behind the blur.</p></div>
-        <div class="swatches" id="moods" role="radiogroup" aria-label="Away colors"></div>
+        <div><h3>Theme</h3><p>Colors the glow and the icon.</p></div>
+        <div class="swatches" id="moods" role="radiogroup" aria-label="Away theme"></div>
       </div>
-      <div class="row rise" style="--d:380ms">
-        <div><h3>Show when I left</h3><p>Adds “Away since 3:42 PM”.</p></div>
-        <button class="switch" id="showTime" role="switch" aria-checked="true" aria-label="Show when I left"></button>
+      <div class="row rise" style="--d:370ms">
+        <div><h3>Icon</h3><p id="iconName">Coffee</p></div>
+        <div class="icon-picks" id="awayIcons" role="radiogroup" aria-label="Away icon"></div>
       </div>
-      <div class="row rise" style="--d:420ms">
+      <div class="row rise" style="--d:400ms">
+        <div><h3>Show how long I’ve been away</h3><p>Adds “Away for 12 min”.</p></div>
+        <button class="switch" id="showTime" role="switch" aria-checked="true" aria-label="Show how long I’ve been away"></button>
+      </div>
+      <div class="row rise" style="--d:430ms">
         <div><h3>Hide the pointer</h3><p>Hides the mouse while you’re away.</p></div>
         <button class="switch" id="hidePointer" role="switch" aria-checked="true" aria-label="Hide the pointer"></button>
       </div>
@@ -1150,8 +1253,8 @@
 
     <div class="rows">
       <div class="row rise" style="--d:300ms">
-        <div><h3>Snooze for</h3><p>How long Snooze puts a note off.</p></div>
-        <div class="stepper" data-key="jot.snooze" data-values="5,10,15,30,60" data-unit=" min"></div>
+        <div><h3>Snooze for</h3><p>How long Snooze puts a note off. Click the time to type your own.</p></div>
+        <div class="stepper" data-key="jot.snooze" data-values="5,10,15,30,60" data-unit=" min" data-free="1,720"></div>
       </div>
       <div class="row rise" style="--d:340ms">
         <div><h3>Play a sound</h3><p>A soft chime when a note comes back.</p></div>
@@ -1266,6 +1369,124 @@
     </div>
   </section>
 </div>
+<div class="page" id="debugPage" data-tool="debug" hidden>
+  <section>
+    <div class="brand rise" style="--d:0ms">
+      <span class="mark" data-glyph="debug"></span>
+      Debug
+      <span class="version"></span>
+    </div>
+    <h1 class="rise" style="--d:60ms">Mac acting up?<br>Find out why.</h1>
+    <p class="lede rise" style="--d:120ms" id="debugLede">Double-tap the Debug key and a small panel opens over whatever you’re doing. It shows what’s slowing things down or draining your battery, and fixes you can click.</p>
+    <div class="seg rise" style="--d:150ms" role="radiogroup" aria-label="Open Debug with" id="debugMode">
+      <span class="seg-thumb"></span>
+      <button role="radio" data-mode="double"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="3"/><path d="M9 6.5 8 4M12 5.5V3M15 6.5 16 4"/></svg>Double-tap</button>
+      <button role="radio" data-mode="hold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="3"/><path d="M12 3v5M9.5 5.5 12 8l2.5-2.5"/></svg>Hold</button>
+      <button role="radio" data-mode="shortcut"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg>Shortcut</button>
+    </div>
+    <div class="keyrow rise" style="--d:160ms" data-for="debugMode">
+      <div class="keyslot" data-mode="double hold">
+        <button class="keywell" data-which="debugKey" aria-describedby="debugCaption">
+          <svg class="ants" aria-hidden="true"><rect rx="15"/></svg>
+          <span class="keys"></span>
+        </button>
+        <span class="keylabel" id="debugKeyLabel">Tap twice</span>
+      </div>
+      <div class="keyslot" data-mode="shortcut" hidden>
+        <button class="keywell" id="debugWell" aria-describedby="debugCaption">
+          <svg class="ants" aria-hidden="true"><rect rx="15"/></svg>
+          <span class="keys"></span>
+        </button>
+        <span class="keylabel">Debug keys</span>
+      </div>
+    </div>
+    <p class="caption rise" style="--d:200ms" id="debugCaption">Click the key to change it. Tap it twice, quickly.</p>
+
+    <div class="collapse access"><div>
+      <div class="callout chunky">
+        <h3>Allow Pane to hear your keys</h3>
+        <p>Debug needs it to notice a double-tap or a held key. Turn on Pane in Privacy &amp; Security › Accessibility.</p>
+        <button class="pill access-btn">Open Accessibility settings</button>
+      </div>
+    </div></div>
+
+    <div class="power rise" style="--d:240ms">
+      <button class="power-btn" id="debugPower" aria-pressed="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 3.5v8"/><path d="M6.6 6.8a7.5 7.5 0 1 0 10.8 0"/></svg>
+        <span class="swap" id="debugPowerText">Turn off</span>
+      </button>
+      <div class="status" id="debugStatus">
+        <span class="dot"></span><span class="swap" id="debugStatusText">Checking…</span>
+      </div>
+    </div>
+    <label class="login-line rise" style="--d:280ms"><button class="switch login small" role="switch" aria-checked="false" aria-label="Open at login"></button>Open Pane at login</label>
+    <div class="tips chunky rise" style="--d:330ms" aria-label="Good to know">
+      <span class="tips-tag">Good to know</span>
+      <ul>
+        <li><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2.5"/><path d="M8 20h8M12 16v4"/></svg></span><span>It opens on <b>the app you’re in</b>. Switch to <b>Whole Mac</b> to see everything.</span></li>
+        <li><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></span><span>Press <b>−</b> to fold it into a little pill that keeps watching.</span></li>
+        <li><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span>Fixes always <b>ask first</b> before anything is lost.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="card chunky rise" style="--d:90ms" aria-label="Debug settings">
+    <div class="head solo">
+      <div>
+        <h2>Panel</h2>
+        <p>Check, click, fixed.</p>
+      </div>
+    </div>
+    <div class="screen-wrap">
+      <div class="ddesk" aria-hidden="true">
+        <div class="dwin"><i style="top:30px;width:70%"></i><i style="top:44px;width:52%"></i><i style="top:58px;width:64%"></i></div>
+        <div class="dp">
+          <div class="dp-top"><span id="ddGlyph"></span>Debug</div>
+          <div class="dp-v"><span></span><b><em>Chrome is working hard</em><em>Running smoothly</em></b></div>
+          <div class="dp-rings">
+            <svg viewBox="0 0 40 40"><circle class="t" cx="20" cy="20" r="15"/><circle class="v" cx="20" cy="20" r="15" pathLength="100"/></svg>
+            <svg viewBox="0 0 40 40" style="--o:45"><circle class="t" cx="20" cy="20" r="15"/><circle class="v" cx="20" cy="20" r="15" pathLength="100"/></svg>
+            <svg viewBox="0 0 40 40" style="--o:22"><circle class="t" cx="20" cy="20" r="15"/><circle class="v" cx="20" cy="20" r="15" pathLength="100"/></svg>
+            <svg viewBox="0 0 40 40" style="--o:60"><circle class="t" cx="20" cy="20" r="15"/><circle class="v" cx="20" cy="20" r="15" pathLength="100"/></svg>
+          </div>
+          <div class="dp-fix"><i></i><i></i><b>Quit Chrome</b></div>
+        </div>
+        <svg class="dcur" viewBox="0 0 17 24"><path d="M1.5 1.5v17.2l4.3-4.1 3 6.9 3.1-1.3-3-6.8h6z" fill="#14161C" stroke="#FFFFFF" stroke-width="1.5" stroke-linejoin="round"/></svg>
+      </div>
+      <button class="try" id="tryDebug">
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 2.2v7.6L9.8 6z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        Try it
+      </button>
+    </div>
+
+    <div class="rows">
+      <div class="row rise dhealth" style="--d:280ms" id="debugHealth">
+        <div><h3>Does your Mac need debugging?</h3><p id="debugHealthText">Checking…</p></div>
+        <span class="dscore" id="debugHealthScore">–</span>
+      </div>
+      <div class="row rise" style="--d:300ms">
+        <div><h3>Size</h3><p>How big the panel is.</p></div>
+        <div class="picks" data-key="size" role="radiogroup" aria-label="Size"><button role="radio" data-v="small">Small</button><button role="radio" data-v="medium">Medium</button><button role="radio" data-v="large">Large</button></div>
+      </div>
+      <div class="row rise" style="--d:330ms">
+        <div><h3>Opens on</h3><p>What it shows first.</p></div>
+        <div class="picks" data-key="start" role="radiogroup" aria-label="Opens on"><button role="radio" data-v="app">This app</button><button role="radio" data-v="mac">Whole Mac</button></div>
+      </div>
+      <div class="row rise" style="--d:360ms">
+        <div><h3>Opens at</h3><p>Where on your screen.</p></div>
+        <div class="picks" data-key="place" role="radiogroup" aria-label="Opens at"><button role="radio" data-v="corner">Top right</button><button role="radio" data-v="pointer">Pointer</button><button role="radio" data-v="last">Last spot</button></div>
+      </div>
+      <div class="row rise" style="--d:390ms">
+        <div><h3>Updates</h3><p>How often it looks again.</p></div>
+        <div class="picks" data-key="refresh" role="radiogroup" aria-label="Updates"><button role="radio" data-v="1">1 sec</button><button role="radio" data-v="2">2 sec</button><button role="radio" data-v="5">5 sec</button></div>
+      </div>
+      <div class="row rise" style="--d:420ms">
+        <div><h3>Ask before quitting apps</h3><p>Force quit and emptying the Trash always ask.</p></div>
+        <button class="switch" id="debugConfirm" role="switch" aria-checked="true" aria-label="Ask before quitting apps"></button>
+      </div>
+    </div>
+  </section>
+</div>
 <div class="demo" id="demo" role="dialog" aria-modal="true" aria-labelledby="demoTitle">
   <div class="demo-sheet">
     <div class="demo-head">
@@ -1297,6 +1518,7 @@
   </div>
 </div>
 <div class="switcher" id="switcher">
+  <button class="check-btn" id="checkUpdates" title="Check for updates"><svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.2 6.4A5.4 5.4 0 0 0 3.3 4.9M2.8 9.6a5.4 5.4 0 0 0 9.9 1.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M3 1.8v3.4h3.4M13 14.2v-3.4H9.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Check for updates</button>
   <button class="switch-btn" id="switchBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="switchMenu">
     <span class="sw-glyph" id="swGlyph"></span><span class="sw-name" id="swName">Scrawl</span>
     <svg class="chev" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.8l3 3 3-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -1326,6 +1548,12 @@
 <button class="upd-corner" id="updCorner" tabindex="-1"><span class="dot"><svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3.5M3.8 7.6L8 3.4l4.2 4.2" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span id="updCornerText">Update</span></button>
 <div class="grip top" data-edge="top" aria-hidden="true"></div>
 <div class="grip bottom" data-edge="bottom" aria-hidden="true"></div>
+<div class="grip left" data-edge="left" aria-hidden="true"></div>
+<div class="grip right" data-edge="right" aria-hidden="true"></div>
+<div class="grip corner top-left" data-edge="top-left" aria-hidden="true"></div>
+<div class="grip corner top-right" data-edge="top-right" aria-hidden="true"></div>
+<div class="grip corner bottom-left" data-edge="bottom-left" aria-hidden="true"></div>
+<div class="grip corner bottom-right" data-edge="bottom-right" aria-hidden="true"></div>
 <script src="wheel.js"></script>
 <script src="tools.js"></script>
 <script src="settings.js"></script>
@@ -1334,6 +1562,7 @@
 <script src="spin-settings.js"></script>
 <script src="jot-settings.js"></script>
 <script src="tweak-settings.js"></script>
+<script src="debug-settings.js"></script>
 <script src="switcher.js"></script>
 <script src="demo.js"></script>
 <script src="update.js"></script>

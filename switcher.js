@@ -1,7 +1,7 @@
 // The tool button in the top-right corner: pick which of Pane's tools the window shows.
 const switchBtn = document.getElementById('switchBtn');
 const switchMenu = document.getElementById('switchMenu');
-const PAGES = { scrawl: document.getElementById('page'), away: document.getElementById('awayPage'), spin: document.getElementById('spinPage'), jot: document.getElementById('jotPage'), tweak: document.getElementById('tweakPage') };
+const PAGES = { scrawl: document.getElementById('page'), away: document.getElementById('awayPage'), spin: document.getElementById('spinPage'), jot: document.getElementById('jotPage'), tweak: document.getElementById('tweakPage'), debug: document.getElementById('debugPage') };
 let currentPage = null;
 
 // Each tool in the menu: its glyph on a tile, name, one line about it, and a tick on the open one.
@@ -20,12 +20,14 @@ const items = () => [...switchMenu.querySelectorAll('.tool-item')];
 
 function openSwitcher() {
   switchMenu.classList.add('open');
+  document.body.classList.add('menu-open');
   switchBtn.setAttribute('aria-expanded', 'true');
   (items().find((b) => b.dataset.tool === currentPage) || items()[0]).focus({ preventScroll: true });
 }
 function closeSwitcher(refocus = false) {
   if (!switchMenu.classList.contains('open')) return;
   switchMenu.classList.remove('open');
+  document.body.classList.remove('menu-open');
   switchBtn.setAttribute('aria-expanded', 'false');
   if (refocus) switchBtn.focus({ preventScroll: true });
 }
@@ -69,6 +71,7 @@ function showPage(id, animate) {
   labelButton(id, animate);
   if (typeof cancelAwayListening === 'function') cancelAwayListening();
   if (typeof cancelJotListening === 'function') cancelJotListening();
+  if (typeof debugShortcut !== 'undefined') debugShortcut.cancel();
   if (listening) { stopListening(); scrawl.send('bind:cancel'); } // a held key being chosen on the page you're leaving
   if (S && S.page !== id) save({ page: id });
   if (!animate || !from) {
@@ -132,15 +135,15 @@ function fit() {
 }
 const ro = new ResizeObserver(() => fit());
 
-// ---------- dragging the top or bottom edge ----------
-// The strips in settings.html: hold and drag, and the main process moves that edge with the pointer.
+// ---------- dragging an edge or corner ----------
+// The strips in settings.html: hold and drag, and the main process moves that edge (or both edges of a corner) with the pointer.
 document.querySelectorAll('.grip').forEach((g) => {
   g.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
     g.setPointerCapture(e.pointerId);
-    scrawl.send('window:edge', 'start', g.dataset.edge, e.screenY);
-    const move = (m) => scrawl.send('window:edge', 'move', g.dataset.edge, m.screenY);
+    scrawl.send('window:edge', 'start', g.dataset.edge, e.screenX, e.screenY);
+    const move = (m) => scrawl.send('window:edge', 'move', g.dataset.edge, m.screenX, m.screenY);
     const up = () => {
       g.removeEventListener('pointermove', move);
       g.removeEventListener('pointerup', up);

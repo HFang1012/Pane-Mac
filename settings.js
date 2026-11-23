@@ -14,16 +14,16 @@ async function save(patch) {
 // (Shortcuts like ⌃⌘A are chosen by shortcutWell, below; their wells have no data-which.)
 const wells = [...document.querySelectorAll('.keywell[data-which]')];
 const wellFor = (which) => wells.find((w) => w.dataset.which === which);
-const KEY_NAMES = { hotkey: 'Wheel key', drawKey: 'Draw key', spinKey: 'Spin key', jotKey: 'Jot key', tweakKey: 'Tweak key', awayKey: 'Away key' };
+const KEY_NAMES = { hotkey: 'Wheel key', drawKey: 'Draw key', spinKey: 'Spin key', jotKey: 'Jot key', tweakKey: 'Tweak key', awayKey: 'Away key', debugKey: 'Debug key' };
 const DEFAULT_CAPTION = 'Click a key to change it. Hold several to use them together.';
 const JOT_CAPTION = 'Click the key to change it. Tap it twice, quickly.';
 const TAP_HOLD_CAPTION = 'Click the key to change it. Tap it, then tap again and hold.';
 let listening = null; // which key is being chosen
-const OWN_KEY = { spinKey: 'spin', jotKey: 'jot', tweakKey: 'tweak', awayKey: 'away' };
+const OWN_KEY = { spinKey: 'spin', jotKey: 'jot', tweakKey: 'tweak', awayKey: 'away', debugKey: 'debug' };
 const keyOf = (which) => (OWN_KEY[which] ? S[OWN_KEY[which]]?.key : S[which]);
 const TWEAK_CAPTION = JOT_CAPTION;
 // Keys that are tapped rather than held take one modifier (the main process says the same).
-const tapped = (which) => ['jotKey', 'tweakKey', 'awayKey'].includes(which) ||
+const tapped = (which) => ['jotKey', 'tweakKey', 'awayKey', 'debugKey'].includes(which) ||
   (which === 'hotkey' && S?.wheelMode === 'double') || (which === 'spinKey' && S?.spin?.mode === 'double');
 // Each page's caption, as it reads when nothing is being chosen. Pages set to a shortcut leave theirs to it.
 const CAPTIONS = {
@@ -32,6 +32,7 @@ const CAPTIONS = {
   jotKey: () => (S?.jot?.mode === 'shortcut' ? null : JOT_CAPTION),
   tweakKey: () => (S?.tweak?.mode === 'shortcut' ? null : TWEAK_CAPTION),
   awayKey: () => (S?.away?.mode === 'double' ? JOT_CAPTION : null),
+  debugKey: () => (S?.debug?.mode === 'shortcut' ? null : S?.debug?.mode === 'hold' ? 'Click the key to change it. Hold it down for a moment.' : JOT_CAPTION),
 };
 
 // One keycap per key in the combo. A key that counts on one side only (Spin's right ⌘) says which side.
@@ -59,7 +60,7 @@ scrawl.on('bind:progress', ({ which, keys }) => {
   well.querySelector('.keys').innerHTML = keycaps(keys, { pop: true, held: true });
   setCaption(keys.length > 1 ? 'Let go to use these keys together.' : 'Add more keys, or let go to use this one.', false, which);
 });
-const captionFor = (which) => $({ spinKey: 'spinCaption', jotKey: 'jotCaption', tweakKey: 'tweakCaption', awayKey: 'awayCaption' }[which] || 'keycaption');
+const captionFor = (which) => $({ spinKey: 'spinCaption', jotKey: 'jotCaption', tweakKey: 'tweakCaption', awayKey: 'awayCaption', debugKey: 'debugCaption' }[which] || 'keycaption');
 function setCaption(text, warn = false, which = listening) {
   const c = captionFor(which);
   c.textContent = text;
@@ -477,44 +478,92 @@ function patchFor(key, v) {
 }
 // Each stepper keeps the value it shows (`el._v`). Saves are async, so `S` lags behind fast clicks;
 // stepping from `S` would repeat the same value and pile up labels.
+// A stepper with `data-free="min,max"` also takes any typed whole number in that range; its buttons then
+// step to the nearest preset above or below.
+const isFree = (el) => 'free' in el.dataset;
+const presets = (el) => el.dataset.values.split(',').map(Number);
+// The preset one step from `v` in `dir`, or undefined at the end of the list.
+function neighbor(el, v, dir) {
+  const values = presets(el);
+  const i = values.indexOf(v);
+  if (i !== -1) return values[i + dir];
+  if (!isFree(el)) return values[Math.max(0, i + dir)];
+  return dir > 0 ? values.find((x) => x > v) : [...values].reverse().find((x) => x < v);
+}
+const shown = (el, v) => (isFree(el) || presets(el).includes(v) ? v : presets(el)[0]);
+function setButtons(el) {
+  const [dec, inc] = el.querySelectorAll('button');
+  dec.disabled = neighbor(el, el._v, -1) === undefined;
+  inc.disabled = neighbor(el, el._v, 1) === undefined;
+}
 function renderSteppers() {
   document.querySelectorAll('.stepper').forEach((el) => {
     const key = el.dataset.key;
-    const values = el.dataset.values.split(',').map(Number);
     // Nothing in flight and the value changed elsewhere (or first render): take it from the settings.
     if (!el._pending && el._v !== getKey(key)) {
-      el._v = getKey(key);
+      el._v = shown(el, getKey(key));
       const cur = el.querySelector('.val > span:not(.out)');
-      if (cur) cur.textContent = stepperText(el, values[Math.max(0, values.indexOf(getKey(key)))]);
+      if (cur) cur.textContent = stepperText(el, el._v);
     }
-    let idx = Math.max(0, values.indexOf(el._v));
     if (!el.children.length) {
-      el.innerHTML = `<button aria-label="Less">${minus}</button><span class="val" aria-live="polite"><span>${stepperText(el, values[idx])}</span></span><button aria-label="More">${plus}</button>`;
+      el.innerHTML = `<button aria-label="Less">${minus}</button><span class="val" aria-live="polite"><span>${stepperText(el, el._v)}</span></span><button aria-label="More">${plus}</button>`;
       const [dec, inc] = el.querySelectorAll('button');
       dec.addEventListener('click', () => step(el, -1));
       inc.addEventListener('click', () => step(el, 1));
+      if (isFree(el)) {
+        const val = el.querySelector('.val');
+        val.title = 'Click to type';
+        val.addEventListener('click', () => editStepper(el));
+      }
     }
-    const [dec, inc] = el.querySelectorAll('button');
-    dec.disabled = idx === 0;
-    inc.disabled = idx === values.length - 1;
+    setButtons(el);
   });
 }
 const minus = '<svg width="11" height="11" viewBox="0 0 11 11"><path d="M2 5.5h7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
 const plus = '<svg width="11" height="11" viewBox="0 0 11 11"><path d="M2 5.5h7M5.5 2v7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
 
-// The old value rolls away and the new one springs in from the direction you stepped.
+// Click the value to type your own: Enter or clicking away keeps it, Escape puts the old one back.
+function editStepper(el) {
+  const val = el.querySelector('.val');
+  if (val.querySelector('input')) return;
+  const [min, max] = el.dataset.free.split(',').map(Number);
+  const input = document.createElement('input');
+  Object.assign(input, { type: 'number', min, max, step: 1, value: el._v });
+  input.setAttribute('aria-label', 'Type a value');
+  val.appendChild(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = (keep) => {
+    if (done) return;
+    done = true;
+    input.remove();
+    const n = Math.round(Number(input.value));
+    if (!keep || !input.value.trim() || !Number.isFinite(n)) return;
+    const v = Math.max(min, Math.min(max, n));
+    if (v !== el._v) setStepper(el, v, v > el._v ? 1 : -1);
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+  });
+  input.addEventListener('blur', () => finish(true));
+}
+
 function step(el, dir) {
+  const v = neighbor(el, el._v, dir);
+  if (v !== undefined) setStepper(el, v, dir);
+}
+// The old value rolls away and the new one springs in from the direction you stepped.
+function setStepper(el, v, dir) {
   const key = el.dataset.key;
-  const values = el.dataset.values.split(',').map(Number);
-  const idx = Math.max(0, values.indexOf(el._v)) + dir;
-  if (idx < 0 || idx >= values.length) return;
-  el._v = values[idx];
+  el._v = v;
   const val = el.querySelector('.val');
   // Labels still rolling away from earlier clicks go now, so only one old and one new are ever shown.
   val.querySelectorAll(':scope > span.out').forEach((s) => s.remove());
   const old = val.querySelector(':scope > span');
   const next = document.createElement('span');
-  next.textContent = stepperText(el, values[idx]);
+  next.textContent = stepperText(el, v);
   val.appendChild(next);
   if (old) {
     old.classList.add('out');
@@ -523,11 +572,9 @@ function step(el, dir) {
   }
   next.animate([{ transform: `translateY(${dir * 14}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 420, easing: BOUNCY });
   // Buttons follow the shown value right away, not when the save comes back.
-  const [dec, inc] = el.querySelectorAll('button');
-  dec.disabled = idx === 0;
-  inc.disabled = idx === values.length - 1;
+  setButtons(el);
   el._pending = (el._pending || 0) + 1;
-  save(patchFor(key, values[idx])).finally(() => { el._pending--; });
+  save(patchFor(key, v)).finally(() => { el._pending--; });
 }
 
 // ---------- login ----------
@@ -569,6 +616,7 @@ function updateStatus() {
   if (typeof updateSpinStatus === 'function') updateSpinStatus();
   if (typeof updateJotStatus === 'function') updateJotStatus();
   if (typeof updateTweakStatus === 'function') updateTweakStatus();
+  if (typeof updateDebugStatus === 'function') updateDebugStatus();
 }
 async function pollStatus() {
   status = await scrawl.invoke('perm:check');
@@ -596,6 +644,7 @@ function update() {
   if (typeof updateSpin === 'function') updateSpin();
   if (typeof updateJot === 'function') updateJot();
   if (typeof updateTweak === 'function') updateTweak();
+  if (typeof updateDebug === 'function') updateDebug();
 }
 
 // Wait for every page's script (away-settings.js, spin-settings.js) before the first render: the
@@ -604,7 +653,7 @@ const domReady = new Promise((r) => (document.readyState === 'loading' ? addEven
 domReady.then(() => scrawl.invoke('settings:get')).then(({ settings, version }) => {
   S = settings;
   document.querySelectorAll('.version').forEach((v) => { v.textContent = version ? `Version ${version}` : ''; });
-  ['hotkey', 'drawKey', 'spinKey', 'jotKey', 'tweakKey', 'awayKey'].forEach((which, i) => {
+  ['hotkey', 'drawKey', 'spinKey', 'jotKey', 'tweakKey', 'awayKey', 'debugKey'].forEach((which, i) => {
     renderKey(which, true);
     wellFor(which).querySelector('.keycap').style.setProperty('--d', `${260 + i * 80}ms`);
   });

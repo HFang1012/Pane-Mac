@@ -42,8 +42,9 @@ const DEFAULTS = {
     keys: { accelerator: 'Control+Command+A', symbols: ['⌃', '⌘', 'A'], name: 'Control Command A' },
     key: { codes: [UiohookKey.ShiftRight], symbol: '⇧', name: 'Right Shift', side: 'right' },
     message: Tools.DEFAULT_MESSAGE,
-    mood: 'dusk',
-    showTime: true,
+    mood: 'dusk', // colors the glow and the icon (Tools.MOODS)
+    icon: 'cup', // Tools.AWAY_ICONS
+    showTime: true, // "Away for 12 min"
     hidePointer: true,
     enabled: true,
   },
@@ -78,8 +79,22 @@ const DEFAULTS = {
     trash: true, // the version you replaced goes to the Trash instead of being gone for good
     enabled: true,
   },
+  debug: {
+    // Double-tap a key (left ⇧ to start), hold it, or press a shortcut, and Debug's panel opens over everything.
+    mode: 'double', // 'double' | 'hold' | 'shortcut'
+    key: { codes: [UiohookKey.Shift], symbol: '⇧', name: 'Left Shift', side: 'left' },
+    keys: { accelerator: 'Control+Command+B', symbols: ['⌃', '⌘', 'B'], name: 'Control Command B' },
+    size: 'medium', // 'small' | 'medium' | 'large' (DEBUG_ZOOM)
+    refresh: 2, // seconds between looks (DEBUG_REFRESH)
+    start: 'app', // opens on the app you're in, or on the whole Mac: 'app' | 'mac'
+    place: 'corner', // 'corner' (top right) | 'pointer' | 'last' (where you left it)
+    at: null, // { x, y }: where it was last dragged
+    confirm: true, // ask before quitting an app
+    enabled: true,
+  },
 };
-const JOT_SNOOZES = [5, 10, 15, 30, 60];
+const DEBUG_ZOOM = { small: 0.88, medium: 1, large: 1.15 };
+const DEBUG_REFRESH = [1, 2, 5];
 const SPIN_COUNTS = [3, 4, 5, 6];
 const WHEEL_SIZES = [60, 76, 96]; // small, medium, large (outer radius, px)
 // Every slice once, in the saved order (new ones go on the end), and at least one on.
@@ -531,9 +546,9 @@ function asCombo(k) {
   const keys = k?.keys?.length ? k.keys : [{ codes: k.codes, symbol: k.symbol, name: k.name, ...(k.side ? { side: k.side } : {}) }];
   return combo(keys.map((key) => (key.codes.length > 1 && MOD_CODES.has(key.codes[0]) ? keyInfo(key.codes[0]) : key)));
 }
-const KEY_LABEL = { hotkey: 'wheel key', drawKey: 'draw key', spinKey: 'Spin key', jotKey: 'Jot key', tweakKey: 'Tweak key', awayKey: 'Away key' };
+const KEY_LABEL = { hotkey: 'wheel key', drawKey: 'draw key', spinKey: 'Spin key', jotKey: 'Jot key', tweakKey: 'Tweak key', awayKey: 'Away key', debugKey: 'Debug key' };
 // Every held key Pane listens for, by name. Spin's, Jot's, Tweak's and Away's live inside their own settings.
-const OWN_KEY = { spinKey: 'spin', jotKey: 'jot', tweakKey: 'tweak', awayKey: 'away' };
+const OWN_KEY = { spinKey: 'spin', jotKey: 'jot', tweakKey: 'tweak', awayKey: 'away', debugKey: 'debug' };
 const keyOf = (which) => (OWN_KEY[which] ? settings[OWN_KEY[which]].key : settings[which]);
 function setKey(which, info) {
   if (OWN_KEY[which]) settings = { ...settings, [OWN_KEY[which]]: { ...settings[OWN_KEY[which]], key: info } };
@@ -544,7 +559,7 @@ function setKey(which, info) {
 const mayShare = (a, b) => ['drawKey,jotKey', 'drawKey,tweakKey'].includes([a, b].sort().join());
 // Keys that are tapped twice: Jot's, Tweak's and Away's always, and Scrawl's wheel key and Spin's key when
 // they're set to double-tap and hold. A tapped key is one modifier on its own.
-const tapped = (which) => ['jotKey', 'tweakKey', 'awayKey'].includes(which) ||
+const tapped = (which) => ['jotKey', 'tweakKey', 'awayKey', 'debugKey'].includes(which) ||
   (which === 'hotkey' && settings.wheelMode === 'double') || (which === 'spinKey' && settings.spin.mode === 'double');
 const oneModifier = (k) => k.keys.length === 1 && MOD_CODES.has(k.keys[0].codes[0]);
 // Switching a held key over to double-tap: keep one of its modifiers if it has one, else find a free one.
@@ -609,7 +624,7 @@ function finishBind(cancel) {
     const other = Object.keys(KEY_LABEL).find((k) => k !== which && !mayShare(k, which) && sameCombo(next, keyOf(k)));
     if (other) error = `${next.name} ${keys.length > 1 ? 'are' : 'is'} already your ${KEY_LABEL[other]}. Pick different keys.`;
     // Double-tapping a letter would happen all the time while typing ("ee"), so Jot takes one modifier.
-    else if (tapped(which) && !oneModifier(next)) error = 'Double-tap works with one of ⌃, ⌥, ⇧ or ⌘. Pick just one.';
+    else if (tapped(which) && !oneModifier(next)) error = `${which === 'debugKey' && settings.debug.mode === 'hold' ? 'Holding' : 'Double-tap'} works with one of ⌃, ⌥, ⇧ or ⌘. Pick just one.`;
     else {
       setKey(which, next);
       writeJSON('settings.json', settings);
@@ -771,7 +786,7 @@ const wheelTap = doubleTap({
   },
 });
 // Every double-tap Pane listens for. Jot's, Tweak's and Away's are made further down.
-const tappers = () => [jotTapper, tweakTap, awayTap, spinTap, wheelTap];
+const tappers = () => [jotTapper, tweakTap, awayTap, spinTap, wheelTap, debugTap, debugHold];
 
 function cancelSpin() {
   if (spinTimer) { clearTimeout(spinTimer); spinTimer = null; }
@@ -980,9 +995,9 @@ let awayKeyOn = false; // the Away shortcut is registered
 
 // ---------- shortcuts: Away's, Jot's and Tweak's, each when it's set to a shortcut rather than a double-tap ----------
 // All set together, because the only way to drop one is to drop them all. Off while any are being chosen.
-const SHORTCUT_NAME = { away: 'Away', jot: 'Jot', tweak: 'Tweak' };
-const shortcutOn = { away: false, jot: false, tweak: false };
-const shortcutBinding = { away: false, jot: false, tweak: false };
+const SHORTCUT_NAME = { away: 'Away', jot: 'Jot', tweak: 'Tweak', debug: 'Debug' };
+const shortcutOn = { away: false, jot: false, tweak: false, debug: false };
+const shortcutBinding = { away: false, jot: false, tweak: false, debug: false };
 const usesShortcut = (tool) => settings[tool].enabled && settings[tool].mode === 'shortcut';
 function registerShortcuts() {
   globalShortcut.unregisterAll();
@@ -990,8 +1005,9 @@ function registerShortcuts() {
   awayBinding = shortcutBinding.away;
   jotBinding = shortcutBinding.jot;
   tweakBinding = shortcutBinding.tweak;
-  if (awayBinding || jotBinding || tweakBinding) { awayKeyOn = jotKeyOn = false; return; }
-  const acts = { away: toggleAway, jot: () => { toggleComposer(); }, tweak: toggleTarget };
+  debugBinding = shortcutBinding.debug;
+  if (awayBinding || jotBinding || tweakBinding || debugBinding) { awayKeyOn = jotKeyOn = false; return; }
+  const acts = { away: toggleAway, jot: () => { toggleComposer(); }, tweak: toggleTarget, debug: toggleDebug };
   for (const t in acts) {
     if (!usesShortcut(t)) continue;
     try { shortcutOn[t] = globalShortcut.register(settings[t].keys.accelerator, acts[t]); } catch { shortcutOn[t] = false; }
@@ -1170,20 +1186,22 @@ const saveNotes = () => writeJSON('jot.json', notes.map(({ showing, ...n }) => n
 function cleanAway(a) {
   const out = { ...DEFAULTS.away, ...a };
   if (!['shortcut', 'double'].includes(out.mode)) out.mode = DEFAULTS.away.mode;
+  if (!Tools.MOODS.some((m) => m.id === out.mood)) out.mood = DEFAULTS.away.mood;
+  if (!Tools.AWAY_ICONS.some((i) => i.id === out.icon)) out.icon = DEFAULTS.away.icon;
   out.key = asCombo(out.key);
   return out;
 }
 function cleanJot(j) {
   const out = { ...DEFAULTS.jot, ...j };
   if (!['double', 'shortcut'].includes(out.mode)) out.mode = DEFAULTS.jot.mode;
-  if (!JOT_SNOOZES.includes(out.snooze)) out.snooze = DEFAULTS.jot.snooze;
+  out.snooze = Math.max(1, Math.min(720, Math.round(Number(out.snooze)) || DEFAULTS.jot.snooze)); // any whole minute, up to 12 hours
   out.last = Math.max(1, Math.min(1440, Math.round(Number(out.last)) || DEFAULTS.jot.last));
   out.key = asCombo(out.key);
   return out;
 }
 function jotBlocked() {
   return !settings.jot.enabled || !!activeTool || !!pen || menu.open || spin.open || !!spinTimer || !!away ||
-    !!binding || awayBinding || jotBinding || tweakBinding;
+    !!binding || awayBinding || jotBinding || tweakBinding || debugBinding;
 }
 
 // ---------- double-tap ----------
@@ -1467,7 +1485,7 @@ function cleanTweak(t) {
 let tweakBinding = false; // the settings window is listening for Tweak's shortcut
 function tweakBlocked() {
   return !settings.tweak.enabled || !!activeTool || !!pen || menu.open || spin.open || !!spinTimer || !!away ||
-    !!binding || awayBinding || jotBinding || tweakBinding;
+    !!binding || awayBinding || jotBinding || tweakBinding || debugBinding;
 }
 function toggleTarget() {
   debug('tweak', { target: !!target, blocked: tweakBlocked() });
@@ -1837,17 +1855,217 @@ function setTweakEnabled(on) {
   settingsWin?.webContents.send('settings:changed', settings);
 }
 
+// ---------- Debug: what's slowing your Mac down, and fixes you can click ----------
+// Double-tap the Debug key (left ⇧ to start), hold it, or press a shortcut, and a small panel opens over
+// everything, on the app you were in. It shows how busy the Mac is (CPU, memory, battery, storage), which
+// apps are behind it, and fixes for what it finds. Its − folds it into a little pill that keeps watching.
+// It never takes the keyboard when it opens, so the app you're looking at stays the one in front.
+const DebugStats = require('./debug-stats.js');
+DebugStats.setIconLoader(async (p) => {
+  try {
+    const img = await nativeImage.createThumbnailFromPath(p, { width: 64, height: 64 });
+    if (!img.isEmpty()) return img.toDataURL();
+  } catch {}
+  return (await app.getFileIcon(p, { size: 'normal' })).toDataURL();
+});
+let dbg = null; // { win, front, mini, timer, busy, closing }
+let debugBinding = false; // the settings window is listening for Debug's shortcut
+const DEBUG_W = 372; // the panel's width at medium size (its card plus room for the shadow), before zoom
+
+function cleanDebug(d) {
+  const out = { ...DEFAULTS.debug, ...d };
+  if (!['double', 'hold', 'shortcut'].includes(out.mode)) out.mode = DEFAULTS.debug.mode;
+  if (!DEBUG_ZOOM[out.size]) out.size = DEFAULTS.debug.size;
+  out.refresh = Number(out.refresh);
+  if (!DEBUG_REFRESH.includes(out.refresh)) out.refresh = DEFAULTS.debug.refresh;
+  if (!['app', 'mac'].includes(out.start)) out.start = DEFAULTS.debug.start;
+  if (!['corner', 'pointer', 'last'].includes(out.place)) out.place = DEFAULTS.debug.place;
+  if (!(out.at && Number.isFinite(out.at.x) && Number.isFinite(out.at.y))) out.at = null;
+  out.confirm = out.confirm !== false;
+  out.key = asCombo(out.key);
+  return out;
+}
+function debugBlocked() {
+  return !settings.debug.enabled || !!activeTool || !!pen || menu.open || spin.open || !!spinTimer || !!away || !!target ||
+    !!binding || awayBinding || jotBinding || tweakBinding || debugBinding;
+}
+function toggleDebug() {
+  if (dbg) closeDebug();
+  else if (!debugBlocked()) openDebug();
+}
+const debugTap = doubleTap({
+  key: () => settings.debug.key,
+  on: () => settings.debug.enabled && settings.debug.mode === 'double',
+  fire: toggleDebug,
+});
+// Or hold the key down on its own for a moment. Pressing anything else, or a click, while it's held
+// means it's part of a shortcut (⇧-click, ⇧A): then nothing happens.
+const DEBUG_HOLD = 650;
+function holdKey({ key, on, fire }) {
+  let timer = null, fired = false;
+  const reset = () => { clearTimeout(timer); timer = null; };
+  function feed(e, isDown) {
+    if (!on()) { reset(); return; }
+    const k = key();
+    const mine = inCombo(k, e.keycode);
+    if (!isDown) { if (mine) { reset(); fired = false; } return; }
+    if (!mine) { reset(); return; }
+    if (timer || fired) return; // a held key repeats
+    if (!comboHeld(k) || othersHeld(k)) return;
+    timer = setTimeout(() => {
+      timer = null;
+      if (comboHeld(k) && !othersHeld(k)) { fired = true; fire(); }
+    }, DEBUG_HOLD);
+  }
+  return { feed, reset };
+}
+const debugHold = holdKey({
+  key: () => settings.debug.key,
+  on: () => settings.debug.enabled && settings.debug.mode === 'hold',
+  fire: toggleDebug,
+});
+
+// Where it opens: the top-right corner of the screen you're on, by the pointer, or where you left it.
+function debugSpot(w, h, near) {
+  const p = near || screen.getCursorScreenPoint();
+  const at = settings.debug.at;
+  if (!near && settings.debug.place === 'last' && at) {
+    const d = screen.getDisplayNearestPoint(at);
+    const wa = d.workArea;
+    return { x: Math.round(Math.min(Math.max(at.x, wa.x), wa.x + wa.width - w)), y: Math.round(Math.min(Math.max(at.y, wa.y), wa.y + wa.height - 120)) };
+  }
+  const wa = screen.getDisplayNearestPoint(p).workArea;
+  if (near || settings.debug.place === 'pointer') {
+    return { x: Math.round(Math.min(Math.max(p.x - w / 2, wa.x + 4), wa.x + wa.width - w - 4)), y: Math.round(Math.min(Math.max(p.y + 14, wa.y + 4), wa.y + wa.height - h - 4)) };
+  }
+  return { x: wa.x + wa.width - w - 6, y: wa.y + 6 };
+}
+
+async function openDebug(near) {
+  if (dbg) { if (!dbg.win.isDestroyed()) dbg.win.showInactive(); return; }
+  const zoom = DEBUG_ZOOM[settings.debug.size];
+  const w0 = Math.round(DEBUG_W * zoom), h0 = Math.round(460 * zoom);
+  const d = { win: null, front: null, mini: false, timer: null, busy: false, closing: false };
+  dbg = d;
+  buildMenu();
+  const front = await DebugStats.frontApp().catch(() => null);
+  if (dbg !== d) return;
+  d.front = front && front.pid !== process.pid ? front : null;
+  const { x, y } = debugSpot(w0, h0, near);
+  const w = jotPanel({ x, y, width: w0, height: h0, focusable: true });
+  d.win = w;
+  w.setAlwaysOnTop(true, OVERLAY_LEVEL, 1);
+  w.loadFile(path.join(__dirname, 'debug.html'));
+  w.webContents.on('did-finish-load', () => w.webContents.setZoomFactor(DEBUG_ZOOM[settings.debug.size]));
+  w.once('ready-to-show', () => { if (dbg === d && !w.isDestroyed()) w.showInactive(); });
+  // Dragged somewhere: remember it, for "where you left it".
+  w.on('moved', () => {
+    if (w.isDestroyed()) return;
+    const b = w.getBounds();
+    settings = { ...settings, debug: { ...settings.debug, at: { x: b.x, y: b.y } } };
+    writeJSON('settings.json', settings);
+  });
+  w.on('closed', () => { if (dbg === d) { clearTimeout(d.timer); dbg = null; buildMenu(); } });
+  debugTick();
+}
+// Close it. If it had the keyboard, give it back to the app you were in first (so macOS doesn't go
+// looking for another Pane window, maybe on another Space).
+function closeDebug() {
+  const d = dbg;
+  if (!d) return;
+  dbg = null;
+  clearTimeout(d.timer);
+  buildMenu();
+  const w = d.win;
+  if (!w || w.isDestroyed()) return;
+  const bye = () => { if (!w.isDestroyed()) w.destroy(); };
+  if (w.isFocused() && d.front?.bundle && /^[\w.-]+$/.test(d.front.bundle)) {
+    execFile('osascript', ['-e', `tell application id "${d.front.bundle}" to activate`], () => setTimeout(bye, 40));
+  } else bye();
+}
+// One look, sent to the panel, then the next one after the chosen pause (slower while folded up).
+async function debugTick() {
+  const d = dbg;
+  if (!d || d.busy) return;
+  clearTimeout(d.timer);
+  d.busy = true;
+  try {
+    const snap = await DebugStats.sample({ selfPid: process.pid });
+    if (dbg === d && d.win && !d.win.isDestroyed()) d.win.webContents.send('debug:data', snap);
+  } catch (err) {
+    console.warn('Debug sample failed:', err.message);
+  }
+  d.busy = false;
+  if (dbg !== d) return;
+  d.timer = setTimeout(debugTick, (d.mini ? Math.max(5, settings.debug.refresh) : settings.debug.refresh) * 1000);
+}
+function debugSettingsChanged() {
+  if (!dbg?.win || dbg.win.isDestroyed()) return;
+  dbg.win.webContents.setZoomFactor(DEBUG_ZOOM[settings.debug.size]);
+  dbg.win.webContents.send('debug:settings', settings.debug);
+  debugTick();
+}
+function setDebugEnabled(on) {
+  settings = { ...settings, debug: { ...settings.debug, enabled: !!on } };
+  if (!on) closeDebug();
+  writeJSON('settings.json', settings);
+  registerShortcuts();
+  buildMenu();
+  settingsWin?.webContents.send('settings:changed', settings);
+}
+const fromDebug = (e) => dbg?.win && !dbg.win.isDestroyed() && e.sender === dbg.win.webContents;
+
+ipcMain.handle('debug:init', () => ({ settings: settings.debug, front: dbg?.front || null, self: process.pid }));
+// The panel's size, in page pixels. It stays pinned by the edge nearest the screen's side, so folding it
+// up in the top-right corner leaves the pill in the corner.
+ipcMain.on('debug:fit', (e, size) => {
+  if (!fromDebug(e) || !size || !(size.w > 40 && size.w < 900 && size.h > 30 && size.h < 1400)) return;
+  const w = dbg.win, b = w.getBounds();
+  const zoom = DEBUG_ZOOM[settings.debug.size];
+  const wa = screen.getDisplayMatching(b).workArea;
+  const width = Math.ceil(size.w * zoom), height = Math.min(Math.ceil(size.h * zoom), wa.height - 8);
+  const right = b.x + b.width / 2 > wa.x + wa.width / 2;
+  const x = Math.round(Math.max(wa.x, Math.min(right ? b.x + b.width - width : b.x, wa.x + wa.width - width)));
+  const y = Math.round(Math.max(wa.y, Math.min(b.y, wa.y + wa.height - height)));
+  w.setBounds({ x, y, width, height });
+});
+ipcMain.on('debug:mini', (e, on) => { if (fromDebug(e)) { dbg.mini = !!on; if (!on) debugTick(); } });
+ipcMain.on('debug:close', (e) => { if (fromDebug(e)) closeDebug(); });
+ipcMain.on('debug:refresh', (e) => { if (fromDebug(e)) debugTick(); });
+ipcMain.on('debug:openSettings', (e) => {
+  if (!fromDebug(e) || !settingsWin) return;
+  settings = { ...settings, page: 'debug' };
+  settingsWin.webContents.send('page:show', 'debug');
+  settingsWin.show(); settingsWin.focus(); app.focus({ steal: true });
+});
+ipcMain.handle('debug:fix', async (e, kind, target) => {
+  if (!fromDebug(e) || typeof kind !== 'string') return { ok: false, message: 'Couldn’t run that.' };
+  const app0 = target && Number.isInteger(target.pid) ? { pid: target.pid } : null;
+  const result = await DebugStats.fix(kind, app0, { shell, selfPid: process.pid }).catch((err) => ({ ok: false, message: err.message }));
+  setTimeout(debugTick, 600); // show what changed
+  return result;
+});
+// The settings page's "Right now" line: one look at the whole Mac, boiled down.
+ipcMain.handle('debug:health', async () => {
+  try { return (await DebugStats.sample({ selfPid: process.pid })).health; } catch { return null; }
+});
+ipcMain.on('debug:try', () => {
+  if (!settings.debug.enabled) return;
+  if (dbg) { closeDebug(); return; }
+  const b = settingsWin?.getBounds();
+  openDebug(b ? { x: Math.round(b.x + b.width / 2), y: Math.round(b.y + 60) } : undefined);
+});
+
 // ---------- settings window ----------
 function createSettings() {
   settingsWin = new BrowserWindow({
     width: 900,
     height: 640,
     useContentSize: true,
-    // Only its height can be dragged: the pages are laid out for 900pt across.
-    // On a short screen the content scrolls instead of hiding under the menu bar.
+    // Every edge and corner can be dragged. It never gets narrower than the 900pt the pages are laid
+    // out for; wider, the page stays centred. On a short screen the content scrolls instead of hiding under the menu bar.
     resizable: true,
     minWidth: 900,
-    maxWidth: 900,
     minHeight: 360,
     maximizable: false,
     fullscreenable: false,
@@ -1903,6 +2121,14 @@ ipcMain.handle('settings:set', (_e, patch) => {
     registerShortcuts();
     buildMenu();
   }
+  if ('debug' in patch) {
+    settings.debug = cleanDebug(settings.debug);
+    if (!settings.debug.enabled) closeDebug();
+    fitTapKey('debugKey');
+    registerShortcuts();
+    buildMenu();
+    debugSettingsChanged();
+  }
   writeJSON('settings.json', settings);
   broadcast();
   return settings;
@@ -1955,25 +2181,26 @@ ipcMain.on('window:fit', (_e, h, animate) => {
   const height = Math.min(Math.ceil(h), area.height - frame);
   const b = settingsWin.getBounds();
   const y = Math.max(area.y, Math.min(b.y, area.y + area.height - (height + frame)));
-  settingsWin.setContentBounds({ x: b.x, y: y + frame, width: 900, height }, !!animate && settingsWin.isVisible());
+  settingsWin.setContentBounds({ x: b.x, y: y + frame, width: settingsWin.getContentSize()[0], height }, !!animate && settingsWin.isVisible());
 });
-// Dragging the settings window's top or bottom edge by the grab strips (switcher.js).
+// Dragging the settings window's edges and corners by the grab strips (switcher.js).
+// edge is 'top', 'bottom', 'left', 'right' or a corner like 'top-left'; x and y are the pointer's screen point.
 let edgeDrag = null;
-ipcMain.on('window:edge', (_e, phase, edge, y) => {
+ipcMain.on('window:edge', (_e, phase, edge, x, y) => {
   if (!settingsWin) return;
-  if (phase === 'start') { edgeDrag = { edge, y0: y, b: settingsWin.getBounds() }; return; }
+  if (phase === 'start') { edgeDrag = { edge: String(edge), x0: x, y0: y, b: settingsWin.getBounds() }; return; }
   if (phase === 'end' || !edgeDrag) { edgeDrag = null; return; }
-  const { b, y0 } = edgeDrag;
+  const { b, x0, y0, edge: ed } = edgeDrag;
   const area = screen.getDisplayMatching(b).workArea;
-  const min = settingsWin.getMinimumSize()[1] || 360;
-  const dy = Math.round(y - y0);
-  if (edgeDrag.edge === 'bottom') {
-    const height = Math.max(min, Math.min(b.height + dy, area.y + area.height - b.y));
-    settingsWin.setBounds({ ...b, height });
-  } else {
-    const top = Math.max(area.y, Math.min(b.y + dy, b.y + b.height - min));
-    settingsWin.setBounds({ ...b, y: top, height: b.y + b.height - top });
-  }
+  const [minW, minH] = settingsWin.getMinimumSize();
+  const dx = Math.round(x - x0), dy = Math.round(y - y0);
+  let { x: left, y: top } = b;
+  let right = b.x + b.width, bottom = b.y + b.height;
+  if (ed.includes('bottom')) bottom = Math.max(top + (minH || 360), Math.min(b.y + b.height + dy, area.y + area.height));
+  if (ed.includes('top')) top = Math.max(area.y, Math.min(b.y + dy, bottom - (minH || 360)));
+  if (ed.includes('right')) right = Math.max(left + (minW || 900), Math.min(right + dx, area.x + area.width));
+  if (ed.includes('left')) left = Math.max(area.x, Math.min(b.x + dx, right - (minW || 900)));
+  settingsWin.setBounds({ x: left, y: top, width: right - left, height: bottom - top });
 });
 ipcMain.on('bind:cancel', () => { binding = false; });
 // Pane's own update sheet in the settings window (see updater.js).
@@ -1983,7 +2210,7 @@ ipcMain.on('update:later', () => Updater.later());
 ipcMain.on('update:skip', () => Updater.skip());
 ipcMain.on('update:install', () => Updater.install());
 ipcMain.on('update:check', () => Updater.check({ manual: true }));
-ipcMain.handle('perm:check', () => ({ trusted: trusted(), listening: hookOn, awayKey: shortcutOn.away, jotKey: shortcutOn.jot, tweakKey: shortcutOn.tweak }));
+ipcMain.handle('perm:check', () => ({ trusted: trusted(), listening: hookOn, awayKey: shortcutOn.away, jotKey: shortcutOn.jot, tweakKey: shortcutOn.tweak, debugKey: shortcutOn.debug }));
 ipcMain.on('perm:open', () => {
   systemPreferences.isTrustedAccessibilityClient(true);
   shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
@@ -2023,6 +2250,7 @@ app.whenReady().then(() => {
   if (!['hold', 'double'].includes(settings.spin.mode)) settings.spin.mode = DEFAULTS.spin.mode;
   settings.jot = cleanJot({ ...DEFAULTS.jot, ...settings.jot });
   settings.tweak = cleanTweak(settings.tweak);
+  settings.debug = cleanDebug(settings.debug);
   // Spin's key can't be exactly one of Scrawl's (sharing some keys is fine): take a free right-hand modifier.
   if (sameCombo(settings.spin.key, settings.hotkey) || sameCombo(settings.spin.key, settings.drawKey)) {
     const free = [UiohookKey.MetaRight, UiohookKey.AltRight, UiohookKey.CtrlRight, UiohookKey.ShiftRight]
@@ -2033,13 +2261,14 @@ app.whenReady().then(() => {
   if (!WHEEL_SIZES.includes(settings.wheelSize)) settings.wheelSize = DEFAULTS.wheelSize;
   if (!WHEEL_SIZES.includes(settings.spin.size)) settings.spin.size = DEFAULTS.spin.size;
   settings.spin.wheel = cleanSpinWheel(settings.spin.wheel);
-  for (const which of ['hotkey', 'spinKey', 'awayKey']) fitTapKey(which);
+  for (const which of ['hotkey', 'spinKey', 'awayKey', 'debugKey']) fitTapKey(which);
   // Keep the saved order, but make sure every built-in tool is present exactly once.
   const known = settings.tools.filter((t) => TOOL_IDS.includes(t.id));
   settings.tools = [...known, ...TOOL_IDS.filter((id) => !known.some((t) => t.id === id)).map((id) => ({ id, on: true }))];
   writeJSON('settings.json', settings); // save the migrated list (e.g. show/hide moved to the middle, undo/redo added)
   drawings = readJSON('drawings.json', {});
   notes = (readJSON('jot.json', []) || []).filter((n) => n && n.id && n.due);
+  DebugStats.startTicker(); // Debug's graph: the last 15 seconds are there the moment it opens
   setInterval(checkNotes, 1000); // cheap, and right after sleep too
 
   createOverlays();
@@ -2115,6 +2344,8 @@ function buildMenu() {
         { label: 'New Note', enabled: settings.jot.enabled, click: () => openComposer() },
         { label: settings.tweak.enabled ? 'Turn Tweak Off' : 'Turn Tweak On', click: () => setTweakEnabled(!settings.tweak.enabled) },
         { label: 'Tweak a File…', accelerator: 'Cmd+O', click: () => chooseAndEdit(BrowserWindow.getFocusedWindow()) },
+        { label: settings.debug.enabled ? 'Turn Debug Off' : 'Turn Debug On', click: () => setDebugEnabled(!settings.debug.enabled) },
+        { label: dbg ? 'Close Debug' : 'Open Debug', enabled: settings.debug.enabled, click: () => (dbg ? closeDebug() : openDebug()) },
         away
           ? { label: 'Come Back', click: hideAway }
           : { label: 'Step Away', ...(settings.away.mode === 'shortcut' ? { accelerator: settings.away.keys.accelerator, registerAccelerator: false } : {}), click: () => showAway(false) },
@@ -2152,9 +2383,10 @@ app.on('before-quit', () => {
   uIOhook.stop();
   if (notes) saveNotes();
   endTarget();
+  closeDebug();
 });
 
 // Test hook: only present when SCRAWL_TEST is set (used by automated checks, never in normal runs).
 if (process.env.SCRAWL_TEST) {
-  global.__scrawlTest = { startBind: (w) => { binding = w; bindKeys = []; }, settings: () => settings, spin, openSpin, closeSpin, spinHover, spinView, Music, applyTool, step, setEnabled, overlays, menu, showAway, hideAway, awayWins: () => away?.wins ?? [], jot: { open: openComposer, composer: () => composer, notes: () => notes, toasts, check: checkNotes, tap: jotTapper.feed, blocked: jotBlocked }, tweak: { start: startTarget, end: endTarget, target: () => target, open: openEditor, editors, tap: tweakTap, files: TweakFiles }, peek: () => ({ away: !!away, awayKey: awayKeyOn, activeTool, visible, menuOpen: menu.open, pencilColor: settings.pencilColor, enabled: settings.enabled, drawings, undo: history.undo.length, redo: history.redo.length }) };
+  global.__scrawlTest = { startBind: (w) => { binding = w; bindKeys = []; }, settings: () => settings, spin, openSpin, closeSpin, spinHover, spinView, Music, applyTool, step, setEnabled, overlays, menu, showAway, hideAway, awayWins: () => away?.wins ?? [], jot: { open: openComposer, composer: () => composer, notes: () => notes, toasts, check: checkNotes, tap: jotTapper.feed, blocked: jotBlocked }, tweak: { start: startTarget, end: endTarget, target: () => target, open: openEditor, editors, tap: tweakTap, files: TweakFiles }, debug: { open: openDebug, close: closeDebug, state: () => dbg, tap: debugTap.feed, hold: debugHold.feed, stats: DebugStats }, settingsWin: () => settingsWin, peek: () => ({ away: !!away, awayKey: awayKeyOn, activeTool, visible, menuOpen: menu.open, pencilColor: settings.pencilColor, enabled: settings.enabled, drawings, undo: history.undo.length, redo: history.redo.length }) };
 }

@@ -94,6 +94,26 @@
   --peach-lip: #5567E3;
 }
 
+/* Debug's theme: blush paper, near-black ink, a tomato-red bug, and leaf green for "all good". */
+[data-theme="debug"] {
+  --paper: #F1E6E3;
+  --paper-deep: #E6D6D2;
+  --card: #FDF9F8;
+  --card-lip: #E9DAD6;
+  --well: #F6EEEC;
+  --edge: #DCC8C3;
+  --ink: #2A1F24;
+  --ink-2: #74636A;
+  --accent: #F25C54;
+  --accent-lip: #C93A36;
+  --accent-soft: #FDDEDB;
+  --accent-ink: #B32C27;
+  --peach: #8CCB7E;     /* leaf */
+  --peach-lip: #5FA552;
+  --warn: #F5B53F;      /* amber, for "keep an eye on it" */
+  --warn-lip: #D18E14;
+}
+
 /* ---------- the wheel ---------- */
 .wheel { overflow: visible; display: block; }
 .wheel .slice, .wheel .wheel-body { transform-box: view-box; transform-origin: var(--cx) var(--cy); }

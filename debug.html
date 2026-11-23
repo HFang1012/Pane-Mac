@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en" data-theme="debug">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'">
+<title>Debug</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  body {
+    font-family: var(--font); color: var(--ink); font-size: 13px; line-height: 1.35;
+    -webkit-font-smoothing: antialiased; user-select: none; cursor: default;
+    --good: var(--peach); --good-lip: var(--peach-lip);
+  }
+  button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; -webkit-app-region: no-drag; }
+  button:focus { outline: none; }
+  button:focus-visible { box-shadow: 0 0 0 3px var(--accent-soft); }
+  [hidden] { display: none !important; }
+  svg.i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* The window is a little bigger than the card, so the soft shadow has room. It takes this box's size. */
+  #wrap { display: inline-block; padding: 8px 14px 22px; }
+  .card {
+    position: relative; width: 344px; border-radius: 26px; background: var(--card); overflow: hidden;
+    box-shadow: 0 6px 0 var(--card-lip), 0 20px 36px -12px rgba(42, 20, 24, 0.34), 0 0 0 1px rgba(42, 31, 36, 0.06);
+    transform-origin: 90% 0; animation: open 520ms var(--bouncy) both;
+  }
+  @keyframes open { from { opacity: 0; transform: scale(0.4) translateY(-20px); } 30% { opacity: 1; } }
+
+  /* ---------- top bar: grab it to move the panel ---------- */
+  .bar { -webkit-app-region: drag; display: flex; align-items: center; gap: 8px; height: 46px; padding: 0 10px 0 14px; cursor: grab; }
+  .bar .mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; background: var(--well); }
+  .bar .mark svg { height: 19px; width: auto; }
+  .bar b { font-size: 14px; font-weight: 800; letter-spacing: -0.01em; }
+  .bar .grow { flex: 1; }
+  /* The overall answer: does this Mac need debugging? A score and a word, live. Click it for the whole Mac. */
+  .health {
+    display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 4px; margin-right: 2px; border-radius: 14px;
+    background: var(--well); font-size: 11.5px; font-weight: 800; white-space: nowrap; transition: background 160ms ease, transform 220ms var(--bouncy);
+  }
+  .health:hover { transform: translateY(-1px); }
+  .health .sc { min-width: 22px; height: 20px; padding: 0 5px; border-radius: 10px; display: grid; place-items: center; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--ink); background: var(--good); box-shadow: 0 2px 0 var(--good-lip); animation: beat 2s ease-out infinite; }
+  .health.warn .sc { background: var(--warn); box-shadow: 0 2px 0 var(--warn-lip); animation-name: beatw; }
+  .health.bad .sc { background: var(--accent); color: #FFF; box-shadow: 0 2px 0 var(--accent-lip); animation-name: beatr; }
+  .health.bad { background: var(--accent-soft); color: var(--accent-ink); }
+  @keyframes beat { 0% { box-shadow: 0 2px 0 var(--good-lip), 0 0 0 0 rgba(140, 203, 126, 0.6); } 80%, 100% { box-shadow: 0 2px 0 var(--good-lip), 0 0 0 6px rgba(140, 203, 126, 0); } }
+  @keyframes beatw { 0% { box-shadow: 0 2px 0 var(--warn-lip), 0 0 0 0 rgba(245, 181, 63, 0.6); } 80%, 100% { box-shadow: 0 2px 0 var(--warn-lip), 0 0 0 6px rgba(245, 181, 63, 0); } }
+  .ib { width: 26px; height: 26px; border-radius: 13px; display: grid; place-items: center; color: var(--ink-2); background: var(--well); transition: transform 260ms var(--bouncy), background 140ms ease, color 140ms ease; }
+  .ib:hover { background: var(--accent-soft); color: var(--accent-ink); }
+  .ib:active { transform: scale(0.86); }
+  .ib.x:hover { transform: rotate(90deg); }
+  .ib.gear:hover svg { transform: rotate(60deg); }
+  .ib svg { transition: transform 360ms var(--bouncy); }
+
+  /* The bug's legs scuttle when you hover it. */
+  .glyph-debug .legs { transform-box: fill-box; transform-origin: center; }
+  .mark:hover .glyph-debug .legs, .pill .grab:hover .glyph-debug .legs { animation: scuttle 360ms ease-in-out 2; }
+  @keyframes scuttle { 25% { transform: translateY(-1.5px) scaleY(0.9); } 75% { transform: translateY(1.5px) scaleY(1.06); } }
+
+  /* ---------- this app, or the whole Mac ---------- */
+  .seg { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; margin: 0 14px; padding: 4px; border-radius: 16px; background: var(--well); }
+  .seg button { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 7px; height: 32px; padding: 0 10px; border-radius: 12px; font-size: 12.5px; font-weight: 800; color: var(--ink-2); min-width: 0; transition: color 160ms ease, transform 220ms var(--bouncy); }
+  .seg button:active { transform: scale(0.95); }
+  .seg button[aria-checked="true"] { color: var(--ink); }
+  .seg button span.nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .seg .chev { width: 18px; height: 18px; border-radius: 9px; display: grid; place-items: center; flex: none; margin-right: -4px; transition: background 140ms ease, transform 300ms var(--bouncy); }
+  .seg .chev:hover { background: var(--accent-soft); }
+  .seg .chev.up { transform: rotate(180deg); }
+  .seg-thumb { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 5px); border-radius: 12px; background: var(--card); box-shadow: 0 3px 0 var(--accent); transition: translate 440ms var(--bouncy); }
+  .seg[data-view="mac"] .seg-thumb { translate: calc(100% + 2px) 0; }
+  .appic { width: 18px; height: 18px; border-radius: 5px; flex: none; object-fit: contain; }
+  .avatar { width: 18px; height: 18px; border-radius: 6px; flex: none; display: grid; place-items: center; font-size: 10px; font-weight: 800; color: var(--card); background: var(--ink-2); }
+  .macic { width: 18px; height: 18px; flex: none; }
+
+  .body { max-height: 476px; overflow-y: auto; overscroll-behavior: contain; padding: 0 14px 14px; scrollbar-width: none; }
+  /* More below: the bottom edge fades, so it reads as a list to scroll. */
+  .body.more-below { -webkit-mask-image: linear-gradient(#000 calc(100% - 36px), transparent); }
+  .body::-webkit-scrollbar { display: none; }
+
+  /* ---------- the verdict: one line anyone can read ---------- */
+  .verdict { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; margin-top: 12px; padding: 10px 12px; border-radius: 18px; background: var(--well); }
+  .verdict .face { width: 34px; height: 34px; border-radius: 17px; display: grid; place-items: center; background: var(--good); box-shadow: 0 3px 0 var(--good-lip); color: var(--ink); transition: background 300ms ease, box-shadow 300ms ease; }
+  .verdict .face svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; }
+  .verdict.warn .face { background: var(--warn); box-shadow: 0 3px 0 var(--warn-lip); }
+  .verdict.bad .face { background: var(--accent); box-shadow: 0 3px 0 var(--accent-lip); animation: wob 1.6s var(--smooth) infinite; }
+  @keyframes wob { 0%, 70%, 100% { transform: none; } 78% { transform: rotate(-9deg); } 86% { transform: rotate(7deg); } }
+  .verdict b { display: block; font-size: 14.5px; font-weight: 800; letter-spacing: -0.01em; }
+  .verdict small { display: block; font-size: 12px; font-weight: 600; color: var(--ink-2); margin-top: 1px; }
+  .verdict .swap { transition: opacity 160ms ease; }
+
+  /* ---------- four gauges ---------- */
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
+  .tile { display: grid; justify-items: center; gap: 1px; padding: 9px 2px 8px; border-radius: 16px; background: var(--well); text-align: center; min-width: 0; transition: transform 260ms var(--bouncy); }
+  .tile:hover { transform: translateY(-2px); }
+  .ring { position: relative; width: 46px; height: 46px; }
+  .ring svg { width: 46px; height: 46px; transform: rotate(-90deg); }
+  .ring circle { fill: none; stroke-width: 5.5; }
+  .ring .track { stroke: var(--edge); opacity: 0.55; }
+  .ring .val { stroke: var(--good); stroke-linecap: round; transition: stroke-dashoffset 700ms var(--smooth), stroke 300ms ease; }
+  .tile.warn .ring .val { stroke: var(--warn); }
+  .tile.bad .ring .val { stroke: var(--accent); }
+  .ring span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .tile b { font-size: 11px; font-weight: 800; margin-top: 3px; }
+  .tile small { font-size: 10.5px; font-weight: 700; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; padding: 0 4px; }
+  .tile.warn small { color: var(--warn-lip); }
+  .tile.bad small { color: var(--accent-ink); }
+
+  /* ---------- the last minute or so, as a little hill ---------- */
+  .graph { position: relative; margin-top: 8px; padding: 8px 10px 6px; border-radius: 16px; background: var(--well); }
+  .graph svg { display: block; width: 100%; height: 38px; overflow: visible; }
+  .graph .area { fill: var(--accent-soft); }
+  .graph .line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .graph .now { fill: var(--accent); }
+  .graph .cap { display: flex; justify-content: space-between; font-size: 10.5px; font-weight: 700; color: var(--ink-2); margin-top: 3px; }
+
+  h4 { margin: 14px 2px 7px; font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); display: flex; justify-content: space-between; align-items: baseline; }
+  h4 em { font-style: normal; letter-spacing: 0; text-transform: none; font-weight: 700; }
+
+  /* ---------- fixes ---------- */
+  .fixes { display: grid; gap: 6px; }
+  .fix {
+    display: grid; grid-template-columns: 24px 1fr; gap: 10px; padding: 10px 12px; border-radius: 18px; background: var(--card);
+    box-shadow: inset 0 0 0 1.5px var(--edge); animation: pop 460ms var(--bouncy) both; animation-delay: var(--d, 0ms);
+  }
+  @keyframes pop { from { opacity: 0; transform: scale(0.9) translateY(6px); } }
+  .fix .ic { width: 24px; height: 24px; border-radius: 12px; display: grid; place-items: center; background: var(--good); color: var(--ink); font-size: 13px; font-weight: 900; }
+  .fix.warn .ic { background: var(--warn); }
+  .fix.bad .ic { background: var(--accent); color: #FFF; }
+  .fix.bad { box-shadow: inset 0 0 0 1.5px var(--accent-soft), 0 3px 0 var(--accent-soft); }
+  .fix .ic svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; }
+  .fix b { display: block; font-size: 13px; font-weight: 800; }
+  .fix p { margin: 2px 0 0; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+  .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .go, .alt {
+    height: 28px; padding: 0 12px; border-radius: 14px; font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; gap: 6px;
+    transition: transform 220ms var(--bouncy), background 140ms ease, box-shadow 140ms ease;
+  }
+  .go { background: var(--accent); color: #FFF; box-shadow: 0 3px 0 var(--accent-lip); }
+  .go:hover { transform: translateY(-1px); }
+  .go:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--accent-lip); }
+  .go.calm { background: var(--ink); box-shadow: 0 3px 0 var(--inkLip, #140E11); }
+  .alt { background: var(--well); color: var(--ink); }
+  .alt:hover { background: var(--accent-soft); color: var(--accent-ink); }
+  .go.sure { background: var(--ink); box-shadow: 0 3px 0 #140E11; animation: nudge 360ms var(--bouncy); }
+  @keyframes nudge { 30% { transform: translateX(-3px); } 60% { transform: translateX(3px); } }
+  .go.busy, .alt.busy { pointer-events: none; opacity: 0.8; }
+  .go.busy::after, .alt.busy::after { content: ""; width: 11px; height: 11px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin 700ms linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .fix.done { animation: done 420ms ease-in forwards; }
+  @keyframes done { to { opacity: 0; transform: translateX(24px) scale(0.96); } }
+  .sure-note { flex-basis: 100%; font-size: 11px; font-weight: 700; color: var(--accent-ink); animation: pop 300ms var(--bouncy) both; }
+
+  /* ---------- apps (or macOS's own parts) ---------- */
+  .rows { display: grid; gap: 3px; }
+  .rowb {
+    display: grid; grid-template-columns: 22px 1fr 58px 52px; gap: 8px; align-items: center; width: 100%; padding: 6px 8px; border-radius: 12px; text-align: left;
+    transition: background 140ms ease, transform 200ms var(--bouncy); animation: pop 400ms var(--bouncy) both; animation-delay: var(--d, 0ms);
+  }
+  .rowb:hover { background: var(--well); transform: translateX(2px); }
+  .rowb .appic, .rowb .avatar, .rowb .macic { width: 22px; height: 22px; }
+  .rowb .nm { font-size: 12.5px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .rowb .nm small { display: block; font-size: 10.5px; font-weight: 600; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meter { height: 7px; border-radius: 4px; background: var(--edge); overflow: hidden; opacity: 0.9; }
+  .meter i { display: block; height: 100%; width: 0; border-radius: 4px; background: var(--good); transition: width 600ms var(--smooth), background 300ms ease; }
+  .meter.warn i { background: var(--warn); }
+  .meter.bad i { background: var(--accent); }
+  .rowb .num { font-size: 11px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); white-space: nowrap; }
+  .rowb .num b { color: var(--ink); }
+  .rowb.static { cursor: default; }
+  .rowb.static:hover { transform: none; }
+  .more { display: block; margin: 4px auto 0; font-size: 11.5px; font-weight: 800; color: var(--accent-ink); padding: 4px 10px; border-radius: 10px; }
+  .more:hover { background: var(--accent-soft); }
+
+  /* ---------- quick fixes: always there ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { height: 28px; padding: 0 11px 0 9px; border-radius: 14px; background: var(--well); font-size: 11.5px; font-weight: 800; display: inline-flex; align-items: center; gap: 6px; transition: transform 220ms var(--bouncy), background 140ms ease, color 140ms ease; }
+  .chip:hover { background: var(--accent-soft); color: var(--accent-ink); transform: translateY(-1px); }
+  .chip:active { transform: scale(0.94); }
+  .chip.sure { background: var(--ink); color: var(--card); }
+  .chip.busy { pointer-events: none; opacity: 0.7; }
+  .chip svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
+
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; padding: 9px 12px; border-radius: 16px; background: var(--well); font-size: 11.5px; font-weight: 700; color: var(--ink-2); }
+  .facts b { color: var(--ink); font-weight: 800; }
+
+  /* ---------- a word after a fix runs ---------- */
+  .toast {
+    position: absolute; left: 50%; bottom: 12px; translate: -50% 0; max-width: 300px; padding: 8px 14px; border-radius: 14px; background: var(--ink); color: var(--card);
+    font-size: 12px; font-weight: 700; box-shadow: 0 8px 20px -6px rgba(20, 14, 17, 0.5); opacity: 0; transform: translateY(10px) scale(0.92);
+    transition: opacity 180ms ease, transform 360ms var(--bouncy); pointer-events: none; text-align: center; z-index: 5;
+  }
+  .toast.show { opacity: 1; transform: none; }
+  .toast.err { background: var(--accent-ink); }
+
+  /* ---------- picking an app ---------- */
+  .pick-head { display: flex; align-items: center; justify-content: space-between; margin: 12px 2px 6px; }
+  .pick-head b { font-size: 13px; font-weight: 800; }
+
+  /* ---------- folded up: a little pill that keeps watching ---------- */
+  .pill {
+    display: flex; align-items: center; gap: 4px; height: 44px; padding: 0 6px 0 4px; border-radius: 22px; background: var(--card);
+    box-shadow: 0 5px 0 var(--card-lip), 0 14px 26px -10px rgba(42, 20, 24, 0.4), 0 0 0 1px rgba(42, 31, 36, 0.06);
+    animation: pillin 460ms var(--bouncy) both;
+  }
+  @keyframes pillin { from { opacity: 0; transform: scale(0.5); } }
+  .pill .grab { -webkit-app-region: drag; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 17px; background: var(--well); cursor: grab; }
+  .pill .grab svg { height: 17px; width: auto; }
+  .pill .open { display: flex; align-items: center; gap: 9px; height: 34px; padding: 0 10px 0 8px; border-radius: 17px; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; transition: background 140ms ease; }
+  .pill .open:hover { background: var(--well); }
+  .pill .stat { display: inline-flex; align-items: center; gap: 4px; }
+  .pill .stat small { font-size: 10px; font-weight: 800; color: var(--ink-2); }
+  .pill .dot { width: 9px; height: 9px; border-radius: 5px; background: var(--good); box-shadow: 0 2px 0 var(--good-lip); }
+  .pill .dot.warn { background: var(--warn); box-shadow: 0 2px 0 var(--warn-lip); }
+  .pill .dot.bad { background: var(--accent); box-shadow: 0 2px 0 var(--accent-lip); animation: beatr 1.4s ease-out infinite; }
+  @keyframes beatr { 0% { box-shadow: 0 0 0 0 rgba(242, 92, 84, 0.7); } 80%, 100% { box-shadow: 0 0 0 7px rgba(242, 92, 84, 0); } }
+  .pill .ib { width: 24px; height: 24px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div class="card" id="card">
+    <div class="bar">
+      <span class="mark" id="mark"></span>
+      <b>Debug</b>
+      <span class="grow"></span>
+      <button class="health" id="health" title="Does your Mac need debugging?"><span class="sc" id="hScore">–</span><span id="hLabel">Checking</span></button>
+      <button class="ib gear" id="gear" aria-label="Debug settings" title="Settings"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+      <button class="ib" id="mini" aria-label="Make it small" title="Make it small"><svg class="i" viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
+      <button class="ib x" id="close" aria-label="Close" title="Close (Esc)"><svg class="i" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg></button>
+    </div>
+    <div class="seg" id="seg" role="radiogroup" aria-label="Show" data-view="app">
+      <span class="seg-thumb"></span>
+      <button role="radio" id="appTab" aria-checked="true"><span id="appTabIc"></span><span class="nm" id="appTabName">This app</span><span class="chev" id="chev" title="Pick another app"><svg class="i" viewBox="0 0 24 24" style="width:11px;height:11px;stroke-width:3"><path d="M6 9l6 6 6-6"/></svg></span></button>
+      <button role="radio" id="macTab" aria-checked="false"><svg class="macic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2.5"/><path d="M8 20h8M12 16v4"/></svg><span class="nm">Whole Mac</span></button>
+    </div>
+    <div class="body" id="body">
+      <div id="main">
+        <div class="verdict" id="verdict" aria-live="polite">
+          <span class="face" id="face"></span>
+          <div><b id="vTitle">Taking a look…</b><small id="vSub">One moment.</small></div>
+        </div>
+        <div class="tiles" id="tiles"></div>
+        <div class="graph" id="graph">
+          <svg id="spark" viewBox="0 0 300 38" preserveAspectRatio="none"><path class="area" id="sparkArea"/><path class="line" id="sparkLine"/><circle class="now" id="sparkNow" r="3"/></svg>
+          <div class="cap"><span id="graphLabel">Processor</span><span id="graphSpan"></span></div>
+        </div>
+        <div id="fixBox"><h4>Suggested fixes</h4><div class="fixes" id="fixes"></div></div>
+        <div id="listBox"><h4><span id="listTitle">Busiest apps</span><em id="listNote"></em></h4><div class="rows" id="rows"></div></div>
+        <div id="factBox"><h4>Details</h4><div class="facts" id="facts"></div></div>
+        <div id="appActBox"><h4>This app</h4><div class="chips" id="appActs"></div></div>
+        <div id="quickBox"><h4>Quick fixes</h4><div class="chips" id="quick"></div></div>
+      </div>
+      <div id="picker" hidden>
+        <div class="pick-head"><b>Pick an app</b><button class="alt" id="pickBack">Back</button></div>
+        <div class="rows" id="pickRows"></div>
+      </div>
+    </div>
+    <div class="toast" id="toast" role="status"></div>
+  </div>
+  <div class="pill" id="pill" hidden>
+    <span class="grab" id="pillGrab" title="Drag to move"></span>
+    <button class="open" id="pillOpen" aria-label="Open Debug">
+      <span class="dot" id="pillDot"></span><span class="stat" id="pillScore" title="Health"></span>
+      <span class="stat"><small>CPU</small><span id="pillCpu">–</span></span>
+      <span class="stat"><small>MEM</small><span id="pillMem">–</span></span>
+    </button>
+    <button class="ib x" id="pillClose" aria-label="Close" title="Close"><svg class="i" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg></button>
+  </div>
+</div>
+<script src="tools.js"></script>
+<script src="debug.js"></script>
+</body>
+</html>

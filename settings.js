@@ -665,5 +665,10 @@ domReady.then(() => scrawl.invoke('settings:get')).then(({ settings, version }) 
   resetCaptions();
   if (typeof startSwitcher === 'function') startSwitcher();
   pollStatus();
-  setInterval(pollStatus, 1500);
+  // Only while the window is showing: hidden, there's nothing to update, so Pane stays quiet.
+  setInterval(() => { if (!document.hidden) pollStatus(); }, 1500);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) pollStatus(); });
+  // The little looping demos pause while you're working in another app, so the window costs nothing in the background.
+  const idle = () => document.documentElement.classList.toggle('idle', !document.hasFocus());
+  addEventListener('blur', idle); addEventListener('focus', idle); idle();
 });

@@ -851,6 +851,10 @@
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
   }
+  /* Working in another app: the looping demos hold still (see settings.js). */
+  /* Only the loops: entrance animations still finish, so a window shown in the background never looks half-drawn. */
+  html.idle :is(.jdesk, .tdesk, .ddesk, .screen, .now) *, html.idle :is(.jdesk, .tdesk, .ddesk, .screen, .now) *::before,
+  html.idle :is(.jdesk, .tdesk, .ddesk, .screen, .now) *::after, html.idle .keywell .ants rect, html.idle .status .dot::after { animation-play-state: paused !important; }
 </style>
 </head>
 <body>

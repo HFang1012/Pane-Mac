@@ -2310,8 +2310,9 @@ app.whenReady().then(() => {
   writeJSON('settings.json', settings); // save the migrated list (e.g. show/hide moved to the middle, undo/redo added)
   drawings = readJSON('drawings.json', {});
   notes = (readJSON('jot.json', []) || []).filter((n) => n && n.id && n.due);
-  DebugStats.startTicker(); // Debug's graph: the last 15 seconds are there the moment it opens
-  setInterval(checkNotes, 1000); // cheap, and right after sleep too
+  // One timer for everything that looks once a second: Jot's notes (cheap, and right after sleep too) and
+  // Debug's CPU reading for its graph (only while Debug is on).
+  setInterval(() => { checkNotes(); if (settings.debug.enabled) DebugStats.tickCpu(); }, 1000);
 
   createOverlays();
   createSettings();

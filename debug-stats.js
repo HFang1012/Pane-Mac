@@ -108,7 +108,7 @@ function cpuTotals() {
 
 // The whole Mac's CPU, once a second, always (os.cpus() is cheap: no process to start). So the graph
 // already has the last 15 seconds the moment Debug opens.
-const tick = { prev: null, buf: [], timer: null };
+const tick = { prev: null, buf: [] };
 function tickCpu() {
   const c = cpuTotals();
   if (tick.prev) {
@@ -118,11 +118,9 @@ function tickCpu() {
   }
   tick.prev = c;
 }
+// main.js calls tickCpu from the once-a-second timer it already has, so Debug adds no timer of its own.
 function startTicker() {
-  if (tick.timer) return;
-  tickCpu();
-  tick.timer = setInterval(tickCpu, 1000);
-  tick.timer.unref?.();
+  if (!tick.prev) tickCpu();
 }
 const trailOf = (points, now) => points.filter((p) => p.t >= now - TRAIL_MS - 1500);
 
@@ -499,7 +497,7 @@ async function fix(kind, app, { shell, selfPid }) {
 }
 
 module.exports = {
-  sample, frontApp, fix, isBrowser, startTicker, TRAIL_MS,
+  sample, frontApp, fix, isBrowser, startTicker, tickCpu, TRAIL_MS,
   setIconLoader: (fn) => { iconLoader = fn; },
   _test: { parseApps, parsePs, cpuSeconds },
 };

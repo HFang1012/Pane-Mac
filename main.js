@@ -1991,6 +1991,7 @@ async function openDebug(near) {
   const d = { win: null, front: null, mini: false, timer: null, busy: false, closing: false, shown: false };
   dbg = d;
   buildMenu();
+  DebugStats.warm(); // per-app memory takes a moment to read: start now, while the panel loads
   const front = await DebugStats.frontApp().catch(() => null);
   if (dbg !== d) return;
   d.front = front && front.pid !== process.pid ? front : null;
@@ -2031,6 +2032,16 @@ function closeDebug() {
   w.webContents.send('debug:leave');
   setTimeout(bye, 500);
 }
+// How hot macOS says the Mac is ('nominal' | 'fair' | 'serious' | 'critical'). The only reading that works
+// on Apple silicon, where pmset has nothing to say.
+const thermalState = () => { try { return powerMonitor.getCurrentThermalState?.() || null; } catch { return null; } };
+// The screen the panel is on: its refresh rate (what FPS is measured against) and size.
+function debugDisplay(w) {
+  try {
+    const s = w && !w.isDestroyed() ? screen.getDisplayMatching(w.getBounds()) : screen.getPrimaryDisplay();
+    return { hz: Math.round(s.displayFrequency) || null, width: Math.round(s.size.width * s.scaleFactor), height: Math.round(s.size.height * s.scaleFactor), count: screen.getAllDisplays().length };
+  } catch { return null; }
+}
 // One look, sent to the panel, then the next one after the chosen pause (slower while folded up).
 async function debugTick() {
   const d = dbg;
@@ -2038,7 +2049,7 @@ async function debugTick() {
   clearTimeout(d.timer);
   d.busy = true;
   try {
-    const snap = await DebugStats.sample({ selfPid: process.pid });
+    const snap = await DebugStats.sample({ selfPid: process.pid, thermal: thermalState(), display: debugDisplay(d.win) });
     if (dbg === d && d.win && !d.win.isDestroyed()) d.win.webContents.send('debug:data', snap);
   } catch (err) {
     console.warn('Debug sample failed:', err.message);
@@ -2102,7 +2113,7 @@ ipcMain.handle('debug:fix', async (e, kind, target) => {
 });
 // The settings page's "Right now" line: one look at the whole Mac, boiled down.
 ipcMain.handle('debug:health', async () => {
-  try { return (await DebugStats.sample({ selfPid: process.pid })).health; } catch { return null; }
+  try { return (await DebugStats.sample({ selfPid: process.pid, thermal: thermalState() })).health; } catch { return null; }
 });
 ipcMain.on('debug:try', () => {
   if (!settings.debug.enabled) return;

@@ -13,20 +13,21 @@ const HISTORY = 40; // samples kept per app, for spotting one that stays busy
 const TRAIL_MS = 15000; // the graphs show the last 15 seconds
 
 // ---------- apps ----------
-// Running apps, from lsappinfo: the ones with a Dock icon ("Foreground").
+// Running apps, from lsappinfo: the ones with a Dock icon ("Foreground"), plus menu bar apps you installed
+// ("UIElement" ones living in their own .app, not macOS's own and not a helper tucked inside another app).
 function parseApps(text) {
   const apps = [];
   for (const block of text.split(/\n\s*\d+\) /)) {
     const name = /^"([^"]*)"/.exec(block.trim())?.[1];
     const pid = Number(/pid = (\d+)/.exec(block)?.[1]);
     const type = /type="([^"]+)"/.exec(block)?.[1];
-    if (!name || !pid || type !== 'Foreground') continue;
-    apps.push({
-      name,
-      pid,
-      bundle: /bundleID="([^"]+)"/.exec(block)?.[1] || null,
-      path: /bundle path="([^"]+)"/.exec(block)?.[1] || null,
-    });
+    const bundle = /bundleID="([^"]+)"/.exec(block)?.[1] || null;
+    const where = /bundle path="([^"]+)"/.exec(block)?.[1] || null;
+    if (!name || !pid) continue;
+    const menubar = type === 'UIElement' && where && /\.app$/.test(where) && !/\.app\//.test(where) &&
+      !where.startsWith('/System/') && !/^com\.apple\./.test(bundle || '') && !/\b(Helper|Agent|Daemon|Service)\b/i.test(name);
+    if (type !== 'Foreground' && !menubar) continue;
+    apps.push({ name, pid, bundle, path: where, kind: menubar ? 'menubar' : 'app' });
   }
   return apps;
 }
@@ -66,26 +67,35 @@ function parsePs(text) {
   return procs;
 }
 
-// System processes worth a word when they're busy. Each has a plain name and what it's up to.
-const SYSTEM = {
-  WindowServer: { label: 'Screen drawing', about: 'draws every window and animation on your screens' },
-  mds_stores: { label: 'Spotlight', about: 'is indexing your files for search' },
-  mds: { label: 'Spotlight', about: 'is indexing your files for search' },
-  mdworker_shared: { label: 'Spotlight', about: 'is indexing your files for search' },
-  mdworker: { label: 'Spotlight', about: 'is indexing your files for search' },
-  photoanalysisd: { label: 'Photos', about: 'is scanning your photo library for faces and places' },
-  mediaanalysisd: { label: 'Photos', about: 'is scanning your photo library' },
-  backupd: { label: 'Time Machine', about: 'is backing up' },
-  bird: { label: 'iCloud Drive', about: 'is syncing your files' },
-  cloudd: { label: 'iCloud', about: 'is syncing' },
-  fileproviderd: { label: 'iCloud Drive', about: 'is syncing your files' },
-  softwareupdated: { label: 'Software Update', about: 'is downloading an update' },
-  coreaudiod: { label: 'Sound', about: 'plays sound for every app' },
-  kernel_task: { label: 'macOS', about: 'is keeping your Mac cool by slowing it down' },
-  corespotlightd: { label: 'Spotlight', about: 'is indexing for search' },
-  syspolicyd: { label: 'Security checks', about: 'is checking a new app' },
-  XprotectService: { label: 'Malware scan', about: 'is checking files for malware' },
-};
+// Everything that isn't an app, sorted into a few plain categories. Checked in order; the first match wins.
+// `passes`: it finishes on its own, so waiting is the fix. `byPath`: matched on where the program lives.
+const CATEGORIES = [
+  { id: 'kernel', label: 'macOS core', about: 'runs the heart of macOS. When your Mac is hot it also slows things down on purpose to cool off', match: /^kernel_task$/ },
+  { id: 'helpers', label: 'Helpers from your apps', about: 'are background parts of apps you installed (updaters, sync, login items)', byPath: (exe) => !exe.startsWith('/System/') && /\/([^/]+)\.app\//.exec(exe)?.[1] },
+  { id: 'screen', label: 'Screen & windows', about: 'draws every window and animation on your screens', match: /^(WindowServer|Dock|WindowManager|NotificationCenter|ControlCenter|SystemUIServer|Wallpaper.*|loginwindow|universalaccessd)$/ },
+  { id: 'search', label: 'Spotlight', about: 'is indexing your files for search', passes: true, match: /^(mds|mds_stores|mdworker|mdworker_shared|mdbulkimport|mdsync|corespotlightd|Spotlight|spotlightknowledged)$/ },
+  { id: 'sync', label: 'iCloud & sync', about: 'is syncing your files and data', passes: true, match: /^(bird|cloudd|fileproviderd|FileProvider.*|cloudphotod|CloudKeychainProxy|syncdefaultsd|itunescloudd|protectedcloudkeysyncing)$/ },
+  { id: 'photos', label: 'Photo & video analysis', about: 'is scanning your photos and videos for faces, places and text', passes: true, match: /^(photoanalysisd|mediaanalysisd|photolibraryd|mediaanalysisd-access|VisualIntelligence.*)$/ },
+  { id: 'backup', label: 'Time Machine', about: 'is backing up', passes: true, match: /^(backupd|backupd-helper)$/ },
+  { id: 'update', label: 'Software updates', about: 'is downloading or installing updates', passes: true, match: /^(softwareupdated|SoftwareUpdateNotificationManager|installd|system_installd|storedownloadd|appstoreagent|mobileassetd|UpdateBrainService|com\.apple\.MobileSoftwareUpdate.*)$/ },
+  { id: 'security', label: 'Security checks', about: 'is checking apps and files for malware', passes: true, match: /^(syspolicyd|XprotectService|XProtect.*|MRT|trustd|amfid|endpointsecurityd)$/ },
+  { id: 'ai', label: 'Siri & Apple Intelligence', about: 'is learning from your Mac and running on-device models', passes: true, match: /^(siriactionsd|siriknowledged|assistantd|intelligenceplatformd|generativeexperiencesd|modelmanagerd|knowledgeconstructiond|duetexpertd|TGOnDeviceInference.*)$/ },
+  { id: 'sound', label: 'Sound & video', about: 'plays sound and decodes video for every app', match: /^(coreaudiod|audiomxd|AudioComponentRegistrar|VTDecoderXPCService|VTEncoderXPCService)$/ },
+  { id: 'network', label: 'Network & downloads', about: 'handles downloads, Wi-Fi and Bluetooth', match: /^(nsurlsessiond|mDNSResponder|networkd|configd|apsd|symptomsd|airportd|WiFiAgent|bluetoothd|rapportd|sharingd)$/ },
+  { id: 'dev', label: 'Developer & command-line tools', about: 'are programs started from a terminal or a code editor', match: /^(node|python[\d.]*|Python|ruby|java|php|perl|go|cargo|rustc|clang|swift.*|xcodebuild|XCBBuildService|SourceKitService|make|cmake|ninja|git|deno|bun|ollama|docker.*|com\.docker\..*|qemu.*|gradle.*)$/, byPath: (exe) => /^\/(opt\/homebrew|usr\/local)\//.test(exe) && path.basename(exe) },
+  { id: 'other', label: 'Other macOS tasks', about: 'are small background parts of macOS' },
+];
+const CAT_BY_ID = Object.fromEntries(CATEGORIES.map((c) => [c.id, c]));
+// Which category a process falls in, and the name to show for it inside that category.
+function categorize(exe) {
+  const name = path.basename(exe);
+  for (const c of CATEGORIES) {
+    const hit = c.byPath?.(exe);
+    if (hit) return { cat: c, name: hit };
+    if (c.match?.test(name)) return { cat: c, name };
+  }
+  return { cat: CAT_BY_ID.other, name };
+}
 
 // ---------- the sampler ----------
 const S = {
@@ -94,6 +104,7 @@ const S = {
   appHistory: new Map(), // app key -> [cpu share, 0-100]
   slow: { at: 0, data: null }, // battery, disk, heat, sleep blockers: every 10 s
   icons: new Map(), // bundle path -> data URL (or null while it loads)
+  io: null, // the last network, disk and graphics totals, for turning into speeds
 };
 
 function cpuTotals() {
@@ -124,6 +135,85 @@ function startTicker() {
 }
 const trailOf = (points, now) => points.filter((p) => p.t >= now - TRAIL_MS - 1500);
 
+// ---------- memory per process, the way Activity Monitor counts it ----------
+// ps's RSS counts memory shared between processes once in every one of them, so an app made of 20 helpers
+// looked several times bigger than it is. top's MEM is each process's own footprint, the number Activity
+// Monitor shows. top costs most of a second of processor time, so it runs every 8 seconds at most, in the
+// background, and the looks in between use its last answer.
+const FOOT_MS = 8000;
+const foot = { at: 0, map: null, pending: null };
+const UNIT = { B: 1, K: 1024, M: 1048576, G: 1073741824, T: 1099511627776 };
+function parseTop(text) {
+  const map = new Map();
+  for (const line of text.split('\n')) {
+    const m = /^\s*(\d+)\s+([\d.]+)([BKMGT])\b/.exec(line);
+    if (m) map.set(Number(m[1]), Math.round(Number(m[2]) * UNIT[m[3]]));
+  }
+  return map;
+}
+function refreshFootprints() {
+  if (!foot.pending) {
+    foot.pending = run('top', ['-l', '1', '-stats', 'pid,mem'], 6000).then((out) => {
+      const map = parseTop(out);
+      if (map.size > 10) { foot.map = map; foot.at = Date.now(); }
+      foot.pending = null;
+    });
+  }
+  return foot.pending;
+}
+async function footprints() {
+  if (!foot.map) await refreshFootprints(); // the very first look waits for it, so numbers never jump
+  else if (Date.now() - foot.at > FOOT_MS) refreshFootprints();
+  return foot.map || new Map();
+}
+// Started the moment Debug is asked to open, so it's ready by the time the panel has loaded.
+function warm() { if (!foot.map) refreshFootprints(); }
+
+// ---------- graphics, network and disk: running totals, turned into speeds ----------
+async function counters() {
+  const [net, disk, gpu] = await Promise.all([
+    run('netstat', ['-ibn']),
+    run('ioreg', ['-r', '-c', 'IOBlockStorageDriver', '-k', 'Statistics', '-d', '1']),
+    run('ioreg', ['-r', '-d', '1', '-c', 'IOAccelerator']),
+  ]);
+  // One <Link#n> row per network interface holds its byte totals. Counted from the right, since some
+  // interfaces have no address column. The loopback (lo0) is the Mac talking to itself: left out.
+  let rx = 0, tx = 0;
+  for (const line of net.split('\n')) {
+    const f = line.trim().split(/\s+/);
+    if (f.length < 9 || !/^<Link#\d+>$/.test(f[2]) || /^lo\d/.test(f[0])) continue;
+    rx += Number(f[f.length - 5]) || 0;
+    tx += Number(f[f.length - 2]) || 0;
+  }
+  const sum = (text, re) => [...text.matchAll(re)].reduce((n, m) => n + Number(m[1]), 0);
+  const rd = sum(disk, /"Bytes \(Read\)"=(\d+)/g), wr = sum(disk, /"Bytes \(Write\)"=(\d+)/g);
+  // The busiest graphics chip (a Mac with two reports both), and the memory its work is holding.
+  const utils = [...gpu.matchAll(/"Device Utilization %"=(\d+)/g)].map((m) => Number(m[1]));
+  const gpuMem = sum(gpu, /"In use system memory"=(\d+)/g);
+  return { rx, tx, rd, wr, gpu: utils.length ? Math.max(...utils) : null, gpuMem: gpuMem || null, hasNet: /<Link#/.test(net), hasDisk: rd + wr > 0 };
+}
+function speeds(c, now) {
+  const p = S.io;
+  S.io = { ...c, at: now };
+  const secs = p ? (now - p.at) / 1000 : 0;
+  const rate = (k) => (p && secs > 0.3 && c[k] >= p[k] ? (c[k] - p[k]) / secs : null);
+  return {
+    gpu: c.gpu, gpuMem: c.gpuMem,
+    down: c.hasNet ? rate('rx') : null, up: c.hasNet ? rate('tx') : null,
+    read: c.hasDisk ? rate('rd') : null, write: c.hasDisk ? rate('wr') : null,
+  };
+}
+
+// The chip, once: "Apple M4 Pro", and how many fast and efficient cores it has.
+let chipInfo = null;
+async function chip() {
+  if (chipInfo) return chipInfo;
+  const out = await run('sysctl', ['-n', 'machdep.cpu.brand_string', 'hw.perflevel0.logicalcpu', 'hw.perflevel1.logicalcpu', 'hw.model']);
+  const [model, p, e, hw] = out.trim().split('\n');
+  chipInfo = { model: model || os.cpus()[0]?.model || 'Unknown', fast: Number(p) || null, efficient: Number(e) || null, hw: hw || null };
+  return chipInfo;
+}
+
 async function memory() {
   const [vm, sys] = await Promise.all([
     run('vm_stat', []),
@@ -134,11 +224,15 @@ async function memory() {
   const pages = (label) => Number(new RegExp(`${label}:\\s+(\\d+)`).exec(vm)?.[1] || 0) * page;
   const total = Number(memsize) || os.totalmem();
   // Like Activity Monitor's "Memory Used": what apps hold, plus wired and compressed memory.
-  const used = Math.min(total, pages('Anonymous pages') - pages('Pages purgeable') + pages('Pages wired down') + pages('Pages occupied by compressor'));
+  const appMem = Math.max(0, pages('Anonymous pages') - pages('Pages purgeable'));
+  const wired = pages('Pages wired down'), compressed = pages('Pages occupied by compressor');
+  const used = Math.min(total, appMem + wired + compressed);
   const mb = (k) => Number(new RegExp(`${k} = ([\\d.]+)M`).exec(swap || '')?.[1] || 0) * 1048576;
   return {
     total,
     used: used > 0 ? used : total - os.freemem(),
+    app: appMem, wired, compressed,
+    cached: pages('File-backed pages') + pages('Pages purgeable'), // files kept in memory; given back the moment it's needed
     pressure: { 1: 'normal', 2: 'warn', 4: 'critical' }[Number(level)] || 'normal',
     freePct: Number(freePct) || null,
     swapUsed: mb('used'),
@@ -153,12 +247,14 @@ async function battery() {
   const state = m[2].trim();
   const rem = /^(\d+):(\d+)$/.exec(m[3] || '');
   const num = (k) => { const v = new RegExp(`"${k}" = (\\d+)`).exec(io)?.[1]; return v == null ? null : Number(v); };
-  const design = num('DesignCapacity'), max = num('AppleRawMaxCapacity');
+  // "Maximum Capacity" in System Settings is the nominal capacity over the design one. The raw maximum
+  // reads a few points lower than what macOS shows, so it's only the fallback.
+  const design = num('DesignCapacity'), max = num('NominalChargeCapacity') || num('AppleRawMaxCapacity');
   const temp = num('Temperature');
   return {
     pct: Number(m[1]),
     plugged: /AC Power/.test(batt),
-    charging: state === 'charging',
+    charging: state === 'charging' || state === 'finishing charge',
     full: state === 'charged',
     remaining: rem && !(rem[1] === '0' && rem[2] === '00') ? Number(rem[1]) * 60 + Number(rem[2]) : null,
     health: design && max ? Math.min(100, Math.round((max / design) * 100)) : null,
@@ -178,11 +274,19 @@ function disk() {
   return null;
 }
 
+// pmset only reports a speed limit on Intel Macs; on Apple silicon it says nothing. So the thermal state
+// macOS gives apps (nominal, fair, serious, critical, passed in by main.js) is the main answer, and
+// pmset's limit is added where there is one.
 async function heat() {
   const out = await run('pmset', ['-g', 'therm']);
   const limit = Number(/CPU_Speed_Limit\s*=\s*(\d+)/.exec(out)?.[1] || 100);
   const level = /thermal warning level set to (\d+)/i.exec(out)?.[1];
-  return { throttled: limit < 100 || (level != null && Number(level) > 0), limit };
+  return { pmsetHot: limit < 100 || (level != null && Number(level) > 0), limit };
+}
+function heatNow(h, thermal) {
+  const state = ['nominal', 'fair', 'serious', 'critical'].includes(thermal) ? thermal : null;
+  const throttled = !!h?.pmsetHot || state === 'serious' || state === 'critical';
+  return { state, throttled, warm: state === 'fair', limit: h?.limit ?? 100 };
 }
 
 // Apps keeping the Mac awake (a video playing, a download). "Created for PID" names the app behind
@@ -224,15 +328,18 @@ async function slowStats() {
 const push = (arr, v) => { arr.push(v); if (arr.length > HISTORY) arr.shift(); return arr; };
 
 // One look at the whole Mac. `selfPids` are Pane's own processes (kept apart, as "Pane").
-async function sample({ selfPid } = {}) {
+async function sample({ selfPid, thermal, display } = {}) {
   startTicker();
-  const [psOut, appsOut, mem, slow, gpuOut] = await Promise.all([
+  const [psOut, appsOut, mem, slow, gpuOut, feet, io, chipNow] = await Promise.all([
     run('ps', ['-Axo', 'pid=,ppid=,pcpu=,time=,rss=,comm=']),
     run('lsappinfo', ['list']),
     memory(),
     slowStats(),
     // Graphics (GPU) parts of Chrome and Electron apps: marked by how they were started, not by name.
     run('pgrep', ['-f', '--', '--type=gpu-process']),
+    footprints(),
+    counters(),
+    chip(),
   ]);
   const gpuPids = new Set(gpuOut.split('\n').map(Number).filter(Boolean));
   const now = Date.now();
@@ -240,6 +347,7 @@ async function sample({ selfPid } = {}) {
   const apps = parseApps(appsOut);
   const cores = os.cpus().length || 1;
   const totals = cpuTotals();
+  const memOf = (p) => feet.get(p.pid) ?? p.rss; // its footprint; RSS only for a process newer than top's last look
 
   // Per-process CPU since the last look, in % of one core. Without a recent look, ps's own average.
   const prev = S.prev;
@@ -280,25 +388,29 @@ async function sample({ selfPid } = {}) {
     return null;
   };
   const groups = new Map(apps.map((a) => [a.pid, { ...a, cpu: 0, mem: 0, gpu: 0, procs: 0 }]));
-  const system = new Map(); // process name -> { cpu, mem, count }
-  let systemCpu = 0, systemMem = 0;
+  const cats = new Map(); // category id -> { cpu, mem, count, names: Map(name -> { cpu, mem, count }) }
+  let systemCpu = 0, systemMem = 0, systemCount = 0;
   for (const p of procs.values()) {
-    const c = cpuOf(p);
+    const c = cpuOf(p), m = memOf(p);
     const a = owner(p);
     if (a) {
       const g = groups.get(a.pid);
-      g.cpu += c; g.mem += p.rss; g.procs++;
-      if (gpuPids.has(p.pid)) g.gpu += p.rss;
+      g.cpu += c; g.mem += m; g.procs++;
+      if (gpuPids.has(p.pid)) g.gpu += m;
       continue;
     }
-    const name = path.basename(p.exe);
-    systemCpu += c; systemMem += p.rss;
-    const s = system.get(name) || { name, cpu: 0, mem: 0, count: 0, pids: [] };
-    s.cpu += c; s.mem += p.rss; s.count++; s.pids.push(p.pid);
-    system.set(name, s);
+    systemCpu += c; systemMem += m; systemCount++;
+    const { cat, name } = categorize(p.exe);
+    const k = cats.get(cat.id) || { cpu: 0, mem: 0, count: 0, names: new Map() };
+    k.cpu += c; k.mem += m; k.count++;
+    const n = k.names.get(name) || { cpu: 0, mem: 0, count: 0 };
+    n.cpu += c; n.mem += m; n.count++;
+    k.names.set(name, n);
+    cats.set(cat.id, k);
   }
 
   const share = (oneCore) => Math.min(100, oneCore / cores); // % of the whole Mac
+  const r1 = (v) => Math.round(v * 10) / 10;
   const blockersByPid = new Map();
   for (const b of slow.blockers) {
     const pr = procs.get(b.pid);
@@ -310,36 +422,39 @@ async function sample({ selfPid } = {}) {
   const list = [...groups.values()].map((g) => {
     const key = g.bundle || g.name;
     live.add(key);
-    const hist = push(S.appHistory.get(key) || [], { t: now, v: Math.round(share(g.cpu) * 10) / 10 });
+    const hist = push(S.appHistory.get(key) || [], { t: now, v: r1(share(g.cpu)) });
     S.appHistory.set(key, hist);
     return {
-      key, pid: g.pid, name: g.name, bundle: g.bundle, path: g.path,
-      cpu: Math.round(share(g.cpu) * 10) / 10, core: Math.round(g.cpu), mem: g.mem, gpu: g.gpu, procs: g.procs,
+      key, pid: g.pid, name: g.name, bundle: g.bundle, path: g.path, kind: g.kind,
+      cpu: r1(share(g.cpu)), core: Math.round(g.cpu), mem: g.mem, gpu: g.gpu, procs: g.procs,
       history: hist.map((p) => p.v), trail: trailOf(hist, now), icon: iconFor(g.path), self: g.pid === selfPid,
       awake: [...new Set(blockersByPid.get(g.pid) || [])],
     };
   });
-  // The rest of macOS as one entry, with its busiest parts named.
-  const sysHist = push(S.appHistory.get('macos') || [], { t: now, v: Math.round(share(systemCpu) * 10) / 10 });
+  // Everything that isn't an app, as one entry ("Background") made of categories, each naming its busiest parts.
+  const sysHist = push(S.appHistory.get('macos') || [], { t: now, v: r1(share(systemCpu)) });
   S.appHistory.set('macos', sysHist);
   live.add('macos');
   for (const k of S.appHistory.keys()) if (!live.has(k)) S.appHistory.delete(k);
-  const parts = [...system.values()].sort((a, b) => b.cpu - a.cpu).slice(0, 12).map((s) => ({
-    name: s.name, label: SYSTEM[s.name]?.label || null, about: SYSTEM[s.name]?.about || null,
-    cpu: Math.round(share(s.cpu) * 10) / 10, core: Math.round(s.cpu), mem: s.mem, count: s.count,
-  }));
+  const parts = [...cats].map(([id, k]) => {
+    const c = CAT_BY_ID[id];
+    const top = [...k.names].sort((a, b) => b[1].cpu - a[1].cpu || b[1].mem - a[1].mem).slice(0, 3)
+      .map(([name, n]) => ({ name, cpu: r1(share(n.cpu)), core: Math.round(n.cpu), mem: n.mem, count: n.count }));
+    return { id, name: id, label: c.label, about: c.about, passes: !!c.passes, cpu: r1(share(k.cpu)), core: Math.round(k.cpu), mem: k.mem, count: k.count, top };
+  }).sort((a, b) => b.cpu - a.cpu || b.mem - a.mem);
   list.push({
-    key: 'macos', pid: 0, name: 'macOS', bundle: null, path: null, system: true,
-    cpu: Math.round(share(systemCpu) * 10) / 10, core: Math.round(systemCpu), mem: systemMem,
-    procs: [...system.values()].reduce((n, s) => n + s.count, 0), history: sysHist.map((p) => p.v), trail: trailOf(sysHist, now), icon: null, awake: [], parts,
+    key: 'macos', pid: 0, name: 'Background', bundle: null, path: null, system: true,
+    cpu: r1(share(systemCpu)), core: Math.round(systemCpu), mem: systemMem,
+    procs: systemCount, history: sysHist.map((p) => p.v), trail: trailOf(sysHist, now), icon: null, awake: [], parts,
   });
   list.sort((a, b) => b.cpu - a.cpu || b.mem - a.mem);
 
   const snap = {
-    at: now, cores, uptime: os.uptime(),
+    at: now, cores, uptime: os.uptime(), chip: chipNow, load: os.loadavg().map((v) => Math.round(v * 100) / 100),
     cpu: { total: Math.round(total), history: [...S.history], trail: cpuTrail },
-    mem, battery: slow.battery, disk: slow.disk, heat: slow.heat,
-    apps: list, appCount: apps.length,
+    mem, battery: slow.battery, disk: slow.disk, heat: heatNow(slow.heat, thermal),
+    live: speeds(io, now), display: display || null, procCount: procs.size,
+    apps: list, appCount: apps.length, memExact: feet.size > 0,
   };
   snap.health = health(snap);
   return snap;
@@ -368,7 +483,8 @@ function health(s) {
   if (b && !b.plugged && b.pct <= 10) hit(20, 'Battery almost empty');
   else if (b && !b.plugged && b.pct <= 20) hit(10, 'Battery low');
   if (b && (b.failing || (b.health != null && b.health < 80))) hit(5, 'Battery worn');
-  if (s.heat?.throttled) hit(30, 'Running hot');
+  if (s.heat?.state === 'critical') hit(40, 'Overheating');
+  else if (s.heat?.throttled) hit(30, 'Running hot');
   if (s.uptime > 14 * 86400) hit(5, 'Not restarted in a while');
   out.sort((x, y) => y.points - x.points);
   const score = Math.max(0, 100 - out.reduce((n, x) => n + x.points, 0));
@@ -511,7 +627,7 @@ async function fix(kind, app, { shell, selfPid }) {
 }
 
 module.exports = {
-  sample, frontApp, fix, isBrowser, startTicker, tickCpu, TRAIL_MS,
+  sample, frontApp, fix, isBrowser, startTicker, tickCpu, warm, TRAIL_MS,
   setIconLoader: (fn) => { iconLoader = fn; },
-  _test: { parseApps, parsePs, cpuSeconds },
+  _test: { parseApps, parsePs, cpuSeconds, parseTop, categorize, counters, heatNow },
 };

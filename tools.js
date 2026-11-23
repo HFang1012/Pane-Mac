@@ -65,15 +65,16 @@
           crop.replace('class="crop"', `class="crop" stroke="${TW.lime}"`);
       },
     },
-    // Debug: an outline bug. A rounded body split in two, a head, feelers and legs, all drawn as lines.
+    // Debug: a bug, kept simple. A round tomato shell with a seam down it, a dark head, and two legs a side.
+    // Flat shapes over their lips, like the other tools' glyphs.
     debug: {
       viewBox: '0 0 60 44',
       body: () => {
-        const legs = '<g class="legs"><path d="M18.5 22 L11 18"/><path d="M17.5 29 H9.5"/><path d="M18.5 36 L11 40"/><path d="M41.5 22 L49 18"/><path d="M42.5 29 H50.5"/><path d="M41.5 36 L49 40"/></g>';
-        const top = '<path d="M25 9.5 L21.5 4"/><path d="M35 9.5 L38.5 4"/><path d="M24 15 Q24 9 30 9 Q36 9 36 15"/>';
-        const shell = '<rect x="18.5" y="15" width="23" height="25.5" rx="11.5"/><path d="M30 20 V40"/>';
-        const line = (d, color, under, dy) => `<g fill="none" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round">${lip(d, color, under, dy).replace(/fill="[^"]*"/g, 'fill="none"')}</g>`;
-        return line(legs + top, DB.ink, DB.inkLip, 1.6) + line(shell, DB.red, DB.redLip, 2.2);
+        const legs = '<g class="legs" fill="none" stroke-width="4" stroke-linecap="round"><path d="M19 22 L11 18"/><path d="M19 32 L11 36"/><path d="M41 22 L49 18"/><path d="M41 32 L49 36"/></g>';
+        const head = '<circle cx="30" cy="11" r="7" stroke="none"/>';
+        const shell = '<rect x="17" y="13" width="26" height="28" rx="13" stroke="none"/>';
+        const seam = `<path d="M30 17 V37" stroke="${DB.redLip}" stroke-width="2.6" stroke-linecap="round" fill="none"/>`;
+        return lip(legs, DB.ink, DB.inkLip, 1.6) + lip(head, DB.ink, DB.inkLip, 2) + lip(shell, DB.red, DB.redLip, 3) + seam;
       },
     },
   };

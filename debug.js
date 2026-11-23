@@ -75,24 +75,15 @@ function macSuggestions(s) {
     const stuck = share < 20; // one core flat out: often an app stuck in a loop
     out.push({
       id: `hot:${a.key}`, level: share >= 40 ? 'bad' : 'warn',
-      title: `${short(a.name)} is working hard`,
-      why: stuck ? `It’s been running one of your Mac’s cores flat out. If it seems stuck, quitting it helps.`
+      title: stuck ? `${short(a.name)} is keeping a core busy` : `${short(a.name)} is working hard`,
+      why: stuck ? `It’s using ${Math.round(recent(a.history) * s.cores)}% of one core${stuckLike(a, s) ? ', steadily, which can mean it’s stuck. Quitting it helps' : onBattery ? ', which drains your battery' : ''}.`
         : `It’s using ${share}% of your Mac’s power${onBattery ? ', which drains your battery fast' : ', which can slow everything else down'}.`,
       acts: [quitAct(a), lookAct(a)],
     });
   }
-  // macOS itself busy: usually something that finishes on its own.
+  // Something in the background busy: often it finishes on its own.
   const sys = s.apps.find((a) => a.system);
-  for (const p of (sys?.parts || []).filter((p) => p.label && p.core >= 60).slice(0, 1)) {
-    const screen = p.name === 'WindowServer';
-    out.push({
-      id: `sys:${p.name}`, level: 'tip',
-      title: screen ? 'Drawing the screen is taking a lot of work' : `${p.label} is busy`,
-      why: screen ? 'Lots of open windows, a big external display or see-through effects all add up. Closing windows you don’t need helps.'
-        : `${p.label} ${p.about}. It finishes on its own, so it’s fine to wait.`,
-      acts: screen ? [{ label: 'Reduce motion & transparency', kind: 'open:display', calm: true }] : [],
-    });
-  }
+  for (const p of (sys?.parts || []).filter((p) => p.id !== 'other' && p.core >= 60).slice(0, 1)) out.push(catSuggestion(p, sys));
   // Memory.
   const heavy = [...apps].sort((a, b) => b.mem - a.mem)[0];
   if (s.mem.pressure !== 'normal') {
@@ -182,6 +173,38 @@ function macSuggestions(s) {
   return out;
 }
 
+// A background category that's busy (see CATEGORIES in debug-stats.js), named by what's doing the work.
+const PLURAL = new Set(['helpers', 'dev', 'other']);
+function catSuggestion(p, sys) {
+  const screen = p.id === 'screen';
+  const who = p.top?.[0]?.name;
+  const one = Math.round(p.core);
+  if (screen) {
+    return {
+      id: 'sys:screen', level: 'tip', title: 'Drawing the screen is taking a lot of work',
+      why: `It’s using ${one}% of one core. Lots of open windows, a big external display or see-through effects all add up. Closing windows you don’t need helps.`,
+      acts: [{ label: 'Reduce motion & transparency', kind: 'open:display', calm: true }],
+    };
+  }
+  const next = p.passes ? 'It finishes on its own, so it’s fine to wait.'
+    : p.id === 'helpers' ? `Quitting ${who || 'the app it belongs to'} from its menu bar icon, or turning it off in Login Items, stops it.`
+      : p.id === 'dev' ? 'Stop it in the terminal or editor that started it.'
+        : 'If it stays busy for a long time, a restart usually settles it.';
+  return {
+    id: `sys:${p.id}`, level: 'tip',
+    title: `${p.label} ${PLURAL.has(p.id) ? 'are' : 'is'} busy`,
+    why: `${p.label} ${p.about}${who ? `. Mostly ${who}` : ''}, at ${one}% of one core. ${next}`,
+    acts: p.id === 'helpers' ? [{ label: 'Login Items', kind: 'open:login', calm: true }]
+      : !p.passes && p.id !== 'dev' && sys && view !== 'app' ? [{ label: 'Look closer', kind: 'view', app: sys, calm: true }] : [],
+  };
+}
+
+// Stuck in a loop: one core flat out (90–110%), barely moving, for the last several looks.
+function stuckLike(a, s) {
+  const last = (a.history || []).slice(-5).map((v) => v * s.cores);
+  return last.length >= 5 && last.every((v) => v >= 90 && v <= 110) && Math.max(...last) - Math.min(...last) < 12;
+}
+
 // How much memory is fine for an app. `normal`: nothing to say below it. `heavy`: too much.
 // Browsers: up to a quarter of the Mac's memory (at least 4 GB) is normal, past 35% (at least 6 GB) too much.
 // Other apps: past 15% (at least 2 GB) is a lot, past a quarter too much. Graphics: up to 6% (at least 1.5 GB).
@@ -195,15 +218,8 @@ function memLimits(a, s) {
 function appSuggestions(s, a) {
   const out = [];
   if (a.system) {
-    for (const p of (a.parts || []).filter((p) => p.core >= 50).slice(0, 2)) {
-      out.push({
-        id: `sys:${p.name}`, level: 'tip',
-        title: p.label ? `${p.label} is busy` : `${p.name} is busy`,
-        why: p.label ? `${p.label} ${p.about}. It finishes on its own.` : 'It’s part of macOS. If it stays busy for a long time, a restart usually settles it.',
-        acts: [],
-      });
-    }
-    if (!out.length && recent(a.history) >= 25) out.push({ id: 'sys-busy', level: 'tip', title: 'macOS is busy in the background', why: 'Updates, backups and indexing run when they can. A restart helps if it never calms down.', acts: [{ label: 'Restart…', kind: 'restart', calm: true }] });
+    for (const p of (a.parts || []).filter((p) => p.core >= 50).slice(0, 2)) out.push(catSuggestion(p, a));
+    if (!out.length && recent(a.history) >= 25) out.push({ id: 'sys-busy', level: 'tip', title: 'Your Mac is busy in the background', why: 'Updates, backups and indexing run when they can. A restart helps if it never calms down.', acts: [{ label: 'Restart…', kind: 'restart', calm: true }] });
     return out;
   }
   const share = Math.round(recent(a.history));
@@ -211,10 +227,12 @@ function appSuggestions(s, a) {
   if (hot(a)) {
     out.push({
       id: `hot:${a.key}`, level: share >= 40 ? 'bad' : 'warn',
-      title: share >= 20 ? `${short(a.name)} is working hard` : `${short(a.name)} may be stuck`,
-      why: share >= 20 ? `It’s using ${share}% of your Mac’s power${onBattery ? ' and draining your battery' : ''}. Quitting it frees that up.`
-        : 'It’s been running one core flat out. If it isn’t responding, force it to quit.',
-      acts: [quitAct(a), ...(share < 20 ? [{ label: 'Force quit', kind: 'force', app: a, confirm: 'Anything you haven’t saved is lost.' }] : [])],
+      // A stuck app pins exactly one core, on and on. Anything spread over more is just real work.
+      title: share >= 20 ? `${short(a.name)} is working hard` : stuckLike(a, s) ? `${short(a.name)} may be stuck` : `${short(a.name)} is keeping a core busy`,
+      why: share >= 20 ? `It’s using ${share}% of your Mac’s power (${Math.round(recent(a.history) * s.cores)}% of one core)${onBattery ? ' and draining your battery' : ''}. Quitting it frees that up.`
+        : stuckLike(a, s) ? 'It’s been running one core flat out, steadily. If it isn’t responding, force it to quit.'
+          : `It’s using ${Math.round(recent(a.history) * s.cores)}% of one core${onBattery ? ', which drains your battery' : ''}. Fine for a video or an export; if it isn’t doing anything, quit it.`,
+      acts: [quitAct(a), ...(share < 20 && stuckLike(a, s) ? [{ label: 'Force quit', kind: 'force', app: a, confirm: 'Anything you haven’t saved is lost.' }] : [])],
     });
   }
   // Memory. Browsers get a higher bar: every tab is its own little app, so lots of memory is normal for
@@ -278,9 +296,13 @@ function tilesFor(s, a) {
   if (a) {
     const share = recent(a.history, 2);
     const memPct = (a.mem / s.mem.total) * 100;
-    const energy = recent(a.history) >= 25 ? 'High' : recent(a.history) >= 6 ? 'Medium' : 'Low';
+    // In "one core" terms too, like Activity Monitor's % CPU: on a 12-core Mac one core flat out is only 8%
+    // of the whole, but it's still an app working hard (and what drains a battery).
+    const core = share * s.cores, core3 = recent(a.history) * s.cores;
+    const energy = core3 >= 150 || recent(a.history) >= 25 ? 'High' : core3 >= 30 ? 'Medium' : 'Low';
+    const word = share >= 35 || core >= 150 ? 'Working hard' : share >= 10 || core >= 40 ? 'Busy' : 'Calm';
     return [
-      ring(share, 'Processor', share >= 35 ? 'Working hard' : share >= 10 ? 'Busy' : 'Calm', lvl(share, 15, 35), pct(share)), // a full ring is the whole Mac
+      ring(share, 'Processor', word, word === 'Working hard' ? 'bad' : word === 'Busy' ? 'warn' : 'good', pct(share)), // a full ring is the whole Mac
       ring(memPct, 'Memory', bytes(a.mem), a.mem > memLimits(a, s).heavy ? 'bad' : a.mem > memLimits(a, s).normal ? 'warn' : 'good', pct(memPct)), // a full ring is all of its memory
       ring({ Low: 18, Medium: 55, High: 92 }[energy], 'Energy', energy, { Low: 'good', Medium: 'warn', High: 'bad' }[energy], iconFor('Energy')),
       ring(Math.min(100, a.procs * 3), a.system ? 'Tasks' : 'Parts', `${a.procs} running`, 'good', iconFor('Parts')),
@@ -358,6 +380,71 @@ function renderSpark(trail, now) {
   $('graphSpan').textContent = 'last 15 seconds';
 }
 
+// ---------- live: frames, graphics, network, disk ----------
+// FPS is measured right here: this panel asks for a frame on every screen refresh and counts how many it
+// gets. Its window is drawn by macOS like any other, so when the Mac can't keep up, it drops frames too.
+// A dropped frame is a gap of about two frames or more. The usual gap is read from what's actually
+// arriving (a 120 Hz screen can still hand out 60), so a steady lower rate isn't counted as dropping.
+const fps = { t0: 0, last: 0, frames: 0, gaps: [], value: null, dropped: 0, frameMs: null };
+function frame(now) {
+  if (fps.last) fps.gaps.push(now - fps.last);
+  fps.last = now;
+  fps.frames++;
+  if (!fps.t0) fps.t0 = now;
+  const span = now - fps.t0;
+  if (span >= 1000) {
+    const sorted = [...fps.gaps].sort((x, y) => x - y);
+    const usual = sorted[Math.floor(sorted.length / 2)] || 16.7;
+    fps.value = Math.round(((fps.frames - 1) * 1000) / span) || 0;
+    fps.dropped = fps.gaps.reduce((n, g) => n + (g > usual * 1.7 ? Math.round(g / usual) - 1 : 0), 0);
+    fps.frameMs = usual;
+    fps.t0 = now; fps.frames = 1; fps.gaps = [];
+    renderLive();
+    renderPill();
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+function fpsLevel() {
+  if (fps.value == null) return 'good';
+  const total = fps.value + fps.dropped;
+  const dropPct = total ? (fps.dropped / total) * 100 : 0;
+  // Judged by dropped frames, not by the rate: a ProMotion screen slows to 60 Hz or less on purpose when
+  // little is moving, and that's smooth. Only a rate too low to look smooth counts on its own.
+  return dropPct >= 20 ? 'bad' : dropPct >= 6 || fps.value < 30 ? 'warn' : 'good';
+}
+function rate(n) {
+  if (n == null) return '–';
+  if (n < 1024) return '0 KB/s';
+  if (n < 1048576) return `${Math.round(n / 1024)} KB/s`;
+  const mb = n / 1048576;
+  return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB/s`;
+}
+function renderLive() {
+  if (!snap) return;
+  const L = snap.live || {}, hz = snap.display?.hz;
+  const fl = fpsLevel();
+  const cells = [
+    { k: 'FPS', v: fps.value == null ? '–' : `${fps.value}`, sub: fps.value == null ? 'measuring' : fl === 'good' ? `smooth${hz ? ` · ${hz} Hz` : ''}` : `${fps.dropped} dropped`, lv: fl,
+      tip: `Frames this panel got in the last second${hz ? `, on a ${hz} Hz screen` : ''}. ${fps.dropped} dropped. About ${fps.frameMs ? fps.frameMs.toFixed(1) : '–'} ms a frame.` },
+    { k: 'Graphics', v: L.gpu == null ? '–' : `${L.gpu}%`, sub: L.gpuMem ? `${bytes(L.gpuMem)} used` : 'GPU', lv: L.gpu == null ? 'good' : lvl(L.gpu, 70, 92),
+      tip: 'How busy the graphics chip (GPU) is, and the memory its work is holding.' },
+    { k: 'Network', v: `↓ ${rate(L.down)}`, sub: `↑ ${rate(L.up)}`, lv: 'good', tip: 'Coming in (↓) and going out (↑), across Wi-Fi, Ethernet and everything else.' },
+    { k: 'Disk', v: `R ${rate(L.read)}`, sub: `W ${rate(L.write)}`, lv: 'good', tip: 'Read from (R) and written to (W) your storage.' },
+  ];
+  const box = $('live');
+  if (box.children.length !== cells.length) box.innerHTML = cells.map(() => '<div class="cell"><small></small><b></b><span></span></div>').join('');
+  cells.forEach((c, i) => {
+    const el = box.children[i];
+    el.className = `cell ${c.lv}`;
+    el.title = c.tip;
+    const [k, v, sub] = el.children;
+    if (k.textContent !== c.k) k.textContent = c.k;
+    if (v.textContent !== c.v) v.textContent = c.v;
+    if (sub.textContent !== c.sub) sub.textContent = c.sub;
+  });
+}
+
 // ---------- the overall answer ----------
 function renderHealth() {
   const h = snap?.health;
@@ -412,7 +499,7 @@ function verdictFor(list, a) {
   const top = bad || warn;
   if (top) return { level: bad ? 'bad' : 'warn', title: top.title, sub: bad ? 'Here’s what to do about it.' : 'Worth a look, below.' };
   if (a && !a.system) return { level: 'good', title: `${short(a.name)} is running fine`, sub: recent(a.history) < 2 ? 'It’s resting right now.' : 'Nothing here is slowing your Mac down.' };
-  if (a?.system) return { level: 'good', title: 'macOS is running fine', sub: 'The background stuff is behaving.' };
+  if (a?.system) return { level: 'good', title: 'The background is running fine', sub: 'macOS and your apps’ helpers are behaving.' };
   return { level: 'good', title: 'Your Mac is running smoothly', sub: snap.battery && !snap.battery.plugged && snap.battery.remaining ? `About ${duration(snap.battery.remaining)} of battery left.` : 'Nothing’s slowing it down right now.' };
 }
 function renderVerdict(v) {
@@ -427,35 +514,71 @@ function rowHTML(a, i, max) {
   const share = recent(a.history, 2);
   const lv = lvl(share, 15, 35);
   const width = Math.max(share > 0.3 ? 4 : 0, Math.min(100, (share / max) * 100));
-  const sub = a.system ? 'Everything running in the background' : a.awake.length ? 'Keeping your Mac awake' : a.self ? 'That’s us' : `${a.procs} part${a.procs === 1 ? '' : 's'}`;
+  const parts = `${a.procs} part${a.procs === 1 ? '' : 's'}`;
+  const sub = a.system ? 'macOS and your apps’ helpers' : a.awake.length ? 'Keeping your Mac awake' : a.self ? 'That’s us' : a.kind === 'menubar' ? `Menu bar app · ${parts}` : parts;
   return `<button class="rowb" data-key="${esc(a.key)}" data-rk="${esc(a.key)}" style="--d:${i * 30}ms">${appIcon(a)}<span class="nm">${esc(a.name)}<small>${esc(sub)}</small></span>
     <span class="meter ${lv}"><i style="width:${width}%"></i></span><span class="num"><b>${share < 1 && share > 0 ? '<1' : Math.round(share)}%</b> · ${bytes(a.mem)}</span></button>`;
 }
-function partHTML(p, i, max) {
+// A background category: what it is, and the busiest things in it. `link`: clicking it opens Background.
+const CAT_ICON = {
+  kernel: '<rect x="6" y="6" width="12" height="12" rx="2.5"/><path d="M10 3v3M14 3v3M10 18v3M14 18v3M3 10h3M3 14h3M18 10h3M18 14h3"/>',
+  helpers: '<rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><path d="M16.5 13.5v6M13.5 16.5h6"/>',
+  screen: '<rect x="3" y="4" width="18" height="12" rx="2.5"/><path d="M8 20h8M12 16v4"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/>',
+  sync: '<path d="M7 18a4.5 4.5 0 0 1-.6-9A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5z"/>',
+  photos: '<rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4 4 3 3-2 4 3"/>',
+  backup: '<path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v4h4"/><path d="M12 8v4l3 2"/>',
+  update: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  security: '<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/>',
+  ai: '<path d="M12 3c.6 4.2 2.8 6.4 7 7-4.2.6-6.4 2.8-7 7-.6-4.2-2.8-6.4-7-7 4.2-.6 6.4-2.8 7-7z"/>',
+  sound: '<path d="M4 10v4h4l5 4V6L8 10z"/><path d="M16.5 9a4 4 0 0 1 0 6"/>',
+  network: '<path d="M2.5 9a14 14 0 0 1 19 0M6 12.5a9 9 0 0 1 12 0M9.5 16a4 4 0 0 1 5 0"/><circle cx="12" cy="19" r=".6"/>',
+  dev: '<path d="M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 5l-3 14"/>',
+  other: '<circle cx="6" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18" cy="12" r="1.3"/>',
+};
+function partHTML(p, i, max, link) {
   const lv = lvl(p.cpu, 15, 35);
   const width = Math.max(p.cpu > 0.3 ? 4 : 0, Math.min(100, (p.cpu / max) * 100));
-  return `<div class="rowb static" data-rk="part:${esc(p.name)}" style="--d:${i * 30}ms"><svg class="macic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
-    <span class="nm">${esc(p.label || p.name)}<small>${esc(p.label ? p.name : p.count > 1 ? `${p.count} copies` : 'part of macOS')}</small></span>
-    <span class="meter ${lv}"><i style="width:${width}%"></i></span><span class="num"><b>${p.cpu < 1 && p.cpu > 0 ? '<1' : Math.round(p.cpu)}%</b> · ${bytes(p.mem)}</span></div>`;
+  const names = (p.top || []).filter((t) => t.cpu >= 0.1 || t.mem >= 50 * 1048576).slice(0, 2).map((t) => (t.count > 1 ? `${t.name} ×${t.count}` : t.name));
+  const sub = names.length ? names.join(', ') : `${p.count} task${p.count === 1 ? '' : 's'}, all quiet`;
+  const tag = link ? `button class="rowb" data-key="macos"` : 'div class="rowb static"';
+  return `<${tag} data-rk="part:${esc(p.id)}" style="--d:${i * 30}ms" title="${esc(`${p.label} ${p.about}. ${p.count} task${p.count === 1 ? '' : 's'}.`)}"><svg class="macic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${CAT_ICON[p.id] || CAT_ICON.other}</svg>
+    <span class="nm">${esc(p.label)}<small>${esc(sub)}</small></span>
+    <span class="meter ${lv}"><i style="width:${width}%"></i></span><span class="num"><b>${p.cpu < 1 && p.cpu > 0 ? '<1' : Math.round(p.cpu)}%</b> · ${bytes(p.mem)}</span></${link ? 'button' : 'div'}>`;
 }
+// The background categories worth showing in the whole Mac's view: only ones doing real work.
+const bigCat = (p) => p.cpu >= 1 || p.core >= 15 || p.mem >= 1.5 * GB;
 function renderList(a) {
   const box = $('rows');
   let html;
+  let bg = '';
   if (!a) {
-    const apps = snap.apps;
+    // Apps first: that's what you can do something about. The background comes after, as categories, and
+    // only the ones doing real work.
+    const apps = snap.apps.filter((x) => !x.system);
     const list = showAll ? apps : apps.slice(0, 5);
-    const max = Math.max(10, ...list.map((x) => recent(x.history, 2)));
+    const sys = snap.apps.find((x) => x.system);
+    const big = (sys?.parts || []).filter(bigCat).slice(0, 4);
+    const max = Math.max(10, ...list.map((x) => recent(x.history, 2)), ...big.map((p) => p.cpu));
     $('listTitle').textContent = 'Busiest apps';
     $('listNote').textContent = `${snap.appCount} open`;
     html = list.map((x, i) => rowHTML(x, i, max)).join('') + (apps.length > 5 ? `<button class="more" id="moreBtn" data-rk="more">${showAll ? 'Show fewer' : `Show all ${apps.length}`}</button>` : '');
+    if (sys) {
+      const quiet = sys.parts.length - big.length;
+      $('bgNote').textContent = `${Math.round(recent(sys.history, 2) * 10) / 10}% · ${bytes(sys.mem)}`;
+      bg = big.map((p, i) => partHTML(p, i, max, true)).join('') +
+        `<button class="more" data-key="macos" data-rk="bgall">${big.length ? `See all ${sys.parts.length}${quiet ? ` (${quiet} quiet)` : ''}` : `All ${sys.parts.length} quiet · see them`}</button>`;
+    }
   } else if (a.system) {
-    const parts = a.parts.slice(0, showAll ? 12 : 5);
+    const parts = a.parts.slice(0, showAll ? a.parts.length : 6);
     const max = Math.max(10, ...parts.map((p) => p.cpu));
-    $('listTitle').textContent = 'Busiest parts of macOS';
-    $('listNote').textContent = '';
-    html = parts.map((p, i) => partHTML(p, i, max)).join('') + (a.parts.length > 5 ? `<button class="more" id="moreBtn" data-rk="more">${showAll ? 'Show fewer' : 'Show more'}</button>` : '');
+    $('listTitle').textContent = 'What’s running in the background';
+    $('listNote').textContent = `${a.procs} tasks`;
+    html = parts.map((p, i) => partHTML(p, i, max, false)).join('') + (a.parts.length > 6 ? `<button class="more" id="moreBtn" data-rk="more">${showAll ? 'Show fewer' : `Show all ${a.parts.length}`}</button>` : '');
   }
   $('listBox').hidden = !html;
+  $('bgBox').hidden = !bg;
+  if (bg) syncRows($('bgRows'), bg);
   if (!html) return;
   syncRows(box, html);
 }
@@ -535,28 +658,53 @@ function renderFacts(a) {
   const s = snap;
   let rows = [];
   if (!a) {
-    const b = s.battery;
+    const b = s.battery, c = s.chip, d = s.display;
     rows = [
-      ['Running for', days(s.uptime)],
+      ['Chip', c ? c.model.replace(/^Apple /, '') : '–'],
+      ['Cores', c?.fast && c?.efficient ? `${c.fast} fast + ${c.efficient} efficient` : `${s.cores}`],
+      ['Load (1·5·15 min)', s.load ? s.load.map((v) => v.toFixed(1)).join(' · ') : '–'],
+      ['Tasks running', `${s.procCount}`],
       ['Memory used', `${bytes(s.mem.used)} of ${bytes(s.mem.total)}`],
+      ['Apps · wired', `${bytes(s.mem.app)} · ${bytes(s.mem.wired)}`],
+      ['Compressed', bytes(s.mem.compressed)],
+      ['Cached files', bytes(s.mem.cached)],
       ['Spilled to storage', s.mem.swapUsed ? bytes(s.mem.swapUsed) : 'None'],
-      ['Processor cores', `${s.cores}`],
+      ['Memory pressure', { normal: 'Normal', warn: 'Tight', critical: 'Critical' }[s.mem.pressure]],
     ];
-    if (b) rows.push(['Battery health', b.health != null ? `${b.health}%` : '–'], ['Charge cycles', b.cycles != null ? `${b.cycles}` : '–']);
-    if (b?.temp) rows.push(['Battery temp', `${Math.round(b.temp)}°C`]);
-    rows.push(['Heat', s.heat?.throttled ? 'Slowing down to cool' : 'Normal']);
+    if (s.disk) rows.push(['Storage free', `${bytes(s.disk.free)} of ${bytes(s.disk.total)}`]);
+    if (d) rows.push(['Screen', `${d.hz ? `${d.hz} Hz` : ''}${d.hz && d.width ? ' · ' : ''}${d.width ? `${d.width}×${d.height}` : ''}${d.count > 1 ? ` (${d.count} screens)` : ''}`]);
+    if (b) {
+      rows.push(['Battery health', b.health != null ? `${b.health}%` : '–'], ['Charge cycles', b.cycles != null ? `${b.cycles}` : '–']);
+      if (b.temp) rows.push(['Battery temp', `${b.temp.toFixed(1)}°C`]);
+    }
+    rows.push(['Heat', HEAT_WORD[s.heat?.state] || (s.heat?.throttled ? 'Slowing down to cool' : 'Normal')]);
+    rows.push(['Running for', days(s.uptime)]);
   } else if (!a.system) {
+    const one = Math.round(recent(a.history, 2) * s.cores);
     rows = [
       ['Uses now', `${Math.round(recent(a.history, 2))}% of your Mac`],
+      ['Of one core', `${one}%`],
       ['Memory', bytes(a.mem)],
+      ['Of your memory', `${Math.round((a.mem / s.mem.total) * 100)}%`],
       ...(a.gpu ? [['Graphics (GPU)', `${bytes(a.gpu)} · ${a.gpu > memLimits(a, s).gpu ? 'High' : 'Normal'}`]] : []),
       ['Parts running', `${a.procs}`],
+      ['Kind', a.kind === 'menubar' ? 'Menu bar app' : 'App'],
       ['Keeps Mac awake', a.awake.length ? 'Yes' : 'No'],
     ];
+  } else {
+    rows = [
+      ['Uses now', `${Math.round(recent(a.history, 2) * 10) / 10}% of your Mac`],
+      ['Memory', bytes(a.mem)],
+      ['Tasks running', `${a.procs}`],
+      ['Busy groups', `${a.parts.filter(bigCat).length} of ${a.parts.length}`],
+    ];
   }
+  if (!snap.memExact) rows.push(['Memory figures', 'Rough for now']);
   $('factBox').hidden = !rows.length;
   $('facts').innerHTML = rows.map(([k, v]) => `<span>${esc(k)}</span><b>${esc(v)}</b>`).join('');
 }
+
+const HEAT_WORD = { nominal: 'Normal', fair: 'Warm', serious: 'Hot, slowing down', critical: 'Very hot, slowing down' };
 
 const CHIP_ICON = {
   quit: '<path d="M12 3v8"/><path d="M6.6 6.8a7.5 7.5 0 1 0 10.8 0"/>',
@@ -626,6 +774,7 @@ function render() {
   renderTiles(tilesFor(snap, a));
   $('graphLabel').textContent = a ? `${short(a.name)}’s processor use` : 'Processor use';
   renderSpark(a ? a.trail : snap.cpu.trail, snap.at);
+  renderLive();
   const RANK = { bad: 0, warn: 1, tip: 2, ok: 3 }; // reassurances (\u201cnormal for a browser\u201d) go last
   renderFixes(list.sort((x, y) => RANK[x.level] - RANK[y.level]));
   renderList(a);
@@ -648,6 +797,8 @@ function renderPill() {
   $('pillScore').textContent = h ? `${h.score}` : '';
   $('pillCpu').textContent = `${snap.cpu.total}%`;
   $('pillMem').textContent = `${Math.round((snap.mem.used / snap.mem.total) * 100)}%`;
+  $('pillFps').textContent = fps.value == null ? '–' : `${fps.value}`;
+  $('pillFpsBox').className = `stat fps ${fpsLevel()}`;
   $('pillOpen').title = h ? `${h.label}: ${h.answer}` : '';
 }
 
@@ -707,7 +858,7 @@ document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-act]');
   if (b) { const act = findAct(b.dataset.act); if (act) runAct(b, b.dataset.act, act); return; }
   if (!e.target.closest('.sure')) document.querySelectorAll('.sure').forEach(unsure);
-  const row = e.target.closest('.rowb[data-key]');
+  const row = e.target.closest('.rowb[data-key], .more[data-key]');
   if (row) { choose(row.dataset.key); return; }
   if (e.target.closest('#moreBtn')) { showAll = !showAll; $('rows').dataset.keys = ''; render(); }
 });
@@ -722,7 +873,7 @@ function choose(key) {
   render();
   $('body').scrollTo({ top: 0, behavior: 'smooth' });
 }
-function resetBoxes() { for (const id of ['rows', 'fixes', 'tiles']) { $(id).dataset.keys = ''; $(id).dataset.sig = ''; $(id).dataset.view = ''; } }
+function resetBoxes() { for (const id of ['rows', 'bgRows', 'fixes', 'tiles']) { $(id).dataset.keys = ''; $(id).dataset.sig = ''; $(id).dataset.view = ''; } }
 $('appTab').addEventListener('click', (e) => {
   if (e.target.closest('#chev') || view === 'app') { picking = !picking; $('pickRows').dataset.keys = ''; render(); return; }
   view = 'app'; picking = false; showAll = false; resetBoxes(); render();

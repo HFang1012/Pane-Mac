@@ -750,5 +750,15 @@ scrawl.on('debug:data', (s) => {
   if (first) fit(); // tells the main process its first look is drawn, so the window can appear
 });
 // The window is on screen now: play the opening (held until then, so it isn't over before you see it).
-scrawl.on('debug:shown', () => document.body.classList.add('shown'));
+scrawl.on('debug:shown', () => {
+  // Number the parts for their rise-in, then fill the gauges once the card has mostly landed.
+  [document.querySelector('.card .bar'), $('seg'), ...$('main').children].forEach((el, i) => el?.style.setProperty('--i', i));
+  document.body.classList.add('shown');
+  setTimeout(() => document.body.classList.add('filled'), 320);
+});
+// Closing: play the way out, then say so (the main process closes the window, or does after a moment anyway).
+scrawl.on('debug:leave', () => {
+  document.body.classList.add('leaving');
+  setTimeout(() => scrawl.send('debug:gone'), 260);
+});
 scrawl.on('debug:settings', (s) => { cfg = s; resetBoxes(); render(); fit(); });

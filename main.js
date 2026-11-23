@@ -2007,15 +2007,23 @@ async function openDebug(near) {
   w.on('closed', () => { if (dbg === d) { clearTimeout(d.timer); dbg = null; buildMenu(); } });
   debugTick();
 }
-// Close it: the panel just goes. (It never hands the keyboard back to another app on its way out, since
-// bringing that app forward made macOS slide over to its Space.)
+// Close it: the panel shrinks and fades, then goes. (It never hands the keyboard back to another app on its
+// way out, since bringing that app forward made macOS slide over to its Space.)
 function closeDebug() {
   const d = dbg;
   if (!d) return;
   dbg = null;
   clearTimeout(d.timer);
   buildMenu();
-  if (d.win && !d.win.isDestroyed()) d.win.destroy();
+  const w = d.win;
+  if (!w || w.isDestroyed()) return;
+  const bye = () => { if (!w.isDestroyed()) w.destroy(); };
+  // Not on screen yet, or Pane is quitting: just go. Otherwise it plays its way out first.
+  if (!d.shown || quitting) { bye(); return; }
+  w.setIgnoreMouseEvents(true);
+  w.webContents.ipc.once('debug:gone', bye);
+  w.webContents.send('debug:leave');
+  setTimeout(bye, 500);
 }
 // One look, sent to the panel, then the next one after the chosen pause (slower while folded up).
 async function debugTick() {

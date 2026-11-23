@@ -246,8 +246,8 @@ function tilesFor(s, a) {
     const memPct = (a.mem / s.mem.total) * 100;
     const energy = recent(a.history) >= 25 ? 'High' : recent(a.history) >= 6 ? 'Medium' : 'Low';
     return [
-      ring(share * 2, 'Processor', share >= 35 ? 'Working hard' : share >= 10 ? 'Busy' : 'Calm', lvl(share, 15, 35), pct(share)), // a full ring is half the Mac
-      ring(memPct * 4, 'Memory', bytes(a.mem), lvl(memPct, 12, 25), pct(memPct)),
+      ring(share, 'Processor', share >= 35 ? 'Working hard' : share >= 10 ? 'Busy' : 'Calm', lvl(share, 15, 35), pct(share)), // a full ring is the whole Mac
+      ring(memPct, 'Memory', bytes(a.mem), lvl(memPct, 12, 25), pct(memPct)), // a full ring is all of its memory
       ring({ Low: 18, Medium: 55, High: 92 }[energy], 'Energy', energy, { Low: 'good', Medium: 'warn', High: 'bad' }[energy], iconFor('Energy')),
       ring(Math.min(100, a.procs * 3), a.system ? 'Tasks' : 'Parts', `${a.procs} running`, 'good', iconFor('Parts')),
     ];
@@ -297,7 +297,10 @@ function renderTiles(tiles) {
     el.className = `tile ${t.level}`;
     el.querySelector('.val').setAttribute('stroke-dashoffset', 100 - t.v);
     const mid = el.querySelector('.ring span');
-    if (mid.innerHTML !== t.center) mid.innerHTML = t.center;
+    if (/^<?\d+%$/.test(t.center) && /%$/.test(mid.textContent)) {
+      // Same kind of number: count to it. (`<1%` arrives escaped-free here, as plain text.)
+      if (mid.__target !== t.center) { mid.__target = t.center; mid.__shown ??= Number.parseInt(mid.textContent.replace('<', ''), 10) || 0; mid.textContent = t.center; countTo(mid); }
+    } else if (mid.innerHTML !== t.center) { mid.innerHTML = t.center; mid.__shown = null; mid.__target = null; }
     el.querySelector('small').textContent = t.word;
   });
 }
@@ -346,8 +349,18 @@ function renderFixes(list) {
   // Forget a dismissed fix once its problem is gone, so it can come back if the problem does.
   for (const id of [...dismissed]) if (!list.some((f) => f.id === id)) dismissed.delete(id);
   $('fixBox').hidden = !shown.length;
-  const sig = shown.map((f) => `${f.id}:${f.title}:${f.why}:${f.acts.map((a) => a.label).join()}`).join('|');
-  if (box.dataset.sig === sig) return;
+  const sig = shown.map((f) => `${f.id}:${f.acts.map((a) => a.label).join()}`).join('|');
+  if (box.dataset.sig === sig) {
+    // Same fixes: only their words change (a live percentage, say). Update them where they are.
+    for (const f of shown) {
+      const card = box.querySelector(`.fix[data-id="${CSS.escape(f.id)}"]`);
+      if (!card) continue;
+      const b = card.querySelector('b'), p = card.querySelector('p');
+      if (b.textContent !== f.title) b.textContent = f.title;
+      if (p.textContent !== f.why) p.textContent = f.why;
+    }
+    return;
+  }
   const pending = box.querySelector('.sure');
   if (pending) return; // don't redraw under a "Sure?" the person is about to click
   const known = new Set((box.dataset.ids || '').split(','));
@@ -381,13 +394,13 @@ function rowHTML(a, i, max) {
   const lv = lvl(share, 15, 35);
   const width = Math.max(share > 0.3 ? 4 : 0, Math.min(100, (share / max) * 100));
   const sub = a.system ? 'Everything running in the background' : a.awake.length ? 'Keeping your Mac awake' : a.self ? 'That’s us' : `${a.procs} part${a.procs === 1 ? '' : 's'}`;
-  return `<button class="rowb" data-key="${esc(a.key)}" style="--d:${i * 30}ms">${appIcon(a)}<span class="nm">${esc(a.name)}<small>${esc(sub)}</small></span>
+  return `<button class="rowb" data-key="${esc(a.key)}" data-rk="${esc(a.key)}" style="--d:${i * 30}ms">${appIcon(a)}<span class="nm">${esc(a.name)}<small>${esc(sub)}</small></span>
     <span class="meter ${lv}"><i style="width:${width}%"></i></span><span class="num"><b>${share < 1 && share > 0 ? '<1' : Math.round(share)}%</b> · ${bytes(a.mem)}</span></button>`;
 }
 function partHTML(p, i, max) {
   const lv = lvl(p.cpu, 15, 35);
   const width = Math.max(p.cpu > 0.3 ? 4 : 0, Math.min(100, (p.cpu / max) * 100));
-  return `<div class="rowb static" style="--d:${i * 30}ms"><svg class="macic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
+  return `<div class="rowb static" data-rk="part:${esc(p.name)}" style="--d:${i * 30}ms"><svg class="macic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
     <span class="nm">${esc(p.label || p.name)}<small>${esc(p.label ? p.name : p.count > 1 ? `${p.count} copies` : 'part of macOS')}</small></span>
     <span class="meter ${lv}"><i style="width:${width}%"></i></span><span class="num"><b>${p.cpu < 1 && p.cpu > 0 ? '<1' : Math.round(p.cpu)}%</b> · ${bytes(p.mem)}</span></div>`;
 }
@@ -400,37 +413,88 @@ function renderList(a) {
     const max = Math.max(10, ...list.map((x) => recent(x.history, 2)));
     $('listTitle').textContent = 'Busiest apps';
     $('listNote').textContent = `${snap.appCount} open`;
-    html = list.map((x, i) => rowHTML(x, i, max)).join('') + (apps.length > 5 ? `<button class="more" id="moreBtn">${showAll ? 'Show fewer' : `Show all ${apps.length}`}</button>` : '');
+    html = list.map((x, i) => rowHTML(x, i, max)).join('') + (apps.length > 5 ? `<button class="more" id="moreBtn" data-rk="more">${showAll ? 'Show fewer' : `Show all ${apps.length}`}</button>` : '');
   } else if (a.system) {
     const parts = a.parts.slice(0, showAll ? 12 : 5);
     const max = Math.max(10, ...parts.map((p) => p.cpu));
     $('listTitle').textContent = 'Busiest parts of macOS';
     $('listNote').textContent = '';
-    html = parts.map((p, i) => partHTML(p, i, max)).join('') + (a.parts.length > 5 ? `<button class="more" id="moreBtn">${showAll ? 'Show fewer' : 'Show more'}</button>` : '');
+    html = parts.map((p, i) => partHTML(p, i, max)).join('') + (a.parts.length > 5 ? `<button class="more" id="moreBtn" data-rk="more">${showAll ? 'Show fewer' : 'Show more'}</button>` : '');
   }
   $('listBox').hidden = !html;
   if (!html) return;
-  // Same rows as before: update them in place (no re-pop), else draw fresh.
-  const keys = [...html.matchAll(/data-key="([^"]+)"|<span class="nm">([^<]+)/g)].map((m) => m[1] || m[2]).join('|');
-  if (box.dataset.keys === keys) {
-    const tmp = document.createElement('div');
-    tmp.innerHTML = html;
-    [...tmp.children].forEach((el, i) => {
-      const old = box.children[i];
-      if (!old) return;
-      if (old.querySelector('.meter')) {
-        old.querySelector('.meter').className = el.querySelector('.meter').className;
-        old.querySelector('.meter i').style.width = el.querySelector('.meter i').style.width;
-        old.querySelector('.num').innerHTML = el.querySelector('.num').innerHTML;
-        old.querySelector('.nm').innerHTML = el.querySelector('.nm').innerHTML;
-        const ic = el.querySelector('img'); const oic = old.querySelector('img, .avatar');
-        if (ic && oic && oic.tagName !== 'IMG') oic.replaceWith(ic);
-      } else old.textContent = el.textContent;
-    });
-    return;
+  syncRows(box, html);
+}
+
+// Keep each row (by its key) and update it where it stands: bars and numbers glide to their new values,
+// a row that changes places slides there, only a new row pops in, and one that's gone just leaves.
+// Redrawing the list every look made every row flash.
+function syncRows(box, html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  const fresh = [...tmp.children];
+  const old = new Map([...box.querySelectorAll(':scope > [data-rk]')].map((el) => [el.dataset.rk, el]));
+  const before = new Map([...old].map(([k, el]) => [k, el.getBoundingClientRect().top]));
+  const first = !box.children.length;
+  const out = fresh.map((el, i) => {
+    const k = el.dataset.rk;
+    const was = k && old.get(k);
+    if (!was) {
+      if (!first) el.style.setProperty('--d', `${i * 20}ms`);
+      el.classList.add('enter');
+      return el;
+    }
+    old.delete(k);
+    const m = el.querySelector('.meter'), om = was.querySelector('.meter');
+    if (m && om) {
+      om.className = m.className;
+      om.firstElementChild.style.width = m.firstElementChild.style.width;
+    }
+    for (const sel of ['.num', '.nm']) {
+      const n = el.querySelector(sel), on = was.querySelector(sel);
+      if (!n || !on || on.innerHTML === n.innerHTML) continue;
+      // Keep where the percentage was showing, so it counts on from there (countTo, below).
+      const ob = on.querySelector('b');
+      const shown = ob ? ob.__shown ?? (Number.parseInt(ob.textContent.replace('<', ''), 10) || 0) : null;
+      on.innerHTML = n.innerHTML;
+      if (shown != null && on.querySelector('b')) on.querySelector('b').__shown = shown;
+    }
+    const ic = el.querySelector('img'), oic = was.querySelector('img, .avatar');
+    if (ic && oic && oic.tagName !== 'IMG') oic.replaceWith(ic); // its icon arrived
+    return was;
+  });
+  for (const el of old.values()) el.remove();
+  // Put them in order, moving only what's out of place (a move would otherwise restart nothing, but
+  // keeping the rest still keeps the page calm), then slide moved rows from where they were.
+  out.forEach((el, i) => { if (box.children[i] !== el) box.insertBefore(el, box.children[i] || null); });
+  while (box.children.length > out.length) box.lastElementChild.remove();
+  for (const el of out) {
+    const top = before.get(el.dataset.rk);
+    if (top == null) continue;
+    const dy = top - el.getBoundingClientRect().top;
+    if (Math.abs(dy) > 1) el.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 700, easing: GLIDE });
   }
-  box.dataset.keys = keys;
-  box.innerHTML = html;
+  box.querySelectorAll('.num b').forEach(countTo);
+}
+const GLIDE = 'cubic-bezier(0.22, 1, 0.36, 1)';
+
+// A number like "37%" counts to its new value instead of jumping. `el` holds the target text; the
+// count runs on the element's first text, so the next update can start from wherever it got to.
+function countTo(el) {
+  const target = el.textContent;
+  const m = /^(<?)(\d+)%$/.exec(target);
+  const from = el.__shown;
+  el.__shown = m ? Number(m[2]) : null;
+  if (!m || m[1] || from == null || from === el.__shown || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const to = el.__shown, t0 = performance.now();
+  cancelAnimationFrame(el.__raf);
+  el.textContent = `${from}%`;
+  const step = (now) => {
+    const k = Math.min(1, (now - t0) / 900), e = 1 - (1 - k) ** 3;
+    el.textContent = `${Math.round(from + (to - from) * e)}%`;
+    if (k < 1) el.__raf = requestAnimationFrame(step);
+  };
+  el.__raf = requestAnimationFrame(step);
 }
 
 function renderFacts(a) {
@@ -538,11 +602,7 @@ function render() {
 function renderPicker() {
   const apps = [...snap.apps];
   const max = Math.max(10, ...apps.map((x) => recent(x.history, 2)));
-  const html = apps.map((x, i) => rowHTML(x, i, max)).join('');
-  const keys = apps.map((x) => x.key).join('|');
-  if ($('pickRows').dataset.keys === keys) return;
-  $('pickRows').dataset.keys = keys;
-  $('pickRows').innerHTML = html;
+  syncRows($('pickRows'), apps.map((x, i) => rowHTML(x, i, max)).join(''));
 }
 
 function renderPill() {

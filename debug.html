@@ -10,6 +10,7 @@
   html, body { margin: 0; background: transparent; overflow: hidden; }
   body {
     font-family: var(--font); color: var(--ink); font-size: 13px; line-height: 1.35;
+    --glide: cubic-bezier(0.22, 1, 0.36, 1); /* live numbers settle with one long, calm ease: no bounce */
     -webkit-font-smoothing: antialiased; user-select: none; cursor: default;
     --good: var(--peach); --good-lip: var(--peach-lip);
   }
@@ -97,7 +98,7 @@
   .ring svg { width: 46px; height: 46px; transform: rotate(-90deg); }
   .ring circle { fill: none; stroke-width: 5.5; }
   .ring .track { stroke: var(--edge); opacity: 0.55; }
-  .ring .val { stroke: var(--good); stroke-linecap: round; transition: stroke-dashoffset 700ms var(--smooth), stroke 300ms ease; }
+  .ring .val { stroke: var(--good); stroke-linecap: round; transition: stroke-dashoffset 1100ms var(--glide), stroke 600ms ease; }
   .tile.warn .ring .val { stroke: var(--warn); }
   .tile.bad .ring .val { stroke: var(--accent); }
   .ring span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
@@ -110,6 +111,7 @@
   .graph { position: relative; margin-top: 8px; padding: 8px 10px 6px; border-radius: 16px; background: var(--well); }
   .graph svg { display: block; width: 100%; height: 38px; overflow: visible; }
   .graph .area { fill: var(--accent-soft); }
+  .graph path, .graph circle { transition: d 900ms var(--glide), cx 900ms var(--glide), cy 900ms var(--glide); }
   .graph .line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
   .graph .now { fill: var(--accent); }
   .graph .cap { display: flex; justify-content: space-between; font-size: 10.5px; font-weight: 700; color: var(--ink-2); margin-top: 3px; }
@@ -155,14 +157,15 @@
   .rows { display: grid; gap: 3px; }
   .rowb {
     display: grid; grid-template-columns: 22px 1fr 58px 52px; gap: 8px; align-items: center; width: 100%; padding: 6px 8px; border-radius: 12px; text-align: left;
-    transition: background 140ms ease, transform 200ms var(--bouncy); animation: pop 400ms var(--bouncy) both; animation-delay: var(--d, 0ms);
+    transition: background 140ms ease, transform 200ms var(--bouncy);
   }
+  .rowb.enter { animation: pop 400ms var(--bouncy) both; animation-delay: var(--d, 0ms); }
   .rowb:hover { background: var(--well); transform: translateX(2px); }
   .rowb .appic, .rowb .avatar, .rowb .macic { width: 22px; height: 22px; }
   .rowb .nm { font-size: 12.5px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .rowb .nm small { display: block; font-size: 10.5px; font-weight: 600; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .meter { height: 7px; border-radius: 4px; background: var(--edge); overflow: hidden; opacity: 0.9; }
-  .meter i { display: block; height: 100%; width: 0; border-radius: 4px; background: var(--good); transition: width 600ms var(--smooth), background 300ms ease; }
+  .meter i { display: block; height: 100%; width: 0; border-radius: 4px; background: var(--good); transition: width 1100ms var(--glide), background 600ms ease; }
   .meter.warn i { background: var(--warn); }
   .meter.bad i { background: var(--accent); }
   .rowb .num { font-size: 11px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); white-space: nowrap; }

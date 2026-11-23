@@ -5,6 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "postinstall": "node scripts/uiohook.js",
     "package": "node scripts/package.js",
     "dmg": "sh scripts/dmg.sh",
     "icons": "electron scripts/icons.js",

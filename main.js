@@ -1982,7 +1982,7 @@ async function openDebug(near) {
   if (dbg) { if (!dbg.win.isDestroyed()) dbg.win.showInactive(); return; }
   const zoom = DEBUG_ZOOM[settings.debug.size];
   const w0 = Math.round(DEBUG_W * zoom), h0 = Math.round(460 * zoom);
-  const d = { win: null, front: null, mini: false, timer: null, busy: false, closing: false };
+  const d = { win: null, front: null, mini: false, timer: null, busy: false, closing: false, shown: false };
   dbg = d;
   buildMenu();
   const front = await DebugStats.frontApp().catch(() => null);
@@ -1994,7 +1994,9 @@ async function openDebug(near) {
   w.setAlwaysOnTop(true, OVERLAY_LEVEL, 1);
   w.loadFile(path.join(__dirname, 'debug.html'));
   w.webContents.on('did-finish-load', () => w.webContents.setZoomFactor(DEBUG_ZOOM[settings.debug.size]));
-  w.once('ready-to-show', () => { if (dbg === d && !w.isDestroyed()) w.showInactive(); });
+  // It shows once the page has measured itself (debug:fit), so it never appears at a guessed size with its
+  // bottom cut off. A moment later regardless, in case that never comes.
+  w.once('ready-to-show', () => setTimeout(() => showDebug(d), 1200));
   // Dragged somewhere: remember it, for "where you left it".
   w.on('moved', () => {
     if (w.isDestroyed()) return;
@@ -2031,6 +2033,12 @@ async function debugTick() {
   if (dbg !== d) return;
   d.timer = setTimeout(debugTick, (d.mini ? Math.max(5, settings.debug.refresh) : settings.debug.refresh) * 1000);
 }
+function showDebug(d) {
+  if (d.shown || dbg !== d || !d.win || d.win.isDestroyed()) return;
+  d.shown = true;
+  d.win.showInactive();
+  d.win.webContents.send('debug:shown');
+}
 function debugSettingsChanged() {
   if (!dbg?.win || dbg.win.isDestroyed()) return;
   dbg.win.webContents.setZoomFactor(DEBUG_ZOOM[settings.debug.size]);
@@ -2060,6 +2068,7 @@ ipcMain.on('debug:fit', (e, size) => {
   const x = Math.round(Math.max(wa.x, Math.min(right ? b.x + b.width - width : b.x, wa.x + wa.width - width)));
   const y = Math.round(Math.max(wa.y, Math.min(b.y, wa.y + wa.height - height)));
   w.setBounds({ x, y, width, height });
+  if (!dbg.shown && size.ready) setTimeout(() => dbg && showDebug(dbg), 30); // its first look is drawn and sized: now it can appear
 });
 ipcMain.on('debug:mini', (e, on) => { if (fromDebug(e)) { dbg.mini = !!on; if (!on) debugTick(); } });
 ipcMain.on('debug:close', (e) => { if (fromDebug(e)) closeDebug(); });

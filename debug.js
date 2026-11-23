@@ -717,7 +717,7 @@ function fit() {
   cancelAnimationFrame(fitFrame);
   fitFrame = requestAnimationFrame(() => {
     const w = $('wrap');
-    scrawl.send('debug:fit', { w: w.offsetWidth, h: w.offsetHeight });
+    scrawl.send('debug:fit', { w: w.offsetWidth, h: w.offsetHeight, ready: !!snap });
   });
 }
 new ResizeObserver(fit).observe($('wrap'));
@@ -739,6 +739,7 @@ scrawl.invoke('debug:init').then(({ settings, front, self }) => {
   view = settings.start === 'mac' || !frontKey ? 'mac' : 'app';
   render();
   fit();
+  scrawl.send('debug:refresh'); // the first look may have gone out before this page was listening
 });
 scrawl.on('debug:data', (s) => {
   const first = !snap;
@@ -746,5 +747,8 @@ scrawl.on('debug:data', (s) => {
   // The app you were in isn't in the list (it was Pane itself, say): start on the whole Mac.
   if (first && view === 'app' && !appByKey(appKey)) { view = 'mac'; appKey = 'macos'; }
   render();
+  if (first) fit(); // tells the main process its first look is drawn, so the window can appear
 });
+// The window is on screen now: play the opening (held until then, so it isn't over before you see it).
+scrawl.on('debug:shown', () => document.body.classList.add('shown'));
 scrawl.on('debug:settings', (s) => { cfg = s; resetBoxes(); render(); fit(); });

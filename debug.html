@@ -25,9 +25,12 @@
   .card {
     position: relative; width: 344px; border-radius: 26px; background: var(--card); overflow: hidden;
     box-shadow: 0 6px 0 var(--card-lip), 0 20px 36px -12px rgba(42, 20, 24, 0.34), 0 0 0 1px rgba(42, 31, 36, 0.06);
-    transform-origin: 90% 0; animation: open 520ms var(--bouncy) both;
+    transform-origin: 50% 0; opacity: 0;
   }
-  @keyframes open { from { opacity: 0; transform: scale(0.4) translateY(-20px); } 30% { opacity: 1; } }
+  body.shown .card { opacity: 1; animation: open 380ms var(--glide) both; }
+  /* Opens without growing past full size: the window is only as big as the card (plus its shadow), so an
+     overshoot would poke out of it and get its corners cut off. */
+  @keyframes open { from { opacity: 0; transform: scale(0.94) translateY(-6px); } }
 
   /* ---------- top bar: grab it to move the panel ---------- */
   .bar { -webkit-app-region: drag; display: flex; align-items: center; gap: 8px; height: 46px; padding: 0 10px 0 14px; cursor: grab; }
@@ -103,7 +106,7 @@
   .tile.bad .ring .val { stroke: var(--accent); }
   .ring span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
   .tile b { font-size: 11px; font-weight: 800; margin-top: 3px; }
-  .tile small { font-size: 10.5px; font-weight: 700; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; padding: 0 4px; }
+  .tile small { font-size: 10px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; padding: 0 2px; }
   .tile.warn small { color: var(--warn-lip); }
   .tile.bad small { color: var(--accent-ink); }
 
@@ -156,7 +159,7 @@
   /* ---------- apps (or macOS's own parts) ---------- */
   .rows { display: grid; gap: 3px; }
   .rowb {
-    display: grid; grid-template-columns: 22px 1fr 58px 52px; gap: 8px; align-items: center; width: 100%; padding: 6px 8px; border-radius: 12px; text-align: left;
+    display: grid; grid-template-columns: 22px minmax(0, 1fr) 42px 92px; gap: 8px; align-items: center; width: 100%; padding: 6px 8px; border-radius: 12px; text-align: left;
     transition: background 140ms ease, transform 200ms var(--bouncy);
   }
   .rowb.enter { animation: pop 400ms var(--bouncy) both; animation-delay: var(--d, 0ms); }
@@ -204,9 +207,9 @@
   .pill {
     display: flex; align-items: center; gap: 4px; height: 44px; padding: 0 6px 0 4px; border-radius: 22px; background: var(--card);
     box-shadow: 0 5px 0 var(--card-lip), 0 14px 26px -10px rgba(42, 20, 24, 0.4), 0 0 0 1px rgba(42, 31, 36, 0.06);
-    animation: pillin 460ms var(--bouncy) both;
+    animation: pillin 320ms var(--glide) both;
   }
-  @keyframes pillin { from { opacity: 0; transform: scale(0.5); } }
+  @keyframes pillin { from { opacity: 0; transform: scale(0.9); } }
   .pill .grab { -webkit-app-region: drag; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 17px; background: var(--well); cursor: grab; }
   .pill .grab svg { height: 17px; width: auto; }
   .pill .open { display: flex; align-items: center; gap: 9px; height: 34px; padding: 0 10px 0 8px; border-radius: 17px; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; transition: background 140ms ease; }

@@ -15,6 +15,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <!-- Macs use the system's rounded face (ui-rounded), like the app. Nunito stands in everywhere else. -->
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet">
+<!-- Visits and clicks: GoatCounter (no cookies, no personal data). Stats at https://pane-mac.goatcounter.com -->
+<script data-goatcounter="https://pane-mac.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 <style>
   /* Pane's own pages wear Away's warm theme; Scrawl's card switches to its original cool one. */
   :root, [data-theme="away"] {
@@ -1080,13 +1082,13 @@
       <p class="label">Install with one command <span class="badge">Recommended</span></p>
       <div class="cmd">
         <code class="cmd-text">curl -fsSL https://hfang1012.github.io/Pane-Mac/install.sh | sh</code>
-        <button class="copy" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="3"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span>Copy</span></button>
+        <button class="copy" type="button" data-goatcounter-click="copy-install-command" data-goatcounter-title="Copy install command"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="3"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span>Copy</span></button>
       </div>
       <p class="how">Open Terminal (<kbd>⌘</kbd> <kbd>Space</kbd>, type “Terminal”), paste, press Return. No security prompt, and running it again updates Pane.</p>
     </div>
     <div class="other rise" style="--d:380ms">
       <span>Prefer a regular download?</span>
-      <a class="download" id="download" href="#download-steps">
+      <a class="download" id="download" href="#download-steps" data-goatcounter-click="download-dmg" data-goatcounter-title="Download Pane.dmg">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 10.5l5 5 5-5"/><path d="M5 20h14"/></svg>
         Download Pane.dmg
       </a>
@@ -1340,7 +1342,7 @@
       <p>Downloads Pane, puts it in Applications and opens it.</p>
       <div class="cmd">
         <code class="cmd-text">curl -fsSL https://hfang1012.github.io/Pane-Mac/install.sh | sh</code>
-        <button class="copy" type="button"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="3"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span>Copy</span></button>
+        <button class="copy" type="button" data-goatcounter-click="copy-install-command" data-goatcounter-title="Copy install command"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="3"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span>Copy</span></button>
       </div>
       <ol class="steps">
         <li><span><strong>Open Terminal.</strong> Press <kbd>⌘</kbd> <kbd>Space</kbd>, type <em>Terminal</em>, press Return.</span></li>
@@ -1409,7 +1411,7 @@
 </main>
 
 <footer>
-  Pane is free. <a id="source" href="https://github.com/">See the code on GitHub</a>.
+  Pane is free. <a id="source" href="https://github.com/" data-goatcounter-click="github-source" data-goatcounter-title="See the code on GitHub">See the code on GitHub</a>.
 </footer>
 
 <script src="wheel.js"></script>

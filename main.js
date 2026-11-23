@@ -87,7 +87,8 @@ const DEFAULTS = {
     size: 'medium', // 'small' | 'medium' | 'large' (DEBUG_ZOOM)
     refresh: 2, // seconds between looks (DEBUG_REFRESH)
     start: 'app', // opens on the app you're in, or on the whole Mac: 'app' | 'mac'
-    place: 'corner', // 'corner' (top right) | 'pointer' | 'last' (where you left it)
+    place: 'pointer', // 'pointer' (by the pointer) | 'corner' (top right) | 'last' (where you left it)
+    placeV: 2, // settings from before Debug opened by the pointer get moved over to it once
     at: null, // { x, y }: where it was last dragged
     confirm: true, // ask before quitting an app
     enabled: true,
@@ -562,15 +563,32 @@ const mayShare = (a, b) => ['drawKey,jotKey', 'drawKey,tweakKey'].includes([a, b
 const tapped = (which) => ['jotKey', 'tweakKey', 'awayKey', 'debugKey'].includes(which) ||
   (which === 'hotkey' && settings.wheelMode === 'double') || (which === 'spinKey' && settings.spin.mode === 'double');
 const oneModifier = (k) => k.keys.length === 1 && MOD_CODES.has(k.keys[0].codes[0]);
-// Switching a held key over to double-tap: keep one of its modifiers if it has one, else find a free one.
-function fitTapKey(which) {
+// Each tool opens one way: held, double-tapped, or a shortcut. It keeps a key saved for its other ways,
+// but only the way it's set to counts: a key a tool isn't using never blocks another tool.
+const HELD_WAY = {
+  jotKey: () => settings.jot.mode === 'double',
+  tweakKey: () => settings.tweak.mode === 'double',
+  awayKey: () => settings.away.mode === 'double',
+  debugKey: () => settings.debug.mode !== 'shortcut',
+};
+const keyInUse = (which) => !HELD_WAY[which] || HELD_WAY[which]();
+// The key in use that `c` would overlap, if any (Scrawl's draw key may share with Jot's and Tweak's double-tap).
+const keyClash = (which, c) => Object.keys(KEY_LABEL).find((o) => o !== which && keyInUse(o) && !mayShare(o, which) && sameCombo(c, keyOf(o)));
+// After a tool switches how it opens, make its key fit: a tapped key is one modifier, and it mustn't overlap
+// a key in use. If it does, it moves to a free one (keeping one of its own modifiers if it can), and the
+// returned line says so.
+function settleKey(which) {
+  if (!keyInUse(which)) return null;
   const k = keyOf(which);
-  if (!tapped(which) || oneModifier(k)) return;
-  const clash = (c) => Object.keys(KEY_LABEL).some((o) => o !== which && !mayShare(o, which) && sameCombo(c, keyOf(o)));
+  const other = keyClash(which, k);
+  if (!other && (!tapped(which) || oneModifier(k))) return null;
   const mine = k.keys.filter((x) => MOD_CODES.has(x.codes[0])).map((x) => x.codes[0]);
-  const all = [UiohookKey.Alt, UiohookKey.AltRight, UiohookKey.Ctrl, UiohookKey.CtrlRight, UiohookKey.Shift, UiohookKey.ShiftRight, UiohookKey.Meta, UiohookKey.MetaRight];
-  const pick = [...mine, ...all].map((c) => combo([keyInfo(c)])).find((c) => !clash(c));
-  if (pick) setKey(which, pick);
+  // Right ⌃ last: most MacBook keyboards don't have one.
+  const all = [UiohookKey.Alt, UiohookKey.AltRight, UiohookKey.Shift, UiohookKey.ShiftRight, UiohookKey.Ctrl, UiohookKey.Meta, UiohookKey.MetaRight, UiohookKey.CtrlRight];
+  const pick = [...mine, ...all].map((c) => combo([keyInfo(c)])).find((c) => !keyClash(which, c));
+  if (!pick) return null;
+  setKey(which, pick);
+  return other ? `${k.name} is your ${KEY_LABEL[other]}, so this now uses ${pick.name}. Click it to change.` : null;
 }
 
 // What's held right now. Modifiers follow the event's own flags, which macOS keeps accurate. Other keys
@@ -621,7 +639,7 @@ function finishBind(cancel) {
   let error = null;
   if (!cancel && keys.length) {
     const next = combo(keys);
-    const other = Object.keys(KEY_LABEL).find((k) => k !== which && !mayShare(k, which) && sameCombo(next, keyOf(k)));
+    const other = keyClash(which, next);
     if (other) error = `${next.name} ${keys.length > 1 ? 'are' : 'is'} already your ${KEY_LABEL[other]}. Pick different keys.`;
     // Double-tapping a letter would happen all the time while typing ("ee"), so Jot takes one modifier.
     else if (tapped(which) && !oneModifier(next)) error = `${which === 'debugKey' && settings.debug.mode === 'hold' ? 'Holding' : 'Double-tap'} works with one of ⌃, ⌥, ⇧ or ⌘. Pick just one.`;
@@ -999,6 +1017,22 @@ const SHORTCUT_NAME = { away: 'Away', jot: 'Jot', tweak: 'Tweak', debug: 'Debug'
 const shortcutOn = { away: false, jot: false, tweak: false, debug: false };
 const shortcutBinding = { away: false, jot: false, tweak: false, debug: false };
 const usesShortcut = (tool) => settings[tool].enabled && settings[tool].mode === 'shortcut';
+// A tool set to a shortcut holds its keys even while it's turned off, so turning it on never clashes.
+const shortcutClash = (tool, acc) => Object.keys(SHORTCUT_NAME).find((t) => t !== tool && settings[t].mode === 'shortcut' && settings[t].keys.accelerator === acc);
+// After a tool switches to a shortcut that another tool's shortcut already uses: move it to a free
+// ⌃⌘ letter (its own name's letters first) and say so.
+function settleShortcut(tool) {
+  if (settings[tool].mode !== 'shortcut') return null;
+  const before = settings[tool].keys;
+  const other = shortcutClash(tool, before.accelerator);
+  if (!other) return null;
+  const letters = [...new Set(`${SHORTCUT_NAME[tool]}ABCDEFGHIJKLMNOPQRSTUVWXYZ`.toUpperCase().replace(/[^A-Z]/g, ''))];
+  const MAC = ['D', 'F', 'Q']; // ⌃⌘D looks up a word, ⌃⌘F is full screen, ⌃⌘Q locks the Mac
+  const L = letters.find((l) => !MAC.includes(l) && !shortcutClash(tool, `Control+Command+${l}`));
+  if (!L) return null;
+  settings = { ...settings, [tool]: { ...settings[tool], keys: { accelerator: `Control+Command+${L}`, symbols: ['⌃', '⌘', L], name: `Control Command ${L}` } } };
+  return `${before.symbols.join('')} are your ${SHORTCUT_NAME[other]} keys, so this now uses ⌃⌘${L}. Click them to change.`;
+}
 function registerShortcuts() {
   globalShortcut.unregisterAll();
   for (const t in shortcutOn) shortcutOn[t] = false;
@@ -1025,7 +1059,7 @@ ipcMain.handle('shortcut:keys', (_e, tool, keys) => {
   if (!(tool in shortcutBinding)) return { settings, error: null };
   shortcutBinding[tool] = false;
   const before = settings[tool].keys;
-  const taken = Object.keys(SHORTCUT_NAME).find((t) => t !== tool && usesShortcut(t) && settings[t].keys.accelerator === keys.accelerator);
+  const taken = shortcutClash(tool, keys.accelerator);
   let error = null;
   if (taken) error = `${keys.symbols.join('')} is already your ${SHORTCUT_NAME[taken]} keys. Pick other keys.`;
   else {
@@ -1880,6 +1914,7 @@ function cleanDebug(d) {
   if (!DEBUG_REFRESH.includes(out.refresh)) out.refresh = DEFAULTS.debug.refresh;
   if (!['app', 'mac'].includes(out.start)) out.start = DEFAULTS.debug.start;
   if (!['corner', 'pointer', 'last'].includes(out.place)) out.place = DEFAULTS.debug.place;
+  if (d?.placeV !== 2) { out.place = 'pointer'; out.placeV = 2; } // it used to open in the corner
   if (!(out.at && Number.isFinite(out.at.x) && Number.isFinite(out.at.y))) out.at = null;
   out.confirm = out.confirm !== false;
   out.key = asCombo(out.key);
@@ -1968,20 +2003,15 @@ async function openDebug(near) {
   w.on('closed', () => { if (dbg === d) { clearTimeout(d.timer); dbg = null; buildMenu(); } });
   debugTick();
 }
-// Close it. If it had the keyboard, give it back to the app you were in first (so macOS doesn't go
-// looking for another Pane window, maybe on another Space).
+// Close it: the panel just goes. (It never hands the keyboard back to another app on its way out, since
+// bringing that app forward made macOS slide over to its Space.)
 function closeDebug() {
   const d = dbg;
   if (!d) return;
   dbg = null;
   clearTimeout(d.timer);
   buildMenu();
-  const w = d.win;
-  if (!w || w.isDestroyed()) return;
-  const bye = () => { if (!w.isDestroyed()) w.destroy(); };
-  if (w.isFocused() && d.front?.bundle && /^[\w.-]+$/.test(d.front.bundle)) {
-    execFile('osascript', ['-e', `tell application id "${d.front.bundle}" to activate`], () => setTimeout(bye, 40));
-  } else bye();
+  if (d.win && !d.win.isDestroyed()) d.win.destroy();
 }
 // One look, sent to the panel, then the next one after the chosen pause (slower while folded up).
 async function debugTick() {
@@ -2094,11 +2124,16 @@ ipcMain.handle('settings:set', (_e, patch) => {
   settings = { ...settings, ...patch };
   writeJSON('settings.json', settings);
   if ('openAtLogin' in patch) app.setLoginItemSettings({ openAtLogin: settings.openAtLogin });
-  if ('away' in patch) { settings.away = cleanAway(settings.away); fitTapKey('awayKey'); registerShortcuts(); buildMenu(); }
+  const moved = []; // keys that had to move to stay clear of another tool's: [caption, line]
+  const settle = (which, tool, caption) => {
+    const line = settleKey(which) || (tool && settleShortcut(tool));
+    if (line) moved.push([caption, line]);
+  };
+  if ('away' in patch) { settings.away = cleanAway(settings.away); settle('awayKey', 'away', 'awayCaption'); registerShortcuts(); buildMenu(); }
   if ('wheelMode' in patch) {
     if (!['hold', 'double'].includes(settings.wheelMode)) settings.wheelMode = DEFAULTS.wheelMode;
     if (menu.open) closeMenu(false);
-    fitTapKey('hotkey');
+    settle('hotkey', null, 'keycaption');
   }
   if ('spin' in patch) {
     if (!settings.spin.enabled) cancelSpin();
@@ -2106,31 +2141,35 @@ ipcMain.handle('settings:set', (_e, patch) => {
     if (!WHEEL_SIZES.includes(settings.spin.size)) settings.spin.size = DEFAULTS.spin.size;
     settings.spin.wheel = cleanSpinWheel(settings.spin.wheel);
     if (!['hold', 'double'].includes(settings.spin.mode)) settings.spin.mode = DEFAULTS.spin.mode;
-    fitTapKey('spinKey');
+    settle('spinKey', null, 'spinCaption');
     buildMenu();
   }
   if ('jot' in patch) {
     settings.jot = cleanJot(settings.jot);
     if (!settings.jot.enabled) closeComposer();
+    settle('jotKey', 'jot', 'jotCaption');
     registerShortcuts();
     buildMenu();
   }
   if ('tweak' in patch) {
     settings.tweak = cleanTweak(settings.tweak);
     if (!settings.tweak.enabled) endTarget();
+    settle('tweakKey', 'tweak', 'tweakCaption');
     registerShortcuts();
     buildMenu();
   }
   if ('debug' in patch) {
     settings.debug = cleanDebug(settings.debug);
     if (!settings.debug.enabled) closeDebug();
-    fitTapKey('debugKey');
+    settle('debugKey', 'debug', 'debugCaption');
     registerShortcuts();
     buildMenu();
     debugSettingsChanged();
   }
   writeJSON('settings.json', settings);
   broadcast();
+  // Told a moment later, after the page has redrawn its captions for the new way.
+  if (moved.length) setTimeout(() => settingsWin?.webContents.send('keys:moved', moved), 300);
   return settings;
 });
 
@@ -2261,7 +2300,8 @@ app.whenReady().then(() => {
   if (!WHEEL_SIZES.includes(settings.wheelSize)) settings.wheelSize = DEFAULTS.wheelSize;
   if (!WHEEL_SIZES.includes(settings.spin.size)) settings.spin.size = DEFAULTS.spin.size;
   settings.spin.wheel = cleanSpinWheel(settings.spin.wheel);
-  for (const which of ['hotkey', 'spinKey', 'awayKey', 'debugKey']) fitTapKey(which);
+  for (const which of Object.keys(KEY_LABEL)) settleKey(which);
+  for (const tool of Object.keys(SHORTCUT_NAME)) settleShortcut(tool);
   // Keep the saved order, but make sure every built-in tool is present exactly once.
   const known = settings.tools.filter((t) => TOOL_IDS.includes(t.id));
   settings.tools = [...known, ...TOOL_IDS.filter((id) => !known.some((t) => t.id === id)).map((id) => ({ id, on: true }))];

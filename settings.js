@@ -100,6 +100,10 @@ function stopListening(popWhich = null) {
 function resetCaptions() {
   for (const [which, text] of Object.entries(CAPTIONS)) { const t = text(); if (t) setCaption(t, false, which); }
 }
+// A tool switched to a way whose keys another tool was using: its keys moved, and its caption says where.
+scrawl.on('keys:moved', (list) => {
+  for (const [caption, line] of list) { const c = $(caption); if (c) { c.textContent = line; c.classList.add('warn'); } }
+});
 scrawl.on('bind:done', ({ settings, which, error }) => {
   S = settings;
   stopListening(error ? null : which);

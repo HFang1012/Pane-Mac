@@ -170,11 +170,51 @@ async function footprints() {
 function warm() { if (!foot.map) refreshFootprints(); }
 
 // ---------- graphics, network and disk: running totals, turned into speeds ----------
+// Each is read twice over: once for the whole Mac (netstat, the storage driver, the GPU's own busy %), and
+// once per process, so an app's view shows only that app's traffic, reads and writes and GPU time:
+//   network  nettop: bytes in and out so far, per process (no permission needed)
+//   disk     Pane's helper (proc_pid_rusage): bytes read and written so far, per process you own
+//   graphics ioreg: each GPU client's accumulated GPU time, in nanoseconds, with the pid that opened it
+let helperFor = null; // set by main.js: () => path of native/pane-files
+function parseNettop(text) {
+  const map = new Map();
+  for (const line of text.split('\n')) {
+    const m = /\.(\d+),(\d+),(\d+),?\s*$/.exec(line); // "Google Chrome H.47397,87493306,318858,"
+    if (!m) continue;
+    const pid = Number(m[1]);
+    const was = map.get(pid) || [0, 0];
+    map.set(pid, [was[0] + Number(m[2]), was[1] + Number(m[3])]);
+  }
+  return map;
+}
+function parseIo(text) {
+  const map = new Map();
+  for (const line of text.split('\n')) {
+    const m = /^(\d+) (\d+) (\d+)$/.exec(line.trim());
+    if (m) map.set(Number(m[1]), [Number(m[2]), Number(m[3])]);
+  }
+  return map;
+}
+// One AGXDeviceUserClient (or similar) block per GPU client: its "AppUsage" holds accumulatedGPUTime for
+// each queue, and "IOUserClientCreator" names the pid. Summed per pid.
+function parseGpuClients(text) {
+  const map = new Map();
+  for (const block of text.split(/\+-o /)) {
+    const pid = Number(/"IOUserClientCreator" = "pid (\d+)/.exec(block)?.[1]);
+    if (!pid) continue;
+    const ns = [...block.matchAll(/"accumulatedGPUTime"=(\d+)/g)].reduce((n, m) => n + Number(m[1]), 0);
+    map.set(pid, (map.get(pid) || 0) + ns);
+  }
+  return map;
+}
 async function counters() {
-  const [net, disk, gpu] = await Promise.all([
+  const helper = helperFor?.();
+  const [net, disk, gpu, nettop, io] = await Promise.all([
     run('netstat', ['-ibn']),
     run('ioreg', ['-r', '-c', 'IOBlockStorageDriver', '-k', 'Statistics', '-d', '1']),
-    run('ioreg', ['-r', '-d', '1', '-c', 'IOAccelerator']),
+    run('ioreg', ['-r', '-l', '-w0', '-c', 'IOAccelerator']),
+    run('nettop', ['-P', '-L', '1', '-x', '-J', 'bytes_in,bytes_out']),
+    helper ? run(helper, ['io']) : Promise.resolve(''),
   ]);
   // One <Link#n> row per network interface holds its byte totals. Counted from the right, since some
   // interfaces have no address column. The loopback (lo0) is the Mac talking to itself: left out.
@@ -190,17 +230,42 @@ async function counters() {
   // The busiest graphics chip (a Mac with two reports both), and the memory its work is holding.
   const utils = [...gpu.matchAll(/"Device Utilization %"=(\d+)/g)].map((m) => Number(m[1]));
   const gpuMem = sum(gpu, /"In use system memory"=(\d+)/g);
-  return { rx, tx, rd, wr, gpu: utils.length ? Math.max(...utils) : null, gpuMem: gpuMem || null, hasNet: /<Link#/.test(net), hasDisk: rd + wr > 0 };
+  return {
+    rx, tx, rd, wr, gpu: utils.length ? Math.max(...utils) : null, gpuMem: gpuMem || null, hasNet: /<Link#/.test(net), hasDisk: rd + wr > 0,
+    perNet: parseNettop(nettop), perDisk: parseIo(io), perGpu: parseGpuClients(gpu), hasPerNet: /bytes_in/.test(nettop), hasPerDisk: !!io,
+  };
 }
+// Running totals → speeds. The whole Mac's, plus each process's since the last look (bytes a second, and
+// GPU time as a % of the time that passed). A process seen for the first time, or whose total went down
+// (a GPU client closing, a connection's count reset), counts as 0 this once rather than a made-up spike.
 function speeds(c, now) {
   const p = S.io;
   S.io = { ...c, at: now };
   const secs = p ? (now - p.at) / 1000 : 0;
-  const rate = (k) => (p && secs > 0.3 && c[k] >= p[k] ? (c[k] - p[k]) / secs : null);
+  const ok = p && secs > 0.3;
+  const rate = (k) => (ok && c[k] >= p[k] ? (c[k] - p[k]) / secs : null);
+  const per = (cur, prev, i) => {
+    const out = new Map();
+    if (!ok) return out;
+    for (const [pid, v] of cur) {
+      const was = prev.get(pid);
+      if (was == null) continue;
+      const d = i == null ? v - was : v[i] - was[i];
+      if (d > 0) out.set(pid, d / secs);
+    }
+    return out;
+  };
   return {
     gpu: c.gpu, gpuMem: c.gpuMem,
     down: c.hasNet ? rate('rx') : null, up: c.hasNet ? rate('tx') : null,
     read: c.hasDisk ? rate('rd') : null, write: c.hasDisk ? rate('wr') : null,
+    ready: !!ok,
+    per: {
+      down: per(c.perNet, p?.perNet, 0), up: per(c.perNet, p?.perNet, 1),
+      read: per(c.perDisk, p?.perDisk, 0), write: per(c.perDisk, p?.perDisk, 1),
+      gpu: per(c.perGpu, p?.perGpu), // nanoseconds of GPU work a second
+      net: c.hasPerNet, disk: c.hasPerDisk, diskSeen: new Set(c.perDisk.keys()),
+    },
   };
 }
 
@@ -387,7 +452,16 @@ async function sample({ selfPid, thermal, display } = {}) {
     if (safari && /com\.apple\.WebKit\.(WebContent|Networking|GPU)/.test(p.exe)) return safari;
     return null;
   };
-  const groups = new Map(apps.map((a) => [a.pid, { ...a, cpu: 0, mem: 0, gpu: 0, procs: 0 }]));
+  const L = speeds(io, now);
+  const zeroIo = () => ({ down: 0, up: 0, read: 0, write: 0, gpuNs: 0, diskSeen: 0 });
+  const addIo = (t, pid) => {
+    t.down += L.per.down.get(pid) || 0; t.up += L.per.up.get(pid) || 0;
+    t.read += L.per.read.get(pid) || 0; t.write += L.per.write.get(pid) || 0;
+    t.gpuNs += L.per.gpu.get(pid) || 0;
+    if (L.per.diskSeen.has(pid)) t.diskSeen++;
+  };
+  const groups = new Map(apps.map((a) => [a.pid, { ...a, cpu: 0, mem: 0, gpu: 0, procs: 0, io: zeroIo() }]));
+  const systemIo = zeroIo();
   const cats = new Map(); // category id -> { cpu, mem, count, names: Map(name -> { cpu, mem, count }) }
   let systemCpu = 0, systemMem = 0, systemCount = 0;
   for (const p of procs.values()) {
@@ -397,9 +471,11 @@ async function sample({ selfPid, thermal, display } = {}) {
       const g = groups.get(a.pid);
       g.cpu += c; g.mem += m; g.procs++;
       if (gpuPids.has(p.pid)) g.gpu += m;
+      addIo(g.io, p.pid);
       continue;
     }
     systemCpu += c; systemMem += m; systemCount++;
+    addIo(systemIo, p.pid);
     const { cat, name } = categorize(p.exe);
     const k = cats.get(cat.id) || { cpu: 0, mem: 0, count: 0, names: new Map() };
     k.cpu += c; k.mem += m; k.count++;
@@ -418,6 +494,14 @@ async function sample({ selfPid, thermal, display } = {}) {
     const key = a ? a.pid : null;
     if (key) (blockersByPid.get(key) || blockersByPid.set(key, []).get(key)).push(b.what);
   }
+  // One app's (or the background's) own network, disk and GPU, in the same shape as the whole Mac's.
+  // Disk is "partial" when some of its parts couldn't be read (macOS's root tasks, for the background).
+  const liveOf = (t, count) => (L.ready ? {
+    down: L.per.net ? t.down : null, up: L.per.net ? t.up : null,
+    read: L.per.disk ? t.read : null, write: L.per.disk ? t.write : null,
+    gpu: Math.min(100, Math.round(t.gpuNs / 1e7)), // ns of GPU work a second → % of the GPU's time
+    diskPartial: L.per.disk && t.diskSeen < count,
+  } : { down: null, up: null, read: null, write: null, gpu: null, diskPartial: false });
   const live = new Set();
   const list = [...groups.values()].map((g) => {
     const key = g.bundle || g.name;
@@ -429,6 +513,7 @@ async function sample({ selfPid, thermal, display } = {}) {
       cpu: r1(share(g.cpu)), core: Math.round(g.cpu), mem: g.mem, gpu: g.gpu, procs: g.procs,
       history: hist.map((p) => p.v), trail: trailOf(hist, now), icon: iconFor(g.path), self: g.pid === selfPid,
       awake: [...new Set(blockersByPid.get(g.pid) || [])],
+      live: liveOf(g.io, g.procs),
     };
   });
   // Everything that isn't an app, as one entry ("Background") made of categories, each naming its busiest parts.
@@ -446,6 +531,7 @@ async function sample({ selfPid, thermal, display } = {}) {
     key: 'macos', pid: 0, name: 'Background', bundle: null, path: null, system: true,
     cpu: r1(share(systemCpu)), core: Math.round(systemCpu), mem: systemMem,
     procs: systemCount, history: sysHist.map((p) => p.v), trail: trailOf(sysHist, now), icon: null, awake: [], parts,
+    live: liveOf(systemIo, systemCount),
   });
   list.sort((a, b) => b.cpu - a.cpu || b.mem - a.mem);
 
@@ -453,7 +539,7 @@ async function sample({ selfPid, thermal, display } = {}) {
     at: now, cores, uptime: os.uptime(), chip: chipNow, load: os.loadavg().map((v) => Math.round(v * 100) / 100),
     cpu: { total: Math.round(total), history: [...S.history], trail: cpuTrail },
     mem, battery: slow.battery, disk: slow.disk, heat: heatNow(slow.heat, thermal),
-    live: speeds(io, now), display: display || null, procCount: procs.size,
+    live: { gpu: L.gpu, gpuMem: L.gpuMem, down: L.down, up: L.up, read: L.read, write: L.write }, display: display || null, procCount: procs.size,
     apps: list, appCount: apps.length, memExact: feet.size > 0,
   };
   snap.health = health(snap);
@@ -629,5 +715,6 @@ async function fix(kind, app, { shell, selfPid }) {
 module.exports = {
   sample, frontApp, fix, isBrowser, startTicker, tickCpu, warm, TRAIL_MS,
   setIconLoader: (fn) => { iconLoader = fn; },
-  _test: { parseApps, parsePs, cpuSeconds, parseTop, categorize, counters, heatNow },
+  setHelper: (fn) => { helperFor = fn; },
+  _test: { parseApps, parsePs, cpuSeconds, parseTop, categorize, counters, heatNow, parseNettop, parseIo, parseGpuClients },
 };

@@ -230,7 +230,9 @@
     animation: pillin 460ms var(--glide) both;
   }
   @keyframes pillin { from { opacity: 0; transform: scale(0.7); } }
-  .pill .grab { -webkit-app-region: drag; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 17px; background: var(--well); cursor: grab; }
+  .pill { cursor: grab; touch-action: none; user-select: none; }
+  .pill.dragging, .pill.dragging * { cursor: grabbing !important; }
+  .pill .grab { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 17px; background: var(--well); cursor: grab; }
   .pill .grab svg { height: 17px; width: auto; }
   .pill .open { display: flex; align-items: center; gap: 9px; height: 34px; padding: 0 10px 0 8px; border-radius: 17px; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; transition: background 140ms ease; }
   .pill .open:hover { background: var(--well); }

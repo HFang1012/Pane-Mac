@@ -50,6 +50,7 @@
   .ibtn:active { transform: scale(0.93); }
   .ibtn:disabled { opacity: 0.35; pointer-events: none; }
   .ibtn svg { width: 17px; height: 17px; }
+  .ibtn.del:hover { background: #F7D3DC; color: #8A2343; }
 
   /* ---------- the workbench ---------- */
   main { display: grid; grid-template-columns: 1fr 296px; min-height: 0; }
@@ -90,6 +91,83 @@
   .crop .e[data-h="w"] { left: -6px; } .crop .e[data-h="e"] { right: -6px; }
   .crop .dims { position: absolute; left: 50%; bottom: -30px; translate: -50% 0; font-size: 11.5px; font-weight: 800; color: #ECEDFB; background: rgba(18, 19, 42, 0.86); padding: 3px 9px; border-radius: 7px; white-space: nowrap; line-height: 1.4; font-variant-numeric: tabular-nums; }
   .crop:not(.live) .dims { display: none; }
+
+  /* Pictures: the result on the mat, scrolling when zoomed in; frames down the left, markup tools on top. */
+  .imgstage { display: grid; grid-template-columns: 1fr; min-height: 0; }
+  .imgstage.multi { grid-template-columns: 132px 1fr; }
+  .viewport { position: relative; min-width: 0; min-height: 0; display: grid; }
+  .viewport .frame canvas { max-width: none; }
+  .viewport .canvas-wrap { overflow: auto; place-items: safe center; padding: 62px 34px 58px; }
+  .canvas-wrap[data-tool="select"] canvas { cursor: crosshair; }
+  .canvas-wrap[data-tool="pen"] canvas { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="white" stroke="black" stroke-width="1.6" stroke-linejoin="round"><path d="M4 20l1.2-4.6L16 4.6a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.6 18.8z"/></svg>') 2 20, crosshair; }
+  .canvas-wrap[data-tool="erase"] canvas { cursor: cell; }
+  .frames { min-height: 0; display: grid; grid-template-rows: auto 1fr; background: rgba(14, 15, 36, 0.45); border-right: 1px solid rgba(255,255,255,0.06); color: #ECEDFB; }
+  .fhead { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 6px 12px; font-size: 11.5px; }
+  .fhead b { font-weight: 800; color: #A6A9CF; }
+  .fplay { width: 28px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: rgba(255,255,255,0.1); color: #ECEDFB; }
+  .fplay:hover { background: rgba(255,255,255,0.18); }
+  .fplay svg { width: 12px; height: 12px; }
+  .flist { overflow-y: auto; padding: 4px 10px 14px; display: grid; align-content: start; gap: 6px; }
+  .fr { display: grid; justify-items: center; gap: 4px; padding: 7px 6px 6px; border-radius: 10px; transition: background 120ms ease; }
+  .fr:hover { background: rgba(255,255,255,0.07); }
+  .fr canvas { max-width: 96px; max-height: 72px; image-rendering: auto; background: repeating-conic-gradient(#3A3E6E 0 25%, #30345F 0 50%) 0 0 / 10px 10px; border-radius: 3px; box-shadow: 0 4px 10px -4px rgba(5,6,20,0.6); }
+  .fr .fn { font-size: 10.5px; font-weight: 800; color: #A6A9CF; font-variant-numeric: tabular-nums; }
+  .fr.on { background: color-mix(in srgb, var(--act) 22%, transparent); box-shadow: inset 0 0 0 2px var(--act); }
+  .fr.on .fn { color: var(--act); }
+  .mtools { position: absolute; top: 12px; left: 50%; translate: -50% 0; z-index: 3; display: flex; gap: 6px; align-items: center; padding: 5px; border-radius: 14px;
+    background: rgba(14, 15, 36, 0.78); backdrop-filter: blur(10px); box-shadow: 0 10px 24px -10px rgba(5,6,20,0.7); color: #ECEDFB; transition: opacity 160ms ease; }
+  .mtools.off { opacity: 0.35; pointer-events: none; }
+  .tgroup { display: flex; gap: 2px; }
+  .tgroup + .tgroup { padding-left: 6px; border-left: 1px solid rgba(255,255,255,0.12); }
+  .mtools button { height: 30px; min-width: 30px; border-radius: 9px; display: grid; place-items: center; color: #C9CBEA; transition: background 120ms ease, color 120ms ease, transform 200ms var(--bouncy); }
+  .mtools button:hover { background: rgba(255,255,255,0.1); color: #fff; }
+  .mtools button:active { transform: scale(0.92); }
+  .mtools button svg { width: 17px; height: 17px; }
+  .mtools [data-tool].on { background: var(--act); color: var(--ink); box-shadow: inset 0 -2px 0 var(--act-lip); }
+  .colors button i { width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.35); }
+  .colors button.on { background: rgba(255,255,255,0.14); }
+  .colors button.on i { box-shadow: 0 0 0 2px var(--act); }
+  .sizes button i { width: var(--d); height: var(--d); border-radius: 50%; background: currentColor; }
+  .sizes button.on { background: rgba(255,255,255,0.14); color: var(--act); }
+  .mtools .tevery { padding: 0 9px; font-size: 11.5px; font-weight: 800; }
+  .mtools .tevery.on { background: rgba(205,235,90,0.2); color: var(--act); }
+  .zoom { position: absolute; right: 14px; bottom: 12px; z-index: 3; display: flex; align-items: center; gap: 2px; padding: 3px; border-radius: 11px; background: rgba(14, 15, 36, 0.78); backdrop-filter: blur(10px); color: #ECEDFB; }
+  .zoom button { height: 26px; min-width: 26px; border-radius: 8px; font-size: 15px; font-weight: 800; color: #C9CBEA; }
+  .zoom button:hover { background: rgba(255,255,255,0.1); color: #fff; }
+  .zoom .zl { min-width: 76px; padding: 0 8px; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  /* The picked box: marching ants, its size, and what you can do with it. */
+  /* The picked box, in Tweak's chartreuse: green-and-ink marching ants over a faint green wash, green handles. */
+  .sel { position: absolute; z-index: 2; cursor: move; touch-action: none; background-color: rgba(205, 235, 90, 0.12);
+    background-image: linear-gradient(90deg, var(--act) 50%, #1B1D3A 50%), linear-gradient(90deg, var(--act) 50%, #1B1D3A 50%), linear-gradient(0deg, var(--act) 50%, #1B1D3A 50%), linear-gradient(0deg, var(--act) 50%, #1B1D3A 50%);
+    background-repeat: repeat-x, repeat-x, repeat-y, repeat-y; background-size: 10px 2px, 10px 2px, 2px 10px, 2px 10px; background-position: 0 0, 0 100%, 0 0, 100% 0; animation: ants 600ms linear infinite; }
+  @keyframes ants { to { background-position: 10px 0, -10px 100%, 0 -10px, 100% 10px; } }
+  .sel .sh { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 4px; background: var(--act); box-shadow: 0 0 0 2px #1B1D3A, 0 2px 0 2px var(--act-lip); z-index: 1; transition: transform 160ms var(--bouncy); }
+  .sel .sh:hover { transform: scale(1.25); }
+  .sel .sh[data-h="nw"] { left: 0; top: 0; cursor: nwse-resize; } .sel .sh[data-h="ne"] { left: 100%; top: 0; cursor: nesw-resize; }
+  .sel .sh[data-h="sw"] { left: 0; top: 100%; cursor: nesw-resize; } .sel .sh[data-h="se"] { left: 100%; top: 100%; cursor: nwse-resize; }
+  .sel .se { position: absolute; }
+  .sel .se[data-h="n"], .sel .se[data-h="s"] { left: 8px; right: 8px; height: 10px; cursor: ns-resize; }
+  .sel .se[data-h="n"] { top: -5px; } .sel .se[data-h="s"] { bottom: -5px; }
+  .sel .se[data-h="w"], .sel .se[data-h="e"] { top: 8px; bottom: 8px; width: 10px; cursor: ew-resize; }
+  .sel .se[data-h="w"] { left: -5px; } .sel .se[data-h="e"] { right: -5px; }
+  .selbar { position: absolute; left: 50%; top: calc(100% + 8px); translate: -50% 0; display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: rgba(14, 15, 36, 0.92); white-space: nowrap; line-height: 1.4; cursor: default; box-shadow: 0 0 0 1.5px rgba(205, 235, 90, 0.35), 0 8px 18px -8px rgba(5,6,20,0.7); }
+  .selbar::before { content: attr(data-dims); align-self: center; padding: 0 8px 0 6px; font-size: 11px; font-weight: 800; color: var(--act); font-variant-numeric: tabular-nums; }
+  .selbar .sb { height: 24px; padding: 0 8px; border-radius: 7px; font-size: 11.5px; font-weight: 800; color: #ECEDFB; }
+  .selbar .sb:hover { background: rgba(205, 235, 90, 0.2); color: var(--act); }
+  .selbar .sb:first-of-type { background: var(--act); color: var(--ink); box-shadow: inset 0 -2px 0 var(--act-lip); }
+  .selbar .sb:first-of-type:hover { filter: brightness(1.06); color: var(--ink); }
+  .sel.dragging .selbar { display: none; }
+  /* Compress: how hard to squeeze, and what it comes to. */
+  .compress .pct { font-size: 11.5px; font-weight: 800; color: var(--act-ink); background: var(--act-soft); border-radius: 6px; padding: 1px 7px; }
+  .compress .pct:empty { display: none; }
+  .compress .pct.worse { color: #8A2343; background: #F7D3DC; }
+  .compress .est { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .compress .est b { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; transition: opacity 160ms ease; }
+  .compress.busy .est b { opacity: 0.45; font-size: 13px; }
+  .compress .est span { font-size: 11.5px; font-weight: 700; color: var(--ink-2); }
+  .compress .meter { height: 8px; border-radius: 4px; background: var(--well); overflow: hidden; }
+  .compress .meter i { display: block; height: 100%; width: 0; border-radius: 4px; background: var(--act); box-shadow: inset 0 -2px 0 var(--act-lip); transition: width 420ms var(--smooth); }
+  .compress .meter.worse i { background: #E4789A; box-shadow: none; }
 
   /* Audio: the waveform on the mat. */
   .wave-wrap { position: relative; width: 100%; height: 100%; display: grid; align-content: center; gap: 18px; padding: 30px 44px; }
@@ -147,6 +225,7 @@
   .group p.note { margin: 0; font-size: 11.5px; color: var(--ink-2); font-weight: 600; }
   .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .row.fill > * { flex: 1; }
+  .row.tight { flex-wrap: nowrap; gap: 4px; } .row.tight > .tbtn { padding: 0 4px; min-width: 0; }
   .tbtn {
     height: 32px; padding: 0 10px; border-radius: 10px; background: var(--well); font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap;
     transition: background 140ms ease, transform 200ms var(--bouncy), box-shadow 160ms ease;
@@ -361,6 +440,7 @@
   <button class="ibtn" id="undo" title="Undo (⌘Z)" aria-label="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
   <button class="ibtn" id="redo" title="Redo (⇧⌘Z)" aria-label="Redo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
   <button class="ibtn" id="reveal" title="Show in Finder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h3.5l2 2.5H18a2.5 2.5 0 0 1 2.5 2.5v7A2.5 2.5 0 0 1 18 19.5H6A2.5 2.5 0 0 1 3.5 17z"/></svg></button>
+  <button class="ibtn del" id="trash" title="Move to the Trash" aria-label="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9.5 7V4.5h5V7"/><path d="M6.5 7l1 12.5a1.5 1.5 0 0 0 1.5 1.5h6a1.5 1.5 0 0 0 1.5-1.5l1-12.5"/><path d="M10 11v6M14 11v6"/></svg></button>
   <button class="ibtn" id="open" title="Open another file">Open…</button>
 </header>
 <main>

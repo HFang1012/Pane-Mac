@@ -113,6 +113,16 @@ function changed() {
   $('dirty').classList.toggle('on', isDirty());
   if (!K?.text) { $('undo').disabled = !hist.past.length; $('redo').disabled = !hist.future.length; }
   describeSave();
+  K?.estimateSoon?.();
+}
+
+// A slider that changes `state` as it moves and lands as one undo step when let go.
+function liveEdit() {
+  let pre = null;
+  return {
+    input(next) { pre ??= JSON.stringify(state); state = next; },
+    done() { if (pre && pre !== JSON.stringify(state)) { hist.past.push(pre); hist.future = []; changed(); } pre = null; },
+  };
 }
 
 // ---------- crop box (pictures and video share it) ----------
@@ -205,16 +215,166 @@ function cropGroup({ size, getCrop, setCrop, onLive, live }) {
   };
 }
 
+// ============ the Compress card (every kind of file) ============
+// A slider for how hard to squeeze, and what that comes to: about how big the file will be, how much of the
+// original that saves, and a bar of the new size against the old. `estimate()` is run a moment after each
+// change (the newest one wins) and answers with a size in bytes, or null when it can't tell.
+function compressCard({ title = 'Compress', estimate, orig = () => F.size }) {
+  const g = group(title, '<span class="pct" id="cpct"></span>');
+  g.classList.add('compress');
+  const host = el('div', 'cslider');
+  const est = el('div', 'est', '<b id="cest">…</b><span id="cwas"></span>');
+  const meter = el('div', 'meter', '<i id="cnew"></i>');
+  const note = el('p', 'note', '');
+  g.append(host, est, meter, note);
+  let gen = 0, timer = 0, s = null;
+  const run = async () => {
+    const my = ++gen;
+    g.classList.add('busy');
+    $('cest').textContent = 'Working it out…';
+    let size = null;
+    try { size = await estimate(); } catch { size = null; }
+    if (my !== gen || !g.isConnected) return;
+    g.classList.remove('busy');
+    show(size);
+  };
+  function show(size) {
+    const was = orig();
+    $('cwas').textContent = was ? `now ${fmtSize(was)}` : '';
+    if (size == null) { $('cest').textContent = 'Can’t tell yet'; $('cpct').textContent = ''; $('cnew').style.width = '0'; return; }
+    $('cest').textContent = `≈ ${fmtSize(Math.max(0, Math.round(size)))}`;
+    const pct = was ? Math.round((1 - size / was) * 100) : 0;
+    const p = $('cpct');
+    p.textContent = !was ? '' : pct > 0 ? `saves ${pct}%` : pct < 0 ? `${-pct}% bigger` : 'same size';
+    p.classList.toggle('worse', pct < 0);
+    $('cnew').style.width = `${was ? clamp((size / was) * 100, 2, 100) : 0}%`;
+    meter.classList.toggle('worse', pct < 0);
+  }
+  return {
+    g,
+    // Swap in the slider for what's being saved (quality, colors, a ZIP's level…).
+    slider(cfg) {
+      const key = JSON.stringify([cfg.label, cfg.min, cfg.max, cfg.step]);
+      if (s?.key !== key) { host.innerHTML = ''; s = { key, ...slider(host, cfg) }; } else s.set(cfg.value);
+      host.hidden = false;
+    },
+    hideSlider() { host.hidden = true; },
+    note(text) { note.textContent = text || ''; note.hidden = !text; },
+    soon(ms = 260) { clearTimeout(timer); gen++; timer = setTimeout(run, ms); },
+    now: run,
+  };
+}
+
 // ============ pictures ============
+const PEN_COLORS = [['#1B1D3A', 'Black'], ['#FFFFFF', 'White'], ['#FF3B30', 'Red'], ['#FFCC00', 'Yellow'], ['#34C759', 'Green'], ['#0A84FF', 'Blue']];
+const PEN_SIZES = [2, 5, 12]; // on screen, in points
+const ERASER_SIZES = [8, 20, 44];
+const LOSSY = ['jpg', 'webp', 'heic', 'avif'];
+// Which types keep every frame: an animation's (gif, png), an icon's sizes (icns, ico), or either as pages.
+const MULTI = { gif: 'anim', png: 'anim', tiff: 'any', icns: 'set', ico: 'set', pdf: 'any' };
+const ZOOMS = [0.1, 0.25, 0.33, 0.5, 0.67, 1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32];
+// The Colors slider: 100 keeps them all; below that, 256 colors down to 2.
+const colorsAt = (v) => (v >= 100 ? 0 : Math.max(2, Math.round(Math.pow(256, v / 99))));
+
+// Fewer colors, for a smaller PNG or GIF: median cut over a sample of the pixels, then every pixel takes the
+// nearest of them (looked up once per 15-bit color, so even a big picture is quick).
+function quantize(src, n) {
+  const w = src.width, h = src.height;
+  const c = new OffscreenCanvas(w, h);
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.drawImage(src, 0, 0);
+  const img = x.getImageData(0, 0, w, h), d = img.data;
+  const total = w * h, step = Math.max(1, Math.floor(total / 50000));
+  const pts = [];
+  for (let p = 0; p < total; p += step) { const o = p * 4; if (d[o + 3] >= 8) pts.push([d[o], d[o + 1], d[o + 2]]); }
+  if (!pts.length) return c;
+  const range = (b) => { let best = -1, ch = 0; for (let k = 0; k < 3; k++) { let lo = 255, hi = 0; for (const p of b) { if (p[k] < lo) lo = p[k]; if (p[k] > hi) hi = p[k]; } if (hi - lo > best) { best = hi - lo; ch = k; } } return { r: best, ch }; };
+  let boxes = [{ pts, ...range(pts) }];
+  while (boxes.length < n) {
+    let bi = -1, score = 0;
+    boxes.forEach((b, i) => { const sc = b.r * Math.sqrt(b.pts.length); if (b.pts.length > 1 && b.r > 0 && sc > score) { score = sc; bi = i; } });
+    if (bi < 0) break;
+    const b = boxes[bi];
+    b.pts.sort((p, q) => p[b.ch] - q[b.ch]);
+    const mid = b.pts.length >> 1, lo = b.pts.slice(0, mid), hi = b.pts.slice(mid);
+    boxes.splice(bi, 1, { pts: lo, ...range(lo) }, { pts: hi, ...range(hi) });
+  }
+  const pal = boxes.map((b) => { let r = 0, g = 0, bl = 0; for (const p of b.pts) { r += p[0]; g += p[1]; bl += p[2]; } const k = b.pts.length; return [Math.round(r / k), Math.round(g / k), Math.round(bl / k)]; });
+  const cache = new Int16Array(32768).fill(-1);
+  for (let o = 0; o < d.length; o += 4) {
+    if (d[o + 3] === 0) continue;
+    const key = ((d[o] >> 3) << 10) | ((d[o + 1] >> 3) << 5) | (d[o + 2] >> 3);
+    let pi = cache[key];
+    if (pi < 0) {
+      const r = ((key >> 10) << 3) + 4, g = (((key >> 5) & 31) << 3) + 4, b = ((key & 31) << 3) + 4;
+      let best = Infinity;
+      for (let i = 0; i < pal.length; i++) { const dr = pal[i][0] - r, dg = pal[i][1] - g, db = pal[i][2] - b, e = dr * dr * 3 + dg * dg * 4 + db * db * 2; if (e < best) { best = e; pi = i; } }
+      cache[key] = pi;
+    }
+    d[o] = pal[pi][0]; d[o + 1] = pal[pi][1]; d[o + 2] = pal[pi][2];
+    if (d[o + 3] < 255) d[o + 3] = d[o + 3] > 240 ? 255 : Math.round(d[o + 3] / 17) * 17;
+  }
+  x.putImageData(img, 0, 0);
+  return c;
+}
+
+// One mark on a frame's layer: pencil, eraser, a cleared box or a moved one. Everything is in the picture's own
+// pixels (the biggest frame's); `s` scales it to a smaller frame (an icon's 16-pixel size, say).
+function drawMark(ctx, m, s) {
+  ctx.save();
+  if (m.t === 'pen' || m.t === 'erase') {
+    ctx.globalCompositeOperation = m.t === 'erase' ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = ctx.fillStyle = m.c || '#000';
+    ctx.lineWidth = Math.max(0.5, m.w * s);
+    ctx.lineCap = ctx.lineJoin = 'round';
+    const p = m.p;
+    if (p.length <= 2) { ctx.beginPath(); ctx.arc(p[0] * s, p[1] * s, ctx.lineWidth / 2, 0, Math.PI * 2); ctx.fill(); }
+    else {
+      ctx.beginPath(); ctx.moveTo(p[0] * s, p[1] * s);
+      for (let i = 2; i < p.length - 2; i += 2) { const mx = (p[i] + p[i + 2]) / 2, my = (p[i + 1] + p[i + 3]) / 2; ctx.quadraticCurveTo(p[i] * s, p[i + 1] * s, mx * s, my * s); }
+      ctx.lineTo(p.at(-2) * s, p.at(-1) * s);
+      ctx.stroke();
+    }
+  } else if (m.t === 'clear') {
+    ctx.clearRect(m.r.x * s, m.r.y * s, m.r.w * s, m.r.h * s);
+  } else if (m.t === 'move') {
+    const { x, y, w, h } = m.r;
+    const tw = Math.max(1, Math.round(w * s)), th = Math.max(1, Math.round(h * s));
+    const tmp = new OffscreenCanvas(tw, th);
+    tmp.getContext('2d').drawImage(ctx.canvas, x * s, y * s, w * s, h * s, 0, 0, tw, th);
+    ctx.clearRect(x * s, y * s, w * s, h * s);
+    ctx.drawImage(tmp, (x + m.dx) * s, (y + m.dy) * s, w * s, h * s);
+  }
+  ctx.restore();
+}
+
 const ImageKind = {
   async init() {
-    const img = new Image();
-    img.src = F.image;
-    await img.decode();
-    this.img = img;
-    this.W0 = img.naturalWidth; this.H0 = img.naturalHeight;
-    state = { rot: 0, fh: false, fv: false, crop: null, out: null, adj: { b: 100, c: 100, s: 100, blur: 0, bw: false }, q: 0.9 };
-    stage.innerHTML = '<div class="canvas-wrap" id="wrap"><div class="frame checker enter" id="frame"><canvas id="view"></canvas></div></div>';
+    if (F.frames?.length > 1) {
+      this.frames = await Promise.all(F.frames.map(async (f) => ({ img: await createImageBitmap(new Blob([f.bytes], { type: 'image/png' })), w: f.w, h: f.h, delay: f.delay || 0, dpi: f.dpi || 72 })));
+    } else {
+      const img = new Image();
+      img.src = F.image;
+      await img.decode();
+      this.frames = [{ img, w: img.naturalWidth, h: img.naturalHeight, delay: 0, dpi: 72 }];
+    }
+    let ref = 0;
+    this.frames.forEach((f, i) => { if (f.w * f.h > this.frames[ref].w * this.frames[ref].h) ref = i; });
+    this.W0 = this.frames[ref].w; this.H0 = this.frames[ref].h;
+    this.multi = this.frames.length > 1;
+    this.sizes = this.multi && this.frames.some((f) => f.w !== this.W0 || f.h !== this.H0); // an icon's sizes, not an animation
+    this.fi = 0;
+    this.layers = this.frames.map(() => null);
+    this.shown = new Map(); this.sig = '';
+    this.tool = 'select'; this.color = PEN_COLORS[2][0]; this.penSize = 1; this.eraseSize = 1; this.every = false;
+    this.zoom = null; // null fits it to the window; otherwise screen points per pixel of what's shown
+    this.sel = null; // a picked box, in the turned picture's pixels
+    this.playing = 0;
+    state = { rot: 0, fh: false, fv: false, crop: null, out: null, adj: { b: 100, c: 100, s: 100, blur: 0, bw: false }, q: 0.9, colors: 100, marks: [] };
+    stage.innerHTML = `<div class="imgstage${this.multi ? ' multi' : ''}">${this.multi ? '<div class="frames" id="frames"></div>' : ''}
+      <div class="viewport" id="viewport"><div class="canvas-wrap" id="wrap"><div class="frame checker enter" id="frame"><canvas id="view"></canvas>
+      <div class="sel" id="sel" hidden>${['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].map((h) => `<i class="${h.length === 2 ? 'sh' : 'se'}" data-h="${h}"></i>`).join('')}<div class="selbar" id="selbar"></div></div></div></div>
+      <div class="mtools" id="mtools"></div><div class="zoom" id="zoom"></div></div></div>`;
     this.view = $('view');
     this.crop = cropBox($('frame'), {
       size: () => this.dims(),
@@ -225,62 +385,421 @@ const ImageKind = {
       ratio: () => this.cropUI.ratio(),
     });
     this.tools();
+    this.toolbar();
+    this.zoomBar();
+    if (this.multi) this.strip();
+    this.pointer();
     new ResizeObserver(() => this.draw()).observe($('wrap'));
     this.apply();
   },
   dims() { return state.rot % 180 ? { w: this.H0, h: this.W0 } : { w: this.W0, h: this.H0 }; },
   cropRect() { const { w, h } = this.dims(); return state.crop || { x: 0, y: 0, w, h }; },
-  outSize() { const r = this.cropRect(); return state.out || { w: r.w, h: r.h }; },
+  outSize() { const r = this.cropRect(); return this.sizes ? { w: r.w, h: r.h } : state.out || { w: r.w, h: r.h }; },
   filter(k = 1) {
     const a = state.adj;
     return `brightness(${a.b}%) contrast(${a.c}%) saturate(${a.s}%)${a.bw ? ' grayscale(1)' : ''}${a.blur ? ` blur(${(a.blur * k).toFixed(2)}px)` : ''}`;
   },
+  // A frame with its marks drawn in. Kept between draws; a new mark is drawn onto it, an undo starts it over.
+  layer(i) {
+    const f = this.frames[i];
+    const marks = state.marks.filter((m) => m.f === -1 || m.f === i);
+    if (!marks.length) { this.layers[i] = null; return f.img; }
+    let L = this.layers[i];
+    if (!L || L.list.length > marks.length || L.list.some((m, j) => m !== marks[j])) {
+      L = { c: new OffscreenCanvas(f.w, f.h), list: [] };
+      L.c.getContext('2d').drawImage(f.img, 0, 0);
+      this.layers[i] = L;
+    }
+    const x = L.c.getContext('2d'), s = f.w / this.W0;
+    for (let j = L.list.length; j < marks.length; j++) drawMark(x, marks[j], s);
+    L.list = marks;
+    return L.c;
+  },
   // The whole (turned, flipped) picture on a canvas, `k` canvas px per picture px.
-  paint(ctx, k) {
+  paint(ctx, k, i = this.fi) {
     const { w, h } = this.dims();
     ctx.save();
     ctx.translate((w * k) / 2, (h * k) / 2);
     ctx.scale(state.fh ? -1 : 1, state.fv ? -1 : 1);
     ctx.rotate((state.rot * Math.PI) / 180);
-    ctx.drawImage(this.img, (-this.W0 * k) / 2, (-this.H0 * k) / 2, this.W0 * k, this.H0 * k);
+    ctx.drawImage(this.layer(i), (-this.W0 * k) / 2, (-this.H0 * k) / 2, this.W0 * k, this.H0 * k);
     ctx.restore();
   },
+  // What saving writes for frame i, at its own size: turned, adjusted, marked, cropped (to `r`) and sized.
+  render(i, part = null) {
+    const r = part || this.cropRect(), o = part ? { w: part.w, h: part.h } : this.outSize();
+    const s = this.frames[i].w / this.W0;
+    const { w, h } = this.dims();
+    const full = new OffscreenCanvas(Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)));
+    const fx = full.getContext('2d');
+    fx.filter = this.filter(s);
+    this.paint(fx, s, i);
+    const ow = Math.max(1, Math.round(o.w * s)), oh = Math.max(1, Math.round(o.h * s));
+    const out = new OffscreenCanvas(ow, oh);
+    const ox = out.getContext('2d');
+    ox.imageSmoothingQuality = 'high';
+    ox.drawImage(full, r.x * s, r.y * s, r.w * s, r.h * s, 0, 0, ow, oh);
+    return out;
+  },
+  colorsFor(ext) { return LOSSY.includes(ext) || ext === 'bmp' ? 0 : colorsAt(state.colors); },
+  keeps(ext) { const m = MULTI[ext]; return this.multi && !!m && (m === 'any' || (m === 'anim' ? !this.sizes : this.sizes)); },
+  // Which frames a save of this type writes: all of them, or the one you're looking at.
+  frameList(ext) {
+    if (!this.keeps(ext)) return [this.fi];
+    let list = this.frames.map((_, i) => i);
+    if (ext === 'ico') { const seen = new Set(); list = list.filter((i) => { const f = this.frames[i]; if (f.w > 256 || seen.has(f.w)) return false; seen.add(f.w); return true; }); }
+    return list.length ? list : [this.fi];
+  },
+
+  // ---------- showing it ----------
+  // The stage shows the result: just the cropped part, at the size it will be saved, fitted to the window (so
+  // a picture scaled up or down fills the space again, and its pixels show at their real sharpness). While
+  // cropping it shows the whole picture instead, with the crop box over it.
+  content() { return this.crop.isLive() ? this.dims() : this.outSize(); },
+  fit() {
+    const wrap = $('wrap'), c = this.content();
+    return Math.max(0.01, Math.min((wrap.clientWidth - 68) / c.w, (wrap.clientHeight - 80) / c.h));
+  },
+  maxZoom() { const c = this.content(); return Math.max(this.fit(), Math.min(48, 12000 / (Math.max(c.w, c.h) * DPR()))); },
   draw() {
     const wrap = $('wrap');
-    if (!wrap) return;
-    const { w, h } = this.dims();
-    const k = Math.min((wrap.clientWidth - 68) / w, (wrap.clientHeight - 80) / h, 4);
-    const cw = Math.max(1, Math.round(w * k)), ch = Math.max(1, Math.round(h * k));
-    const v = this.view, dpr = DPR();
-    v.width = cw * dpr; v.height = ch * dpr;
+    if (!wrap || !state || K !== this) return;
+    const live = this.crop.isLive(), c = this.content(), dpr = DPR();
+    const z = this.zoom == null ? this.fit() : clamp(this.zoom, 0.02, this.maxZoom());
+    this.z = z;
+    const cw = Math.max(1, Math.round(c.w * z)), ch = Math.max(1, Math.round(c.h * z));
+    const v = this.view;
+    if (v.width !== cw * dpr || v.height !== ch * dpr) { v.width = cw * dpr; v.height = ch * dpr; }
     v.style.width = `${cw}px`; v.style.height = `${ch}px`;
     const ctx = v.getContext('2d');
-    ctx.filter = this.filter(k * dpr);
-    this.paint(ctx, k * dpr);
-    this.k = k;
-    this.crop.place(k);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, v.width, v.height);
+    if (live) {
+      ctx.filter = this.filter(z * dpr);
+      this.paint(ctx, z * dpr);
+      ctx.filter = 'none';
+    } else {
+      const res = this.result(this.fi, cw * dpr, ch * dpr);
+      ctx.imageSmoothingEnabled = v.width / res.width < 3.5; // close up, the pixels show as squares, as they are
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(res, 0, 0, v.width, v.height);
+    }
+    this.crop.place(z);
+    if (!live) this.crop.el.hidden = true;
+    this.placeSel();
+    this.zoomUI?.();
   },
-  apply() { this.draw(); this.syncResize(); this.cropUI.sync(); this.adjUI?.(); },
+  // What the stage draws for frame i, kept until something changes. Bigger than the screen: painted straight
+  // at the screen's size (quick, even while a slider moves). Smaller: made at its real size and blown up.
+  result(i, dw, dh) {
+    if (state.marks !== this.lastMarks) { this.lastMarks = state.marks; this.mver = (this.mver || 0) + 1; }
+    const sig = JSON.stringify([state.rot, state.fh, state.fv, state.crop, state.out, state.adj, this.mver, this.colorsFor(fmt())]);
+    if (sig !== this.sig) { this.sig = sig; this.shown.clear(); }
+    const o = this.outSize(), s = this.frames[i].w / this.W0;
+    const small = o.w * s <= dw * 1.02;
+    const key = `${i}|${small ? 'real' : `${dw}x${dh}`}`;
+    let c = this.shown.get(key);
+    if (!c) {
+      if (small) c = this.render(i);
+      else {
+        const r = this.cropRect(), g = dw / r.w;
+        c = new OffscreenCanvas(dw, dh);
+        const x = c.getContext('2d');
+        x.translate(-r.x * g, -r.y * g);
+        x.filter = this.filter(g);
+        this.paint(x, g, i);
+      }
+      const n = this.colorsFor(fmt());
+      if (n) c = quantize(c, n); // the fewer colors show, so you see what the slider does
+      if (this.shown.size > 80) this.shown.clear();
+      this.shown.set(key, c);
+    }
+    return c;
+  },
+  apply() {
+    this.draw(); this.syncResize(); this.cropUI.sync(); this.adjUI?.();
+    this.rs.hidden = this.sizes;
+    this.syncStrip(); this.syncTools();
+    if (this.ccExt !== fmt() + state.q + state.colors) { this.ccExt = fmt() + state.q + state.colors; this.onFormat(fmt()); }
+  },
+
+  // ---------- zoom ----------
+  zoomBar() {
+    const z = $('zoom');
+    z.innerHTML = `<button data-z="out" title="Zoom out (⌘−)">−</button><button data-z="fit" class="zl" id="zlabel" title="Fit to the window, or actual size (⌘9)"></button><button data-z="in" title="Zoom in (⌘+)">+</button>`;
+    z.addEventListener('click', (e) => {
+      const b = e.target.closest('button'); if (!b) return; b.blur();
+      if (b.dataset.z === 'in') this.zoomStep(1);
+      else if (b.dataset.z === 'out') this.zoomStep(-1);
+      else this.setZoom(this.zoom == null ? 1 : null);
+    });
+    this.zoomUI = () => { $('zlabel').textContent = `${this.zoom == null ? 'Fit · ' : ''}${Math.round(((this.z * this.W0) / this.frames[this.fi].w) * 100)}%`; }; // of the frame on show (an icon's 16-pixel size is far bigger)
+    $('wrap').addEventListener('wheel', (e) => {
+      if (!e.ctrlKey && !e.metaKey) return; // a pinch on the trackpad comes as a wheel with ctrl held
+      e.preventDefault();
+      this.setZoom(this.z * Math.exp(-e.deltaY * 0.01), e);
+    }, { passive: false });
+  },
+  zoomStep(dir) {
+    const z = this.z;
+    const next = dir > 0 ? ZOOMS.find((v) => v > z * 1.01) : [...ZOOMS].reverse().find((v) => v < z * 0.99);
+    this.setZoom(next ?? z);
+  },
+  // Zoom, keeping the spot under the pointer (or the middle) where it is.
+  setZoom(z, at = null) {
+    const wrap = $('wrap'), v = this.view;
+    const before = v.getBoundingClientRect(), wr = wrap.getBoundingClientRect();
+    const px = at ? at.clientX : wr.left + wr.width / 2, py = at ? at.clientY : wr.top + wr.height / 2;
+    const fx = (px - before.left) / before.width, fy = (py - before.top) / before.height;
+    this.zoom = z == null ? null : clamp(z, 0.02, this.maxZoom());
+    if (this.zoom != null && Math.abs(this.zoom - this.fit()) < 0.002) this.zoom = null;
+    this.draw();
+    const after = v.getBoundingClientRect();
+    wrap.scrollLeft += after.left + fx * after.width - px;
+    wrap.scrollTop += after.top + fy * after.height - py;
+  },
+
+  // ---------- frames: an animation's, an icon's sizes, a document's pages ----------
+  strip() {
+    const s = $('frames');
+    const what = this.sizes ? 'size' : this.frames.some((f) => f.delay > 0) ? 'frame' : 'page';
+    this.what = what;
+    s.innerHTML = `<div class="fhead"><b>${this.frames.length}${F.partialFrames ? '+' : ''} ${what}s</b>${what === 'frame' ? `<button class="fplay" id="fplay" title="Play">${icon('play')}</button>` : ''}</div><div class="flist" id="flist"></div>`;
+    const list = $('flist');
+    this.frames.forEach((f, i) => {
+      const b = el('button', 'fr');
+      const c = document.createElement('canvas');
+      const k = Math.min(1, 96 / Math.max(f.w, f.h));
+      c.width = Math.max(1, Math.round(f.w * k)); c.height = Math.max(1, Math.round(f.h * k));
+      const cx = c.getContext('2d');
+      cx.imageSmoothingEnabled = k < 1;
+      cx.drawImage(f.img, 0, 0, c.width, c.height);
+      b.append(c, el('span', 'fn', this.sizes ? `${f.w} × ${f.h}${f.dpi > 100 ? ' @2x' : ''}` : `${i + 1}${f.delay ? ` · ${+f.delay.toFixed(2)} s` : ''}`));
+      b.addEventListener('click', () => { this.stop(); this.show(i); });
+      list.append(b);
+    });
+    $('fplay')?.addEventListener('click', (e) => { e.currentTarget.blur(); this.playing ? this.stop() : this.play(); });
+  },
+  show(i) {
+    this.fi = clamp(i, 0, this.frames.length - 1);
+    this.sel = null;
+    this.draw(); this.syncStrip(); changed();
+  },
+  syncStrip() {
+    const list = $('flist');
+    if (!list) return;
+    [...list.children].forEach((b, i) => b.classList.toggle('on', i === this.fi));
+    list.children[this.fi]?.scrollIntoView({ block: 'nearest' });
+  },
+  play() {
+    this.playing = 1;
+    $('fplay').innerHTML = icon('pause');
+    const tick = () => {
+      if (!this.playing || K !== this) return;
+      this.fi = (this.fi + 1) % this.frames.length;
+      this.draw(); this.syncStrip();
+      this.playing = setTimeout(tick, Math.max(20, (this.frames[this.fi].delay || 0.1) * 1000));
+    };
+    this.playing = setTimeout(tick, Math.max(20, (this.frames[this.fi].delay || 0.1) * 1000));
+  },
+  stop() { if (!this.playing) return; clearTimeout(this.playing); this.playing = 0; if ($('fplay')) $('fplay').innerHTML = icon('play'); changed(); },
+
+  // ---------- pencil, eraser, picking a box ----------
+  toolbar() {
+    const t = $('mtools');
+    const tools = [['select', 'Select a part (drag)', '<rect x="4" y="5" width="16" height="14" rx="1.5" stroke-dasharray="3 2.6"/>'],
+      ['pen', 'Pencil', '<path d="M4 20l1.2-4.6L16 4.6a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.6 18.8z"/><path d="M14 6.6l3.4 3.4"/>'],
+      ['erase', 'Eraser', '<path d="M8.5 19.5 3.8 14.8a2 2 0 0 1 0-2.8l8-8a2 2 0 0 1 2.8 0l5.4 5.4a2 2 0 0 1 0 2.8l-7.7 7.3z"/><path d="M8 9.5l6.5 6.5M8.5 19.5H20"/>']];
+    t.innerHTML = `<div class="tgroup">${tools.map(([k, n, p]) => `<button data-tool="${k}" title="${n}" aria-label="${n}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg></button>`).join('')}</div>
+      <div class="tgroup colors" id="tcolors">${PEN_COLORS.map(([c, n]) => `<button data-color="${c}" title="${n}" aria-label="${n}"><i style="background:${c}"></i></button>`).join('')}</div>
+      <div class="tgroup sizes" id="tsizes">${[0, 1, 2].map((i) => `<button data-size="${i}" title="${['Thin', 'Medium', 'Thick'][i]}"><i style="--d:${[4, 8, 13][i]}px"></i></button>`).join('')}</div>
+      ${this.multi ? `<button class="tevery" id="tevery" title="Draw and erase on every ${this.sizes ? 'size' : 'frame'}, not just this one">All ${this.sizes ? 'sizes' : 'frames'}</button>` : ''}`;
+    t.addEventListener('click', (e) => {
+      const b = e.target.closest('button'); if (!b) return; b.blur();
+      if (b.dataset.tool) { this.tool = b.dataset.tool; if (this.tool !== 'select') { this.sel = null; this.placeSel(); } }
+      if (b.dataset.color) { this.color = b.dataset.color; if (this.tool !== 'pen') this.tool = 'pen'; }
+      if (b.dataset.size) this[this.tool === 'erase' ? 'eraseSize' : 'penSize'] = +b.dataset.size;
+      if (b.id === 'tevery') this.every = !this.every;
+      this.syncTools();
+    });
+    this.syncTools();
+  },
+  syncTools() {
+    const t = $('mtools'); if (!t) return;
+    const live = this.crop.isLive();
+    t.classList.toggle('off', live);
+    t.querySelectorAll('[data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === this.tool));
+    t.querySelectorAll('[data-color]').forEach((b) => b.classList.toggle('on', b.dataset.color === this.color));
+    const sz = this.tool === 'erase' ? this.eraseSize : this.penSize;
+    t.querySelectorAll('[data-size]').forEach((b) => b.classList.toggle('on', +b.dataset.size === sz));
+    $('tcolors').hidden = this.tool !== 'pen';
+    $('tsizes').hidden = this.tool === 'select';
+    $('tevery')?.classList.toggle('on', this.every);
+    if ($('tevery')) $('tevery').hidden = this.tool === 'select' && !this.sel;
+    $('wrap').dataset.tool = live ? 'crop' : this.tool;
+  },
+  // Screen points on the stage to the turned picture's pixels, and those to the picture's own pixels.
+  toDims(e) {
+    const b = this.view.getBoundingClientRect(), r = this.cropRect(), o = this.outSize();
+    const k = this.z * (o.w / r.w); // screen points per picture pixel
+    return { x: r.x + (e.clientX - b.left) / k, y: r.y + (e.clientY - b.top) / k, k };
+  },
+  toImage(x, y) {
+    const { w, h } = this.dims();
+    let u = x - w / 2, v = y - h / 2;
+    if (state.fh) u = -u;
+    if (state.fv) v = -v;
+    const a = (-state.rot * Math.PI) / 180, cs = Math.round(Math.cos(a)), sn = Math.round(Math.sin(a));
+    return { x: u * cs - v * sn + this.W0 / 2, y: u * sn + v * cs + this.H0 / 2 };
+  },
+  rectToImage(r) {
+    const a = this.toImage(r.x, r.y), b = this.toImage(r.x + r.w, r.y + r.h);
+    return { x: Math.round(Math.min(a.x, b.x)), y: Math.round(Math.min(a.y, b.y)), w: Math.round(Math.abs(b.x - a.x)), h: Math.round(Math.abs(b.y - a.y)) };
+  },
+  addMark(m) { commit({ ...state, marks: [...state.marks, { ...m, f: this.multi && !this.every ? this.fi : -1 }] }); },
+  pointer() {
+    const v = this.view;
+    v.addEventListener('pointerdown', (e) => {
+      if (this.crop.isLive() || e.button !== 0) return;
+      e.preventDefault();
+      this.stop();
+      v.setPointerCapture(e.pointerId);
+      if (this.tool === 'select') this.selectDrag(e); else this.strokeDrag(e);
+    });
+    $('sel').addEventListener('pointerdown', (e) => {
+      if (e.target.closest('.selbar') || e.button !== 0) return;
+      e.preventDefault(); e.stopPropagation();
+      this.adjustDrag(e);
+    });
+  },
+  strokeDrag(e) {
+    const v = this.view, ctx = v.getContext('2d'), dpr = DPR(), b = v.getBoundingClientRect();
+    const erase = this.tool === 'erase';
+    const pts = (erase ? ERASER_SIZES[this.eraseSize] : PEN_SIZES[this.penSize]);
+    const start = this.toDims(e);
+    const img = [];
+    const push = (ev) => { const d = this.toDims(ev), p = this.toImage(d.x, d.y); img.push(Math.round(p.x * 2) / 2, Math.round(p.y * 2) / 2); };
+    push(e);
+    // While drawing, the line goes straight onto the screen; it joins the picture when you let go.
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = ctx.fillStyle = this.color;
+    ctx.lineWidth = pts; ctx.lineCap = ctx.lineJoin = 'round';
+    let lx = e.clientX - b.left, ly = e.clientY - b.top;
+    ctx.beginPath(); ctx.arc(lx, ly, pts / 2, 0, Math.PI * 2); ctx.fill();
+    const move = (ev) => {
+      const x = ev.clientX - b.left, y = ev.clientY - b.top;
+      if (Math.hypot(x - lx, y - ly) < 1.2) return;
+      ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(x, y); ctx.stroke();
+      lx = x; ly = y;
+      push(ev);
+    };
+    const up = () => {
+      v.removeEventListener('pointermove', move);
+      ctx.restore();
+      this.addMark({ t: erase ? 'erase' : 'pen', c: erase ? undefined : this.color, w: Math.round((pts / start.k) * 100) / 100, p: img });
+    };
+    v.addEventListener('pointermove', move);
+    v.addEventListener('pointerup', up, { once: true });
+    v.addEventListener('pointercancel', up, { once: true });
+  },
+  selectDrag(e) {
+    const v = this.view, a = this.toDims(e), r = this.cropRect();
+    const move = (ev) => {
+      const b = this.toDims(ev);
+      const x0 = clamp(Math.min(a.x, b.x), r.x, r.x + r.w), y0 = clamp(Math.min(a.y, b.y), r.y, r.y + r.h);
+      const x1 = clamp(Math.max(a.x, b.x), r.x, r.x + r.w), y1 = clamp(Math.max(a.y, b.y), r.y, r.y + r.h);
+      this.sel = { x: Math.round(x0), y: Math.round(y0), w: Math.round(x1 - x0), h: Math.round(y1 - y0) };
+      this.placeSel(true);
+    };
+    const up = () => {
+      v.removeEventListener('pointermove', move);
+      if (this.sel && (this.sel.w < 2 || this.sel.h < 2)) this.sel = null;
+      this.placeSel();
+    };
+    this.sel = null; this.placeSel();
+    v.addEventListener('pointermove', move);
+    v.addEventListener('pointerup', up, { once: true });
+  },
+  // The picked box is only a frame, as in Preview: drag inside it to move it, or a corner or side to resize
+  // it. The picture under it stays where it is.
+  adjustDrag(e) {
+    const s = $('sel'), h = e.target.dataset?.h || 'move';
+    const s0 = { ...this.sel }, a = this.toDims(e), r = this.cropRect();
+    s.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      const b = this.toDims(ev), dx = b.x - a.x, dy = b.y - a.y;
+      let x0 = s0.x, y0 = s0.y, x1 = s0.x + s0.w, y1 = s0.y + s0.h;
+      if (h === 'move') {
+        const nx = clamp(s0.x + dx, r.x, r.x + r.w - s0.w), ny = clamp(s0.y + dy, r.y, r.y + r.h - s0.h);
+        x0 = nx; y0 = ny; x1 = nx + s0.w; y1 = ny + s0.h;
+      } else {
+        if (h.includes('w')) x0 = clamp(s0.x + dx, r.x, x1 - 2);
+        if (h.includes('e')) x1 = clamp(x1 + dx, x0 + 2, r.x + r.w);
+        if (h.includes('n')) y0 = clamp(s0.y + dy, r.y, y1 - 2);
+        if (h.includes('s')) y1 = clamp(y1 + dy, y0 + 2, r.y + r.h);
+      }
+      this.sel = { x: Math.round(x0), y: Math.round(y0), w: Math.round(x1 - x0), h: Math.round(y1 - y0) };
+      this.placeSel(true);
+    };
+    const up = () => { s.removeEventListener('pointermove', move); this.placeSel(); };
+    s.addEventListener('pointermove', move);
+    s.addEventListener('pointerup', up, { once: true });
+    s.addEventListener('pointercancel', up, { once: true });
+  },
+  placeSel(dragging = false) {
+    const s = $('sel');
+    if (!s) return;
+    const c = this.sel;
+    s.hidden = !c || this.crop.isLive();
+    if (!c || s.hidden) { this.syncTools(); return; }
+    const r = this.cropRect(), o = this.outSize(), k = this.z * (o.w / r.w);
+    Object.assign(s.style, { left: `${(c.x - r.x) * k}px`, top: `${(c.y - r.y) * k}px`, width: `${c.w * k}px`, height: `${c.h * k}px` });
+    const bar = $('selbar');
+    if (!bar.childElementCount) {
+      bar.append(button('Crop to this', () => this.cropToSel(), 'sb'), button('Copy', () => this.copySel(), 'sb'), button('Cut', () => this.copySel(true), 'sb'), button('Clear', () => this.clearSel(), 'sb'));
+      bar.addEventListener('pointerdown', (e) => e.stopPropagation());
+    }
+    bar.querySelector('.sb').textContent = 'Crop to this';
+    bar.dataset.dims = `${c.w} × ${c.h}`;
+    s.classList.toggle('dragging', dragging);
+    this.syncTools();
+  },
+  cropToSel() { const c = this.sel; if (!c) return; this.sel = null; this.zoom = null; commit({ ...state, crop: c, out: null }); },
+  clearSel() { const c = this.sel; if (!c) return; this.addMark({ t: 'clear', r: this.rectToImage(c) }); },
+  async copySel(cut = false) {
+    const c = this.sel; if (!c) return;
+    const blob = await this.render(this.fi, c).convertToBlob({ type: 'image/png' });
+    const ok = await scrawl.invoke('tweak:copyImage', await blob.arrayBuffer());
+    if (!ok) { toast('Couldn’t copy that part.', null, true); return; }
+    if (cut) this.clearSel();
+    toast(cut ? 'Cut. It’s on the clipboard.' : 'Copied. Paste it anywhere.');
+  },
+
+  // ---------- the inspector ----------
   tools() {
     this.cropUI = cropGroup({
       size: () => this.dims(), live: () => this.crop.isLive(),
-      getCrop: () => state.crop, setCrop: (r) => commit({ ...state, crop: r, out: null }),
-      onLive: (on) => { this.crop.live(on); this.cropUI.sync(); },
+      getCrop: () => state.crop, setCrop: (r) => { this.zoom = null; commit({ ...state, crop: r, out: null }); },
+      onLive: (on) => { this.crop.live(on); this.zoom = null; this.sel = null; this.cropUI.sync(); this.syncTools(); this.draw(); },
     });
     const turn = group('Turn and flip');
     const row = el('div', 'row fill');
+    // Turning carries the crop and the picked box around with the picture. Marks stay put on the picture itself.
     const turnBy = (d) => {
       const { w: RW, h: RH } = this.dims();
       let c = state.crop;
-      // Carry the crop around with the picture.
       if (c) c = d > 0 ? { x: RH - (c.y + c.h), y: c.x, w: c.h, h: c.w } : { x: c.y, y: RW - (c.x + c.w), w: c.h, h: c.w };
       const out = state.out ? { w: state.out.h, h: state.out.w } : null;
+      this.sel = null; this.zoom = null;
       commit({ ...state, rot: (state.rot + d + 360) % 360, crop: c, out });
     };
     const flip = (axis) => {
       const { w: RW, h: RH } = this.dims();
       let c = state.crop;
       if (c) c = axis === 'h' ? { ...c, x: RW - (c.x + c.w) } : { ...c, y: RH - (c.y + c.h) };
+      this.sel = null;
       commit({ ...state, [axis === 'h' ? 'fh' : 'fv']: !state[axis === 'h' ? 'fh' : 'fv'], crop: c });
     };
     row.append(button(icon('left'), () => turnBy(-90), 'tbtn'), button(icon('right'), () => turnBy(90), 'tbtn'),
@@ -289,9 +808,12 @@ const ImageKind = {
     turn.append(row);
 
     const rs = group('Size', '<button class="link" data-reset>Reset</button>');
+    this.rs = rs;
     rs.insertAdjacentHTML('beforeend', `<div class="pair"><div class="field"><label for="rw">Width</label><input class="num" id="rw" type="number" min="1" max="20000"></div><button class="lock on" id="rlock" title="Keep the shape">${icon('lock')}</button><div class="field"><label for="rh">Height</label><input class="num" id="rh" type="number" min="1" max="20000"></div></div>`);
-    const pct = el('div', 'row fill');
-    [25, 50, 75, 100].forEach((p) => pct.append(button(`${p}%`, () => { const r = this.cropRect(); commit({ ...state, out: p === 100 ? null : { w: Math.max(1, Math.round(r.w * p / 100)), h: Math.max(1, Math.round(r.h * p / 100)) } }); }, 'tbtn sm')));
+    const pct = el('div', 'row fill tight');
+    // A new size fits the stage again, so the picture is shown big whatever size it's becoming.
+    const resize = (out) => { this.zoom = null; this.sel = null; commit({ ...state, out }); };
+    [25, 50, 75, 100, 200].forEach((p) => pct.append(button(`${p}%`, () => { const r = this.cropRect(); resize(p === 100 ? null : { w: Math.max(1, Math.round(r.w * p / 100)), h: Math.max(1, Math.round(r.h * p / 100)) }); }, 'tbtn sm')));
     rs.append(pct);
     const lock = $('rlock');
     lock.addEventListener('click', () => { lock.classList.toggle('on'); lock.innerHTML = icon(lock.classList.contains('on') ? 'lock' : 'unlock'); });
@@ -300,11 +822,11 @@ const ImageKind = {
       let w = Math.round(+$('rw').value) || cur.w, h = Math.round(+$('rh').value) || cur.h;
       if (lock.classList.contains('on')) { if (which === 'w') h = Math.max(1, Math.round(w * r.h / r.w)); else w = Math.max(1, Math.round(h * r.w / r.h)); }
       w = clamp(w, 1, 20000); h = clamp(h, 1, 20000);
-      commit({ ...state, out: w === r.w && h === r.h ? null : { w, h } });
+      resize(w === r.w && h === r.h ? null : { w, h });
     };
     $('rw').addEventListener('change', () => sizeFrom('w'));
     $('rh').addEventListener('change', () => sizeFrom('h'));
-    rs.querySelector('[data-reset]').addEventListener('click', () => commit({ ...state, out: null }));
+    rs.querySelector('[data-reset]').addEventListener('click', () => resize(null));
 
     const ad = group('Adjust', '<button class="link" data-reset>Reset</button>');
     const live = (key) => (v) => { state = { ...state, adj: { ...state.adj, [key]: v } }; this.draw(); };
@@ -317,33 +839,105 @@ const ImageKind = {
     ad.querySelector('[data-reset]').addEventListener('click', () => commit({ ...state, adj: { b: 100, c: 100, s: 100, blur: 0, bw: false } }));
     this.adjUI = () => { for (const k of Object.keys(S)) S[k].set(state.adj[k]); bw.set(state.adj.bw); };
 
-    this.qGroup = group('Quality');
-    this.q = slider(this.qGroup, { label: 'Smaller file ↔ sharper', min: 40, max: 100, value: 90, unit: '%', onChange: (v) => { state = { ...state, q: v / 100 }; changed(); } });
+    const mg = group('Draw', '<button class="link" data-reset>Clear all</button>');
+    mg.append(el('p', 'note', 'Pick the pencil or eraser over the picture, or drag out a box: move it or pull its corners to fit, then crop, copy, cut or clear what’s in it. Delete clears it; ⌘C copies it.'));
+    mg.querySelector('[data-reset]').addEventListener('click', () => { if (state.marks.length) commit({ ...state, marks: [] }); });
+
+    this.cc = compressCard({ estimate: () => this.estimate() });
   },
   syncResize() {
     const o = this.outSize();
     if ($('rw')) { $('rw').value = o.w; $('rh').value = o.h; }
   },
-  onFormat(ext) { this.qGroup.hidden = !['jpg', 'webp', 'heic', 'avif'].includes(ext); },
-  async job(ext) {
-    const r = this.cropRect(), o = this.outSize();
-    // Paint the whole picture at full size, then cut and scale the crop out of it.
-    const { w, h } = this.dims();
-    const full = new OffscreenCanvas(w, h);
-    const fctx = full.getContext('2d');
-    fctx.filter = this.filter(1);
-    this.paint(fctx, 1);
-    const out = new OffscreenCanvas(o.w, o.h);
-    const ctx = out.getContext('2d');
-    const encoded = ext === 'jpg' ? 'jpeg' : ext === 'webp' ? 'webp' : 'png';
-    if (encoded === 'jpeg' || ['bmp', 'pdf'].includes(ext)) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, o.w, o.h); } // no see-through in these
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(full, r.x, r.y, r.w, r.h, 0, 0, o.w, o.h);
-    const blob = await out.convertToBlob({ type: `image/${encoded}`, quality: state.q });
-    return { kind: 'image', bytes: await blob.arrayBuffer(), encoded, quality: state.q };
+  // The Compress card's slider is quality for types that lose a little (JPEG, WebP, HEIC, AVIF) and colors for
+  // the ones that keep every pixel (PNG, GIF, TIFF, icons).
+  onFormat(ext) {
+    this.ccExt = ext + state.q + state.colors;
+    const lossy = LOSSY.includes(ext);
+    if (ext === 'bmp') {
+      this.cc.hideSlider();
+      this.cc.note('BMP keeps every pixel as it is, so it can’t be made smaller. PNG keeps them too, in far less space.');
+    } else if (lossy) {
+      const le = liveEdit();
+      this.cc.slider({ label: 'Quality', min: 10, max: 100, value: Math.round(state.q * 100), unit: '%',
+        onInput: (v) => { le.input({ ...state, q: v / 100 }); changed(); }, onChange: () => le.done() });
+      this.cc.note('Lower quality, smaller file. Around 70–85% looks the same on most screens.');
+    } else {
+      const le = liveEdit();
+      this.cc.slider({ label: 'Colors', min: 0, max: 100, value: state.colors, fmt: (v) => (colorsAt(v) ? `${colorsAt(v)} colors` : 'All colors'),
+        onInput: (v) => { le.input({ ...state, colors: v }); this.draw(); changed(); }, onChange: () => le.done() });
+      this.cc.note(`Fewer colors make a smaller ${ext.toUpperCase()}. Flat pictures (icons, screenshots) barely change down to 64 or so.`);
+    }
+    this.draw();
+    this.cc.soon(60);
   },
-  info() { const o = this.outSize(); return `${o.w} × ${o.h}`; },
-  keys(e) { if (e.key === 'Escape' && this.crop.isLive()) { this.crop.live(false); this.cropUI.sync(); return true; } if (e.key === 'Enter' && this.crop.isLive()) { this.crop.live(false); this.cropUI.sync(); return true; } return false; },
+  estimateSoon() { this.cc?.soon(); },
+  // Encoded the way saving does it. The last one is kept, so saving straight after costs nothing more.
+  async encode(ext, list) {
+    const key = JSON.stringify([this.sig, this.mver, state.q, state.colors, ext, list, state.adj, state.out, state.crop, state.rot, state.fh, state.fv]);
+    if (this.enc?.key === key) return this.enc.value;
+    const colors = this.colorsFor(ext);
+    const encoded = ext === 'jpg' ? 'jpeg' : ext === 'webp' ? 'webp' : 'png';
+    const flat = encoded === 'jpeg' || ['bmp', 'pdf'].includes(ext); // no see-through in these
+    const out = [];
+    for (const i of list) {
+      let c = this.render(i);
+      if (colors) c = quantize(c, colors);
+      if (flat) { const f = new OffscreenCanvas(c.width, c.height), x = f.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(c, 0, 0); c = f; }
+      out.push({ blob: await c.convertToBlob({ type: `image/${encoded}`, quality: state.q }), delay: this.frames[i].delay || 0.1, dpi: this.frames[i].dpi });
+    }
+    const value = out.length === 1
+      ? { blob: out[0].blob, job: { bytes: await out[0].blob.arrayBuffer(), encoded } }
+      : { job: { frames: await Promise.all(out.map(async (f) => ({ bytes: await f.blob.arrayBuffer(), delay: f.delay, dpi: f.dpi }))), encoded: 'png', loop: F.loop || 0 } };
+    this.enc = { key, value };
+    return value;
+  },
+  async estimate() {
+    const ext = fmt();
+    if (ext === F.own && JSON.stringify(state) === base) return F.size; // saved untouched, it stays as it is
+    const { blob, job } = await this.encode(ext, this.frameList(ext));
+    if (blob && { png: 'png', jpg: 'jpeg', webp: 'webp' }[ext] === job.encoded) return blob.size;
+    const r = await scrawl.invoke('tweak:estimate', { ...job, ext, quality: state.q });
+    return r?.size ?? null;
+  },
+  async job(ext) {
+    const { job } = await this.encode(ext, this.frameList(ext));
+    return { kind: 'image', ...job, quality: state.q };
+  },
+  info() {
+    const o = this.outSize();
+    let s = `${o.w} × ${o.h}`;
+    if (this.multi) s += this.keeps(fmt()) ? `, all ${this.frameList(fmt()).length} ${this.what}s` : `, ${this.what} ${this.fi + 1} of ${this.frames.length} only`;
+    return s;
+  },
+  keys(e) {
+    if ((e.key === 'Escape' || e.key === 'Enter') && this.crop.isLive()) { this.crop.live(false); this.cropUI.sync(); this.syncTools(); this.draw(); return true; }
+    if (e.key === 'Escape' && this.sel) { this.sel = null; this.placeSel(); return true; }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && this.sel) { this.clearSel(); return true; }
+    if (e.key === 'Enter' && this.sel) { this.cropToSel(); return true; }
+    if (this.sel && e.key.startsWith('Arrow')) { // nudge the box (⇧ for 10)
+      const r = this.cropRect(), n = e.shiftKey ? 10 : 1, c = this.sel;
+      const dx = e.key === 'ArrowLeft' ? -n : e.key === 'ArrowRight' ? n : 0, dy = e.key === 'ArrowUp' ? -n : e.key === 'ArrowDown' ? n : 0;
+      this.sel = { ...c, x: clamp(c.x + dx, r.x, r.x + r.w - c.w), y: clamp(c.y + dy, r.y, r.y + r.h - c.h) };
+      this.placeSel(); return true;
+    }
+    if (this.multi && (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowLeft')) { this.stop(); this.show(this.fi + (e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : -1)); return true; }
+    if (e.key === ' ' && this.multi && $('fplay')) { this.playing ? this.stop() : this.play(); return true; }
+    const k = { s: 'select', p: 'pen', b: 'pen', e: 'erase' }[e.key];
+    if (k && !this.crop.isLive()) { this.tool = k; if (k !== 'select') { this.sel = null; this.placeSel(); } this.syncTools(); return true; }
+    return false;
+  },
+  // ⌘ keys: zoom, select all, copy and cut.
+  cmdKeys(e) {
+    if (e.key === '=' || e.key === '+') { this.zoomStep(1); return true; }
+    if (e.key === '-') { this.zoomStep(-1); return true; }
+    if (e.key === '9') { this.setZoom(null); return true; }
+    if (this.crop.isLive()) return false;
+    if (e.key === 'a') { const r = this.cropRect(); this.tool = 'select'; this.sel = { ...r }; this.placeSel(); return true; }
+    if (e.key === 'c' && this.sel) { this.copySel(); return true; }
+    if (e.key === 'x' && this.sel) { this.copySel(true); return true; }
+    return false;
+  },
 };
 
 // ============ video and sound: the shared timeline ============
@@ -359,13 +953,17 @@ function timeline(host, media, { onSeek, getRange, setRange, begin, end }) {
   // until you stopped. Instead one seek runs at a time, and when it lands the latest spot is next, so the
   // picture keeps up as you drag. The playhead follows the pointer straight away.
   let want = null;
+  // Played to the end: the browser stops a moment before the last redraw, and some files say they're a little
+  // longer than they play. So the head is parked at the end itself until you play or seek again.
+  let parked = null;
   const seekTo = (t) => {
+    parked = null;
     want = t;
     if (!media.seeking) { media.currentTime = t; want = null; }
     place();
   };
   media.addEventListener('seeked', () => { if (want != null) { const t = want; want = null; media.currentTime = t; } });
-  const now = () => want ?? media.currentTime;
+  const now = () => want ?? parked ?? media.currentTime;
   function place() {
     const { start, end } = getRange();
     $('trimL').style.left = pos(start); $('trimR').style.left = pos(end);
@@ -405,8 +1003,9 @@ function timeline(host, media, { onSeek, getRange, setRange, begin, end }) {
     if (media.paused) { if (media.currentTime < start || media.currentTime >= end - 0.05) media.currentTime = start; media.play(); } else media.pause();
   };
   $('play').addEventListener('click', (e) => { e.currentTarget.blur(); play(); });
-  media.addEventListener('play', () => { $('play').innerHTML = icon('pause'); loop(); });
-  media.addEventListener('pause', () => { $('play').innerHTML = icon('play'); });
+  media.addEventListener('play', () => { parked = null; $('play').innerHTML = icon('pause'); loop(); });
+  media.addEventListener('pause', () => { $('play').innerHTML = icon('play'); place(); });
+  media.addEventListener('ended', () => { parked = getRange().end; $('play').innerHTML = icon('play'); place(); media.dispatchEvent(new Event('parked')); });
   // While playing: stay inside the trimmed part, looping back to its start.
   function loop() {
     if (media.paused) return;
@@ -439,39 +1038,54 @@ function waitMeta(media) {
   });
 }
 
-// How hard saving squeezes a video or a song. Full is as it is now; Smaller and Smallest write it again at
-// a lower bit rate (and Smallest at no more than 960×540). Plain-sample sound (WAV, AIFF, CAF) can't shrink.
-const SIZES = [['full', 'Full'], ['smaller', 'Smaller'], ['smallest', 'Smallest']];
-const SIZE_NOTE = {
-  video: { full: 'Keeps the quality it has.', smaller: 'About a third of the size. Looks the same on most screens.', smallest: 'Much smaller, at most 960 × 540. Good for sending.' },
-  audio: { full: 'Keeps the quality it has.', smaller: 'Smaller, at 96 kbps. Sounds the same to most ears.', smallest: 'About half the size, at 64 kbps. Fine for voices.' },
-};
-function sizeCard(kind) {
-  const g = group('File size');
-  const row = el('div', 'row fill');
-  const btns = SIZES.map(([v, label]) => {
-    const b = button(label, () => commit({ ...state, size: v }), 'tbtn sm');
-    b.dataset.size = v;
-    b.setAttribute('aria-pressed', 'false');
-    row.append(b);
-    return b;
-  });
-  g.append(row);
-  const note = el('p', 'note', '');
-  const plain = el('p', 'note', '');
-  const toM4A = button('Save as M4A instead', () => setFormat('m4a'), 'tbtn sm');
-  g.append(note, plain, toM4A);
+// How hard saving squeezes a video or a song: Quality 100 keeps it as it is; lower writes it again at a lower bit
+// rate (and, lower still, smaller on screen). These are the helper's numbers (native/pane-files, squeeze*), so
+// the estimate matches what saving does.
+const sqLong = (q) => (q < 0.2 ? 960 : q < 0.45 ? 1280 : q < 0.7 ? 1920 : null);
+const sqBpp = (q) => 0.025 + 0.2 * q;
+const sqAudio = (q, src) => { let r = q < 0.25 ? 64000 : q < 0.5 ? 96000 : q < 0.75 ? 128000 : 160000; if (src > 64000) r = Math.min(r, Math.max(64000, Math.floor(src / 32000) * 32000)); return r; };
+const M4A_RATE = 256000; // what macOS's own M4A export writes
+function mediaEstimate(P, kind, ext) {
+  if (!P || !state || ext === 'gif') return null;
+  const dur = Math.max(0, state.end - state.start), q = (state.squeeze ?? 100) / 100, aSrc = P.aRate || 0;
+  if (['wav', 'aiff', 'caf'].includes(ext)) return (P.sampleRate || 44100) * Math.max(1, P.channels || 2) * 2 * dur + 4096;
+  if (kind === 'audio' || ext === 'm4a') {
+    const r = q < 0.999 ? sqAudio(q, aSrc) : F.own === 'm4a' && (state.vol ?? 1) >= 0.999 ? aSrc : M4A_RATE;
+    return (r * dur) / 8 + 4096;
+  }
+  let w = P.w || 0, h = P.h || 0;
+  if (state.crop) { w = state.crop.w; h = state.crop.h; }
+  const area = P.w && P.h ? (w * h) / (P.w * P.h) : 1, a = state.mute ? 0 : aSrc;
+  if (q >= 0.999) return (((P.vRate || 0) * area + a) * dur) / 8 + 8192;
+  const cap = sqLong(q);
+  if (cap && w && h) { const k = Math.min(1, cap / Math.max(w, h), (cap * 9) / 16 / Math.min(w, h)); w *= k; h *= k; }
+  let vb = Math.max(300000, w * h * (P.fps || 30) * sqBpp(q));
+  if (P.vRate) vb = Math.min(vb, Math.max(300000, P.vRate * 0.95));
+  const ab = state.mute || !aSrc ? 0 : sqAudio(q, aSrc);
+  return (((vb + ab) * dur) / 8) * 1.12 + 8192; // encoders run a little over their target
+}
+function squeezeCard(kind) {
+  let probe = null;
+  const P = () => (probe ??= scrawl.invoke('tweak:probe'));
   let ext = '';
+  const cc = compressCard({ estimate: async () => mediaEstimate(await P(), kind, ext) });
+  const toM4A = button('Save as M4A instead', () => setFormat('m4a'), 'tbtn sm');
+  cc.g.append(toM4A);
+  const le = liveEdit();
   const sync = () => {
     const lossless = ['wav', 'aiff', 'caf'].includes(ext);
-    for (const b of btns) { const on = b.dataset.size === (state.size || 'full'); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); b.disabled = lossless; }
-    const soundOut = kind === 'audio' || ['m4a', 'wav', 'aiff', 'caf'].includes(ext);
-    note.textContent = SIZE_NOTE[soundOut ? 'audio' : 'video'][state.size || 'full'];
-    note.hidden = lossless;
-    plain.textContent = `${ext.toUpperCase()} keeps every sample, so it can’t be made smaller.`;
-    plain.hidden = toM4A.hidden = !lossless;
+    const soundOut = kind === 'audio' || ext === 'm4a';
+    toM4A.hidden = !lossless;
+    if (lossless) { cc.hideSlider(); cc.note(`${ext.toUpperCase()} keeps every sample, so it can’t be made smaller.`); return; }
+    const v = state.squeeze ?? 100, q = v / 100;
+    cc.slider({ label: 'Quality', min: 0, max: 100, value: v, fmt: (x) => (x >= 100 ? 'As it is' : `${x}%`),
+      onInput: (x) => { le.input({ ...state, squeeze: x }); sync(); changed(); }, onChange: () => le.done() });
+    const cap = sqLong(q);
+    cc.note(q >= 0.999 ? 'Keeps the quality it has. Slide left to make it smaller.'
+      : soundOut ? `Sound at ${sqAudio(q, 0) / 1000} kbps. ${q >= 0.5 ? 'Sounds the same to most ears.' : 'Fine for voices.'}`
+        : `${cap ? `At most ${cap} × ${(cap * 9) / 16}. ` : ''}${q >= 0.6 ? 'Looks the same on most screens.' : q >= 0.3 ? 'Good for sending.' : 'Small, and softer.'}`);
   };
-  return { sync, onFormat: (e) => { ext = e; g.hidden = e === 'gif'; sync(); } };
+  return { sync, soon: () => cc.soon(), onFormat: (e) => { ext = e; cc.g.hidden = e === 'gif'; sync(); cc.soon(60); } };
 }
 
 // ============ video ============
@@ -483,7 +1097,7 @@ const VideoKind = {
     this.v = v;
     await waitMeta(v);
     this.W = v.videoWidth; this.H = v.videoHeight;
-    state = { start: 0, end: v.duration, crop: null, rot: 0, fh: false, fv: false, vol: 1, mute: false, gifFps: 12, gifWidth: 480, size: 'full' };
+    state = { start: 0, end: v.duration, crop: null, rot: 0, fh: false, fv: false, vol: 1, mute: false, gifFps: 12, gifWidth: 480, squeeze: 100 };
     this.crop = cropBox($('frame'), {
       size: () => ({ w: this.W, h: this.H }), get: () => state.crop,
       set: (r) => { state.crop = r; },
@@ -537,7 +1151,7 @@ const VideoKind = {
   },
   tools(range) {
     this.trim = trimGroup(this.v, { getRange: range, commitRange: (r) => commit({ ...state, ...r }), tl: this.tl });
-    this.sizeUI = sizeCard('video'); // high up: making a clip small enough to send is a common reason to be here
+    this.sizeUI = squeezeCard('video'); // high up: making a clip small enough to send is a common reason to be here
     this.cropUI = cropGroup({
       size: () => ({ w: this.W, h: this.H }), live: () => this.crop.isLive(),
       getCrop: () => state.crop, setCrop: (r) => commit({ ...state, crop: r }),
@@ -569,8 +1183,9 @@ const VideoKind = {
     slider(this.gif, { label: 'Width', min: 160, max: 960, step: 40, value: 480, unit: ' px', onChange: (x) => { state = { ...state, gifWidth: x }; } });
   },
   onFormat(ext) { this.gif.hidden = ext !== 'gif'; this.sizeUI.onFormat(ext); },
+  estimateSoon() { this.sizeUI?.soon(); },
   async job() {
-    return { kind: 'media', ops: { start: state.start, end: state.end, crop: state.crop ? [state.crop.x, state.crop.y, state.crop.w, state.crop.h] : null, rotate: state.rot, flipH: state.fh, flipV: state.fv, volume: state.vol, mute: state.mute, gifFps: state.gifFps, gifWidth: state.gifWidth, size: state.size } };
+    return { kind: 'media', ops: { start: state.start, end: state.end, crop: state.crop ? [state.crop.x, state.crop.y, state.crop.w, state.crop.h] : null, rotate: state.rot, flipH: state.fh, flipV: state.fv, volume: state.vol, mute: state.mute, gifFps: state.gifFps, gifWidth: state.gifWidth, quality: (state.squeeze ?? 100) / 100 } };
   },
   info() { const c = state.crop; return `${fmtTime(state.end - state.start)}${c ? `, ${c.w} × ${c.h}` : ''}`; },
   keys(e) {
@@ -591,7 +1206,7 @@ const AudioKind = {
     a.src = F.url; a.preload = 'auto';
     this.a = a;
     await waitMeta(a);
-    state = { start: 0, end: a.duration, vol: 1, size: 'full' };
+    state = { start: 0, end: a.duration, vol: 1, squeeze: 100 };
     let pre = null;
     const range = () => ({ start: state.start, end: state.end });
     // Dragging along the timeline: the wave follows, and a moment of sound plays where you are.
@@ -615,8 +1230,9 @@ const AudioKind = {
     let p2 = null;
     this.vol = slider(snd, { label: 'Quieter', min: 0, max: 100, value: 100, unit: '%', onInput: (x) => { p2 ??= JSON.stringify(state); state = { ...state, vol: x / 100 }; a.volume = state.vol; this.drawWave(); }, onChange: () => { if (p2 !== JSON.stringify(state)) { hist.past.push(p2); hist.future = []; changed(); } p2 = null; } });
     snd.append(el('p', 'note', 'Turns the whole file down. 100% leaves it as it is.'));
-    this.sizeUI = sizeCard('audio');
+    this.sizeUI = squeezeCard('audio');
     a.addEventListener('timeupdate', () => this.drawWave());
+    a.addEventListener('parked', () => this.drawWave()); // played to the end: the wave fills to the end too
     new ResizeObserver(() => this.drawWave()).observe($('wrap'));
     this.peaks = await this.loadPeaks();
     this.apply();
@@ -664,7 +1280,8 @@ const AudioKind = {
   },
   apply() { this.a.volume = state.vol; this.vol.set(Math.round(state.vol * 100)); this.trim.sync(); this.sizeUI.sync(); this.drawWave(); },
   onFormat(ext) { this.sizeUI.onFormat(ext); },
-  async job() { return { kind: 'media', ops: { start: state.start, end: state.end, volume: state.vol, size: state.size } }; },
+  estimateSoon() { this.sizeUI?.soon(); },
+  async job() { return { kind: 'media', ops: { start: state.start, end: state.end, volume: state.vol, quality: (state.squeeze ?? 100) / 100 } }; },
   info() { return fmtTime(state.end - state.start); },
   keys(e) {
     if (e.key === ' ') { this.tl.play(); return true; }
@@ -832,6 +1449,16 @@ const TextKind = {
       jg.append(jrow);
     }
 
+    this.zipLevel = 6;
+    const cc = compressCard({ estimate: async () => {
+      const r = await scrawl.invoke('tweak:zipEstimate', { text: F.kind === 'rich' && !this.dirty() ? undefined : this.t.value, level: this.zipLevel, name: `${F.stem}.${F.own}` });
+      return r?.size ?? null;
+    } });
+    cc.slider({ label: 'Packing', min: 1, max: 9, value: 6, fmt: (v) => (v <= 2 ? 'Quick' : v >= 8 ? 'Smallest' : `Level ${v}`), onInput: (v) => { this.zipLevel = v; cc.soon(); } });
+    const zb = button('Save as ZIP', () => setFormat('zip'), 'tbtn sm go');
+    cc.g.append(zb);
+    this.cc = cc; this.zb = zb;
+
     const vg = group('View');
     switchLine(vg, 'Wrap long lines', prose, (v) => { this.wrapOn = v; this.t.classList.toggle('wrap', v || this.proseOn); });
     this.wrapOn = prose;
@@ -848,6 +1475,7 @@ const TextKind = {
   // Saving to another type can change what's inside, not just the name.
   convert(ext) {
     const v = this.t.value, from = F.ext;
+    if (ext === 'zip') return { text: v, note: 'Packed into a ZIP.' };
     if (['md', 'markdown'].includes(from) && ext === 'html') return { text: pageFor(markdown(v), F.stem), note: 'The Markdown becomes a web page.' };
     if (['csv', 'tsv'].includes(from) && ext === 'json') { const rows = parseCSV(v, from === 'tsv' ? '\t' : ','); return { text: `${JSON.stringify(rows, null, 2)}\n`, note: `Each row becomes a JSON object (${rows.length} rows).` }; }
     if (from === 'json' && ext === 'csv') {
@@ -855,7 +1483,16 @@ const TextKind = {
     }
     return { text: v, note: null };
   },
-  async job(ext) { return { kind: 'text', text: this.convert(ext).text }; },
+  async job(ext) {
+    if (ext === 'zip') return { kind: 'zip', text: this.t.value, inner: F.own, level: this.zipLevel, original: !this.dirty() };
+    return { kind: 'text', text: this.convert(ext).text };
+  },
+  onFormat(ext) {
+    this.zb.hidden = ext === 'zip';
+    this.cc.note(ext === 'zip' ? `Saving packs ${F.stem}.${F.own} into a ZIP.` : 'Packs it into a ZIP. Text often shrinks to a fraction of its size.');
+    this.cc.soon(60);
+  },
+  estimateSoon() { this.cc?.soon(700); },
   info() { return null; },
   keys() { return false; },
 };
@@ -1285,7 +1922,7 @@ $('stem').addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { e.preventDefault(); $('stem').value = F?.stem ?? ''; changed(); $('stem').blur(); }
 });
 $('stem').addEventListener('blur', () => commitName());
-const LABELS = { png: 'PNG', jpg: 'JPEG', webp: 'WebP', heic: 'HEIC', avif: 'AVIF', tiff: 'TIFF', gif: 'GIF', bmp: 'BMP', ico: 'Icon (ICO)', pdf: 'PDF', mp4: 'MP4 video', mov: 'QuickTime movie', m4v: 'M4V video', m4a: 'M4A sound', wav: 'WAV sound', aiff: 'AIFF sound', caf: 'CAF sound', txt: 'Plain text', md: 'Markdown', json: 'JSON', csv: 'CSV', html: 'Web page (HTML)', xml: 'XML', yaml: 'YAML', js: 'JavaScript', css: 'CSS', py: 'Python', rtf: 'Rich text (RTF)', docx: 'Word (DOCX)', odt: 'OpenDocument', doc: 'Word 97 (DOC)' };
+const LABELS = { png: 'PNG', jpg: 'JPEG', webp: 'WebP', heic: 'HEIC', avif: 'AVIF', tiff: 'TIFF', gif: 'GIF', bmp: 'BMP', ico: 'Icon (ICO)', pdf: 'PDF', icns: 'Mac icon (ICNS)', zip: 'ZIP archive', mp4: 'MP4 video', mov: 'QuickTime movie', m4v: 'M4V video', m4a: 'M4A sound', wav: 'WAV sound', aiff: 'AIFF sound', caf: 'CAF sound', txt: 'Plain text', md: 'Markdown', json: 'JSON', csv: 'CSV', html: 'Web page (HTML)', xml: 'XML', yaml: 'YAML', js: 'JavaScript', css: 'CSS', py: 'Python', rtf: 'Rich text (RTF)', docx: 'Word (DOCX)', odt: 'OpenDocument', doc: 'Word 97 (DOC)' };
 function describeSave() {
   if (!F || !K || K.noSave) return;
   const name = `${$('stem').value.trim() || F.stem}.${ending()}`;
@@ -1366,12 +2003,27 @@ addEventListener('keydown', (e) => {
   if (e.metaKey && e.key === 'ArrowUp' && F?.dir && F.dir !== F.path && !e.target.matches('input, textarea')) { e.preventDefault(); go(F.dir); return; }
   const typing = e.target.matches('input, textarea, select');
   if (e.metaKey && e.key.toLowerCase() === 'z' && !typing && !K?.text) { e.preventDefault(); undo(e.shiftKey ? 'redo' : 'undo'); return; }
+  if (e.metaKey && !typing && K?.cmdKeys?.(e)) { e.preventDefault(); return; }
   if (typing || e.metaKey || e.ctrlKey) return;
   if (K?.keys?.(e)) e.preventDefault();
 });
 
 // ---------- open, drop ----------
 $('open').addEventListener('click', async (e) => { e.currentTarget.blur(); if (!(await commitName())) return; if (await scrawl.invoke('tweak:swap')) start(); });
+$('trash').addEventListener('click', async (e) => {
+  e.currentTarget.blur();
+  if (!F?.path) return;
+  const r = await scrawl.invoke('tweak:trash');
+  if (r?.canceled) return;
+  if (!r?.ok) { toast(r?.error || 'Couldn’t move it to the Trash.', null, true); return; }
+  K?.a?.pause?.(); K?.v?.pause?.();
+  K = null; state = null; hist.past = []; hist.future = [];
+  const name = F.name;
+  F = { name, error: true };
+  $('chip').textContent = ''; $('dirty').classList.remove('on');
+  showProblem('In the Trash', `${name} was moved to the Trash. You can put it back from there.`);
+  toast(`Moved ${name} to the Trash`);
+});
 $('reveal').addEventListener('click', (e) => { e.currentTarget.blur(); if (F) scrawl.send('tweak:reveal', F.path); });
 let drag = 0;
 addEventListener('dragenter', (e) => { if (e.dataTransfer?.types.includes('Files')) { drag++; $('drop').classList.add('on'); } });
@@ -1411,6 +2063,16 @@ function aboutFile() {
   inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') go2.click(); });
   row.append(inp, go2);
   eg.append(row);
+  if (F.kind === 'dir') return;
+  let level = 6;
+  const cc = compressCard({ estimate: async () => (await scrawl.invoke('tweak:zipEstimate', { level }))?.size ?? null });
+  cc.slider({ label: 'Packing', min: 1, max: 9, value: 6, fmt: (v) => (v <= 2 ? 'Quick' : v >= 8 ? 'Smallest' : `Level ${v}`), onInput: (v) => { level = v; cc.soon(); } });
+  cc.note('Makes a ZIP of it beside it. The file itself stays as it is.');
+  cc.g.append(button('Save ZIP beside it', async () => {
+    const r = await scrawl.invoke('tweak:zip', { level });
+    if (r?.ok) toast(`Saved ${r.name} · ${fmtSize(r.size)}`, r.path); else toast(r?.error || 'Couldn’t zip it.', null, true);
+  }, 'tbtn go'));
+  cc.now();
 }
 function showProblem(title, text) {
   stage.classList.remove('texty');
@@ -1424,7 +2086,7 @@ function showProblem(title, text) {
 }
 async function start(keepToast = false) {
   if (!keepToast) $('toast').classList.remove('on');
-  K?.a?.pause?.(); K?.v?.pause?.();
+  K?.a?.pause?.(); K?.v?.pause?.(); K?.stop?.();
   stage.classList.remove('foldery');
   K = null; state = null; hist.past = []; hist.future = [];
   panel.innerHTML = ''; stage.className = 'stage'; stage.innerHTML = '';

@@ -26,10 +26,10 @@ const FORMATS = {
   image: ['png', 'jpg', 'webp', 'heic', 'avif', 'tiff', 'gif', 'bmp', 'ico', 'pdf'],
   video: ['mp4', 'mov', 'm4v', 'gif', 'm4a', 'wav', 'aiff', 'caf'],
   audio: ['m4a', 'wav', 'aiff', 'caf'],
-  text: ['txt', 'md', 'json', 'csv', 'html', 'xml', 'yaml', 'js', 'css', 'py', 'rtf', 'docx', 'odt', 'pdf'],
+  text: ['txt', 'md', 'json', 'csv', 'html', 'xml', 'yaml', 'js', 'css', 'py', 'rtf', 'docx', 'odt', 'pdf', 'zip'],
 };
 const TEXTUTIL_OUT = { rtf: 'rtf', docx: 'docx', doc: 'doc', odt: 'odt', webarchive: 'webarchive', wordml: 'wordml' };
-const SIPS_OUT = { heic: 'heic', avif: 'avif', tiff: 'tiff', tif: 'tiff', gif: 'gif', bmp: 'bmp', ico: 'ico', pdf: 'pdf', jp2: 'jp2', psd: 'psd', tga: 'tga' };
+const SIPS_OUT = { icns: 'icns', heic: 'heic', avif: 'avif', tiff: 'tiff', tif: 'tiff', gif: 'gif', bmp: 'bmp', ico: 'ico', pdf: 'pdf', jp2: 'jp2', psd: 'psd', tga: 'tga' };
 const LABEL = {
   png: 'PNG image', jpg: 'JPEG image', jpeg: 'JPEG image', webp: 'WebP image', heic: 'HEIC photo', heif: 'HEIF photo', avif: 'AVIF image',
   tiff: 'TIFF image', tif: 'TIFF image', gif: 'GIF', bmp: 'Bitmap', ico: 'Icon', icns: 'Mac icon', psd: 'Photoshop file', pdf: 'PDF',
@@ -91,8 +91,23 @@ const tmpFile = (ext) => path.join(os.tmpdir(), `pane-tweak-${Date.now().toStrin
 
 const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', avif: 'image/avif', ico: 'image/x-icon' };
 
+// Pictures that can hold more than one frame: an animation's frames, an icon's sizes, a TIFF's pages.
+const MULTI_READ = ['gif', 'png', 'webp', 'tif', 'tiff', 'icns', 'ico', 'heic', 'heif', 'avif'];
+async function readFrames(file, helper) {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'pane-tweak-frames-'));
+  try {
+    const r = JSON.parse(String(await run(helper, ['frames', file, dir])).trim().split('\n').pop());
+    if (!(r.count > 1) || !r.frames?.length) return null;
+    const frames = await Promise.all(r.frames.map(async (f) => {
+      const b = await fsp.readFile(f.path);
+      return { bytes: b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength), w: f.w, h: f.h, delay: f.delay || 0, dpi: f.dpi || 72 };
+    }));
+    return { frames, loop: r.loop || 0, partial: !!r.partial, count: r.count };
+  } catch { return null; } finally { fsp.rm(dir, { recursive: true, force: true }).catch(() => {}); }
+}
+
 // Everything the editor needs to show a file.
-async function load(file) {
+async function load(file, { helper } = {}) {
   const st = await fsp.stat(file);
   const k = kindOf(file, { dir: st.isDirectory() });
   const info = {
@@ -109,6 +124,10 @@ async function load(file) {
     }
     info.image = `data:${mime};base64,${(await fsp.readFile(src)).toString('base64')}`;
     if (src !== file) fsp.rm(src, { force: true }).catch(() => {});
+    if (helper && MULTI_READ.includes(k.ext)) {
+      const m = await readFrames(file, helper);
+      if (m) Object.assign(info, { frames: m.frames, loop: m.loop, partialFrames: m.partial, frameCount: m.count });
+    }
   } else if (k.kind === 'text') {
     info.text = await fsp.readFile(file, 'utf8');
   } else if (k.kind === 'rich') {
@@ -240,35 +259,72 @@ async function settle(src, tmp, p, { trash, trashItem }) {
 const sideTmp = (dest, ext) => path.join(path.dirname(dest), `.pane-tweak-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.${ext || 'tmp'}`);
 
 // ---------- pictures ----------
-// `bytes` come from the editor's canvas, already encoded as `encoded` (png, jpeg or webp).
-async function saveImage(src, { bytes, encoded, ext, quality }, p, opts) {
-  const tmp = sideTmp(p.dest, ext);
+// `bytes` come from the editor's canvas, already encoded as `encoded` (png, jpeg or webp). A picture with
+// frames sends `frames` instead (PNGs, each with its delay or its @2x-ness), and the helper puts them together.
+const MULTI_OUT = { gif: 'gif', png: 'png', tiff: 'tiff', tif: 'tiff', icns: 'icns', ico: 'ico', pdf: 'pdf' };
+async function encodeImage(out, { bytes, frames, loop, encoded, ext, quality }, opts) {
+  if (frames?.length > 1) {
+    const type = MULTI_OUT[ext];
+    if (!type) throw new Error(`Pane can’t write frames into a .${ext} picture.`);
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'pane-tweak-asm-'));
+    try {
+      const list = await Promise.all(frames.map(async (f, i) => {
+        const fp = path.join(dir, `${i}.png`);
+        await fsp.writeFile(fp, Buffer.from(f.bytes));
+        return { path: fp, delay: f.delay || 0.1, dpi: f.dpi || 72 };
+      }));
+      const r = String(await run(opts.helper, ['assemble', JSON.stringify({ output: out, type, frames: list, loop: loop || 0 })]));
+      if (!r.includes('"ok"')) throw new Error(JSON.parse(r.trim().split('\n').pop()).error || 'Couldn’t write the frames.');
+    } finally { fsp.rm(dir, { recursive: true, force: true }).catch(() => {}); }
+    return;
+  }
   const buf = Buffer.from(bytes);
+  const native = { png: 'png', jpg: 'jpeg', jpeg: 'jpeg', webp: 'webp' }[ext];
+  if (native === encoded) { await fsp.writeFile(out, buf); return; }
+  const fmt = SIPS_OUT[ext];
+  if (!fmt) throw new Error(`Pane can’t write .${ext} pictures.`);
+  const png = tmpFile('png');
+  await fsp.writeFile(png, buf);
   try {
-    const native = { png: 'png', jpg: 'jpeg', jpeg: 'jpeg', webp: 'webp' }[ext];
-    if (native === encoded) {
-      await fsp.writeFile(tmp, buf);
-    } else {
-      const fmt = SIPS_OUT[ext];
-      if (!fmt) throw new Error(`Pane can’t write .${ext} pictures.`);
-      const png = tmpFile('png');
-      await fsp.writeFile(png, buf);
-      try {
-        if (fmt === 'ico') await run('/usr/bin/sips', ['-Z', '256', png]); // icons top out at 256 px
-        const args = ['-s', 'format', fmt];
-        if (['heic', 'avif', 'jp2'].includes(fmt) && quality) args.push('-s', 'formatOptions', String(Math.round(quality * 100)));
-        await run('/usr/bin/sips', [...args, png, '--out', tmp]);
-      } finally { fsp.rm(png, { force: true }).catch(() => {}); }
-    }
+    if (fmt === 'ico') await run('/usr/bin/sips', ['-Z', '256', png]); // icons top out at 256 px
+    const args = ['-s', 'format', fmt];
+    if (['heic', 'avif', 'jp2'].includes(fmt) && quality) args.push('-s', 'formatOptions', String(Math.round(quality * 100)));
+    if (fmt === 'tiff') args.push('-s', 'formatOptions', 'lzw'); // squeezed, losing nothing
+    await run('/usr/bin/sips', [...args, png, '--out', out]);
+  } finally { fsp.rm(png, { force: true }).catch(() => {}); }
+}
+async function saveImage(src, job, p, opts) {
+  const tmp = sideTmp(p.dest, job.ext);
+  try {
+    await encodeImage(tmp, job, opts);
     return await settle(src, tmp, p, opts);
   } catch (err) { fsp.rm(tmp, { force: true }).catch(() => {}); throw err; }
+}
+// How big a picture job would come out, without saving it: encoded in a temp file, measured, thrown away.
+async function estimateImage(job, opts) {
+  const tmp = tmpFile(job.ext);
+  try { await encodeImage(tmp, job, opts); return (await fsp.stat(tmp)).size; } finally { fsp.rm(tmp, { force: true }).catch(() => {}); }
+}
+
+// ---------- ZIP ----------
+// A file packed into a ZIP. `level` is 1 (quick) to 9 (smallest). The inside keeps the file's own name.
+async function zipInto(out, inner, level) {
+  await fsp.rm(out, { force: true });
+  await run('/usr/bin/zip', ['-q', '-j', '-X', `-${clampLevel(level)}`, out, inner]);
+}
+const clampLevel = (l) => Math.max(1, Math.min(9, Math.round(+l || 6)));
+// About how big the ZIP will be: the bytes squeezed with the same deflate, plus the ZIP's own bookkeeping.
+// A big file is judged from its first 16 MB.
+function zipEstimate(buf, name, level, total = buf.length) {
+  const zlib = require('zlib');
+  const sample = buf.length > 16 * 1024 * 1024 ? buf.subarray(0, 16 * 1024 * 1024) : buf;
+  const packed = Math.min(sample.length, zlib.deflateRawSync(sample, { level: clampLevel(level) }).length);
+  return Math.round((packed * total) / Math.max(1, sample.length)) + 98 + 2 * Buffer.byteLength(name);
 }
 
 // ---------- words ----------
 function escapeHtml(s) { return s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]); }
-async function saveText(src, { text, ext }, p, opts) {
-  const tmp = sideTmp(p.dest, ext);
-  try {
+async function writeText(tmp, text, ext, opts) {
     if (TEXTUTIL_OUT[ext]) {
       const txt = tmpFile('txt');
       await fsp.writeFile(txt, text, 'utf8');
@@ -278,8 +334,25 @@ async function saveText(src, { text, ext }, p, opts) {
     } else {
       await fsp.writeFile(tmp, text, 'utf8');
     }
+}
+async function saveText(src, { text, ext }, p, opts) {
+  const tmp = sideTmp(p.dest, ext);
+  try {
+    await writeText(tmp, text, ext, opts);
     return await settle(src, tmp, p, opts);
   } catch (err) { fsp.rm(tmp, { force: true }).catch(() => {}); throw err; }
+}
+// The (edited) text in its own type, packed into a ZIP. `original` zips the file as it is on disk.
+async function saveZip(src, { text, inner, level, original, stem: newStem }, p, opts) {
+  const tmp = sideTmp(p.dest, 'zip');
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'pane-tweak-zip-'));
+  try {
+    const innerExt = String(inner || extOf(src));
+    const innerPath = path.join(dir, `${cleanStem(newStem, stem(src))}${innerExt ? `.${innerExt}` : ''}`);
+    if (original || text == null) await fsp.copyFile(src, innerPath); else await writeText(innerPath, text, innerExt, opts);
+    await zipInto(tmp, innerPath, level);
+    return await settle(src, tmp, p, opts);
+  } catch (err) { fsp.rm(tmp, { force: true }).catch(() => {}); throw err; } finally { fsp.rm(dir, { recursive: true, force: true }).catch(() => {}); }
 }
 
 // ---------- video and sound ----------
@@ -309,4 +382,4 @@ function saveMedia(src, { ops, ext }, p, opts) {
   });
 }
 
-module.exports = { kindOf, load, plan, rename, list, dirStats, ENDING, saveImage, saveText, saveMedia, freeName, extOf, stem, FORMATS, LABEL, run };
+module.exports = { kindOf, load, plan, rename, list, dirStats, ENDING, saveImage, estimateImage, saveText, saveZip, zipInto, zipEstimate, saveMedia, freeName, extOf, stem, FORMATS, LABEL, run };

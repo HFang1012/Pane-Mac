@@ -422,15 +422,22 @@ function rate(n) {
 }
 function renderLive() {
   if (!snap) return;
-  const L = snap.live || {}, hz = snap.display?.hz;
+  // In an app's view, Graphics, Network and Disk are that app's own (all its parts added up), not the
+  // whole Mac's. FPS stays the screen's: it's measured by this panel, so it can't be any one app's.
+  const a = view === 'app' && !picking ? appByKey(appKey) : null;
+  const L = (a ? a.live : snap.live) || {}, hz = snap.display?.hz;
+  const who = a ? (a.system ? 'the background' : short(a.name)) : null;
   const fl = fpsLevel();
+  const gpuSub = a ? (a.gpu ? `${bytes(a.gpu)} held` : 'of the GPU') : L.gpuMem ? `${bytes(L.gpuMem)} used` : 'GPU';
   const cells = [
     { k: 'FPS', v: fps.value == null ? '–' : `${fps.value}`, sub: fps.value == null ? 'measuring' : fl === 'good' ? `smooth${hz ? ` · ${hz} Hz` : ''}` : `${fps.dropped} dropped`, lv: fl,
-      tip: `Frames this panel got in the last second${hz ? `, on a ${hz} Hz screen` : ''}. ${fps.dropped} dropped. About ${fps.frameMs ? fps.frameMs.toFixed(1) : '–'} ms a frame.` },
-    { k: 'Graphics', v: L.gpu == null ? '–' : `${L.gpu}%`, sub: L.gpuMem ? `${bytes(L.gpuMem)} used` : 'GPU', lv: L.gpu == null ? 'good' : lvl(L.gpu, 70, 92),
-      tip: 'How busy the graphics chip (GPU) is, and the memory its work is holding.' },
-    { k: 'Network', v: `↓ ${rate(L.down)}`, sub: `↑ ${rate(L.up)}`, lv: 'good', tip: 'Coming in (↓) and going out (↑), across Wi-Fi, Ethernet and everything else.' },
-    { k: 'Disk', v: `R ${rate(L.read)}`, sub: `W ${rate(L.write)}`, lv: 'good', tip: 'Read from (R) and written to (W) your storage.' },
+      tip: `Your screen, not one app: frames this panel got in the last second${hz ? `, on a ${hz} Hz screen` : ''}. ${fps.dropped} dropped. About ${fps.frameMs ? fps.frameMs.toFixed(1) : '–'} ms a frame.` },
+    { k: 'Graphics', v: L.gpu == null ? '–' : `${L.gpu}%`, sub: gpuSub, lv: L.gpu == null ? 'good' : lvl(L.gpu, 70, 92),
+      tip: a ? `How much of the graphics chip’s (GPU’s) time ${who} is using.` : 'How busy the graphics chip (GPU) is, and the memory its work is holding.' },
+    { k: 'Network', v: `↓ ${rate(L.down)}`, sub: `↑ ${rate(L.up)}`, lv: 'good',
+      tip: a ? `What ${who} is downloading (↓) and uploading (↑), across all its parts.` : 'Coming in (↓) and going out (↑), across Wi-Fi, Ethernet and everything else.' },
+    { k: 'Disk', v: `R ${rate(L.read)}`, sub: `W ${rate(L.write)}`, lv: 'good',
+      tip: a ? `What ${who} is reading from (R) and writing to (W) your storage.${L.diskPartial ? ' macOS’s protected tasks can’t be seen, so they aren’t counted.' : ''}` : 'Read from (R) and written to (W) your storage.' },
   ];
   const box = $('live');
   if (box.children.length !== cells.length) box.innerHTML = cells.map(() => '<div class="cell"><small></small><b></b><span></span></div>').join('');
@@ -890,6 +897,31 @@ function setMini(on) {
   fit();
 }
 $('mini').addEventListener('click', () => setMini(true));
+// The pill moves wherever you drag it, from anywhere on it. A press that barely moves is still a click
+// (so the middle still opens the panel); one that travels is a drag, and its click is swallowed.
+const pillDrag = { id: null, x: 0, y: 0, moved: false };
+$('pill').addEventListener('pointerdown', (e) => {
+  if (e.button !== 0 || e.target.closest('#pillClose')) return;
+  Object.assign(pillDrag, { id: e.pointerId, x: e.screenX, y: e.screenY, moved: false });
+  $('pill').setPointerCapture(e.pointerId);
+  scrawl.send('debug:drag', 'start', { x: e.screenX, y: e.screenY });
+});
+$('pill').addEventListener('pointermove', (e) => {
+  if (e.pointerId !== pillDrag.id) return;
+  if (!pillDrag.moved && Math.hypot(e.screenX - pillDrag.x, e.screenY - pillDrag.y) < 4) return;
+  pillDrag.moved = true;
+  $('pill').classList.add('dragging');
+  scrawl.send('debug:drag', 'move', { x: e.screenX, y: e.screenY });
+});
+const endPillDrag = (e) => {
+  if (e.pointerId !== pillDrag.id) return;
+  pillDrag.id = null;
+  $('pill').classList.remove('dragging');
+  if (pillDrag.moved) scrawl.send('debug:drag', 'end', { x: e.screenX, y: e.screenY });
+};
+$('pill').addEventListener('pointerup', endPillDrag);
+$('pill').addEventListener('pointercancel', endPillDrag);
+$('pill').addEventListener('click', (e) => { if (pillDrag.moved) { e.stopPropagation(); e.preventDefault(); pillDrag.moved = false; } }, true);
 $('pillOpen').addEventListener('click', () => setMini(false));
 $('close').addEventListener('click', () => scrawl.send('debug:close'));
 $('pillClose').addEventListener('click', () => scrawl.send('debug:close'));

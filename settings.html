@@ -458,6 +458,113 @@
   .dots span.done { background: var(--accent); }
   .demo-foot .pill { margin: 0 0 4px; }
 
+  /* The pointer in every demo is macOS's own (#macCursor): its soft shadow, and its tip on the spot it points at. */
+  .stage .cursor .arrow { margin: -2.2px 0 0 -2.6px; filter: drop-shadow(0 1px 1.2px rgba(0, 0, 0, 0.32)) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.16)); }
+  .stage .dlayer { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+  .stage .dwheel { z-index: 3; }
+  [data-theme="spin"] .stage { --stage-bg: linear-gradient(135deg, #CFDDCD, #E2EBDF 50%, #D3DDD8); --win: #FFFFFF; --bar: #E5ECE3; --line: #D3DDD0; --dark: #2D3A33; }
+  [data-theme="jot"] .stage { --stage-bg: radial-gradient(120% 120% at 0% 0%, #CFE6EC, #E4F0F2 55%, #D7E4EE); --win: #FFFFFF; --bar: #E2EEF1; --line: #CFE0E5; --dark: #24363C; }
+  [data-theme="tweak"] .stage { --stage-bg: linear-gradient(140deg, #C9CDEB, #DCDDF0 50%, #CFD7E9); --win: #FFFFFF; --bar: #E6E7F5; --line: #D3D5EC; --dark: #262A4E; }
+  [data-theme="debug"] .stage { --stage-bg: radial-gradient(130% 120% at 100% 0%, #E9D3CF, #F3E7E4 55%, #E4DCD6); --win: #FFFFFF; --bar: #F1E6E3; --line: #E3D4D0; --dark: #3A2A2C; }
+  .stage.calm .bg .win { opacity: 0.55; }
+  .dl-pop { animation: dl-pop 420ms var(--bouncy) both; }
+  .dl-out { animation: dl-out 200ms ease both; }
+  @keyframes dl-pop { from { opacity: 0; transform: scale(0.6); } }
+  @keyframes dl-out { to { opacity: 0; transform: scale(0.85); } }
+
+  /* Spin: what's playing, down in the corner. */
+  .sp-now { position: absolute; left: 16px; bottom: 16px; display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px; border-radius: 16px; background: var(--card); box-shadow: 0 4px 0 var(--card-lip), 0 10px 22px rgba(20, 30, 24, 0.16); }
+  .sp-now .disc { width: 34px; height: 34px; border-radius: 50%; background: radial-gradient(circle, var(--ink) 0 3px, var(--c) 3.5px 9px, #23262C 9.5px); animation: sp-spin 3s linear infinite; }
+  @keyframes sp-spin { to { transform: rotate(360deg); } }
+  .sp-now b { display: block; font-size: 13px; font-weight: 800; }
+  .sp-now small { display: block; font-size: 11px; font-weight: 700; color: var(--ink-2); }
+  .sp-now .t { display: grid; }
+  .sp-now .t.swap { animation: step-in 420ms var(--bouncy); }
+
+  /* Jot: a note at the pointer, a paper plane, and the note coming back in the corner. */
+  .sj-note { position: absolute; width: 244px; padding: 6px 12px 10px; border-radius: 22px; background: var(--card); transform-origin: 18px 14px; box-shadow: 0 5px 0 var(--card-lip), 0 14px 26px -8px rgba(10, 26, 32, 0.3); }
+  .sj-note .grip { display: flex; justify-content: center; padding: 2px 0 6px; }
+  .sj-note .grip span { width: 28px; height: 4px; border-radius: 2px; background: var(--edge); }
+  .sj-note .txt { min-height: 20px; font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; }
+  .sj-note .txt::after { content: ""; display: inline-block; width: 2px; height: 14px; margin-left: 1px; vertical-align: -2px; background: var(--accent-ink); animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .sj-note .pills { display: flex; gap: 4px; margin-top: 8px; padding-right: 30px; }
+  .sj-note .pills i { font-style: normal; font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 999px; background: var(--well); color: var(--ink-2); transition: background 200ms ease, color 200ms ease, transform 260ms var(--bouncy); }
+  .sj-note .pills i.on { background: var(--accent); color: var(--ink); transform: translateY(-1px); }
+  .sj-note .send { position: absolute; right: 10px; bottom: 9px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); box-shadow: 0 2px 0 var(--accent-lip); }
+  .sj-note .send svg, .sj-plane svg { width: 13px; height: 13px; }
+  .sj-note.sent { animation: sj-send 420ms cubic-bezier(.5, 0, .8, .4) both; }
+  @keyframes sj-send { to { opacity: 0; transform: translate(40px, -24px) scale(0.4) rotate(-8deg); } }
+  .sj-plane { position: absolute; color: var(--accent-lip); animation: sj-fly 900ms cubic-bezier(.3, 0, .6, 1) both; }
+  @keyframes sj-fly { from { opacity: 1; transform: none; } to { opacity: 0; transform: translate(-260px, -110px) rotate(-20deg) scale(0.7); } }
+  .sj-back { position: absolute; left: 14px; top: 14px; display: flex; align-items: center; gap: 10px; width: 210px; padding: 10px 12px; border-radius: 18px; background: var(--card); box-shadow: 0 4px 0 var(--card-lip), 0 12px 24px rgba(10, 26, 32, 0.18); animation: sj-in 600ms var(--bouncy) both; }
+  .sj-back .bell { width: 26px; height: 26px; flex: none; border-radius: 50%; background: var(--accent); box-shadow: 0 2px 0 var(--accent-lip); }
+  .sj-back b { display: block; font-size: 12px; font-weight: 800; }
+  .sj-back small { display: block; font-size: 11px; font-weight: 700; color: var(--ink-2); }
+  @keyframes sj-in { from { opacity: 0; transform: translateX(-120px) rotate(-6deg); } }
+
+  /* Tweak: files on the desktop, crop marks around the one under the pointer, and the editor. */
+  .st-file { position: absolute; width: 64px; display: grid; justify-items: center; gap: 5px; font-size: 10px; font-weight: 800; color: var(--ink); }
+  .st-file span { width: 44px; height: 36px; border-radius: 8px; box-shadow: inset 0 -3px 0 rgba(12, 13, 31, 0.18); }
+  .st-file.photo span { background: linear-gradient(135deg, #F4B07A, #E4789A); }
+  .st-file.clip span { background: #2E3260; position: relative; }
+  .st-file.clip span::after { content: ""; position: absolute; left: 17px; top: 11px; border: 7px solid transparent; border-left: 10px solid #ECEDFB; }
+  .st-file.text span { width: 32px; height: 40px; border-radius: 4px; background: #FAFAFE; }
+  .st-mark { position: absolute; width: 74px; height: 70px; border-radius: 10px; opacity: 0; transition: transform 380ms var(--bouncy), opacity 200ms ease; }
+  .st-mark::before, .st-mark::after { content: ""; position: absolute; inset: 0; border-radius: 10px; }
+  .st-mark::before { border: 2.5px dashed var(--accent-lip); }
+  .st-mark.on { opacity: 1; }
+  .st-ed { position: absolute; width: 230px; height: 150px; border-radius: 14px; background: var(--card); overflow: hidden; box-shadow: 0 5px 0 var(--card-lip), 0 16px 32px rgba(12, 13, 31, 0.24); }
+  .st-ed .tb { height: 18px; display: flex; gap: 5px; align-items: center; padding: 0 8px; background: var(--well); }
+  .st-ed .tb i { width: 7px; height: 7px; border-radius: 50%; background: var(--edge); }
+  .st-ed .pic { position: absolute; left: 12px; top: 28px; width: 150px; height: 92px; border-radius: 8px; overflow: hidden; background: linear-gradient(135deg, #F4B07A, #E4789A); }
+  .st-ed .crop { position: absolute; inset: 0; border-radius: 6px; border: 2px solid #FFFFFF; box-shadow: 0 0 0 999px rgba(12, 13, 31, 0.35); transition: inset 700ms var(--smooth); }
+  .st-ed .crop.in { inset: 10px 28px 14px 20px; }
+  .st-ed .side { position: absolute; right: 12px; top: 28px; display: grid; gap: 6px; }
+  .st-ed .side i { width: 44px; height: 8px; border-radius: 4px; background: var(--well); }
+  .st-ed .save { position: absolute; right: 10px; bottom: 9px; font-size: 10px; font-weight: 800; color: #fff; background: #5567E3; border-radius: 6px; padding: 3px 10px; transition: transform 120ms ease; }
+  .st-ed .save.down { transform: translateY(2px); }
+
+  /* Debug: the panel, at the pointer. */
+  .sd-panel { position: absolute; width: 236px; padding: 9px 12px 10px; border-radius: 18px; background: var(--card); transform-origin: 0 0; box-shadow: 0 5px 0 var(--card-lip), 0 16px 32px rgba(42, 20, 24, 0.24); }
+  .sd-panel .top { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; color: var(--ink-2); }
+  .sd-panel .v { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12.5px; font-weight: 800; }
+  .sd-panel .v span { width: 18px; height: 18px; border-radius: 50%; flex: none; background: var(--peach); transition: background 300ms ease; }
+  .sd-panel.bad .v span { background: var(--accent); }
+  .sd-panel .v b.swap { animation: step-in 420ms var(--bouncy); }
+  .sd-panel .rings { display: flex; gap: 8px; margin-top: 8px; }
+  .sd-panel .rings svg { width: 28px; height: 28px; transform: rotate(-90deg); }
+  .sd-panel .rings circle { fill: none; stroke-width: 5; }
+  .sd-panel .rings .t { stroke: var(--well); }
+  .sd-panel .rings .val { stroke: var(--accent); stroke-linecap: round; stroke-dasharray: 100; transition: stroke-dashoffset 900ms var(--smooth), stroke 300ms ease; }
+  .sd-panel .fix { display: flex; align-items: center; justify-content: space-between; gap: 8px; white-space: nowrap; margin-top: 8px; padding: 6px 8px 6px 10px; border-radius: 12px; background: var(--well); font-size: 11px; font-weight: 800; transition: opacity 260ms ease, transform 300ms var(--bouncy); }
+  .sd-panel .fix b { color: var(--ink); background: var(--accent); border-radius: 8px; padding: 3px 9px; box-shadow: 0 2px 0 var(--accent-lip); transition: transform 120ms ease, box-shadow 120ms ease; }
+  .sd-panel .fix b.down { transform: translateY(2px); box-shadow: 0 0 0 var(--accent-lip); }
+  .sd-panel .fix { max-height: 40px; overflow: hidden; }
+  .sd-panel .fix.gone { opacity: 0; transform: translateX(30px); max-height: 0; margin-top: 0; padding-top: 0; padding-bottom: 0; transition: opacity 200ms ease, transform 300ms var(--bouncy), max-height 360ms var(--smooth) 180ms, margin 360ms var(--smooth) 180ms, padding 360ms var(--smooth) 180ms; }
+
+  /* Scrawl's card: a little desk where the wheel opens, the pencil is picked, and a line gets drawn. Plays on its own (demo.js). */
+  .sdesk {
+    position: relative; height: 200px; margin-top: 14px; border-radius: 20px; overflow: hidden; isolation: isolate;
+    background: linear-gradient(135deg, #CBD5E3, #DCE4EE 50%, #D7D2E4); box-shadow: 0 5px 0 var(--card-lip);
+  }
+  .sdesk .swin { position: absolute; left: 22px; top: 22px; width: 190px; height: 128px; border-radius: 12px; background: #FFFFFF; box-shadow: 0 6px 14px -8px rgba(20, 24, 40, 0.3); }
+  .sdesk .swin.s2 { left: 236px; top: 56px; width: 180px; height: 120px; }
+  .sdesk .swin::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 14px; border-radius: 12px 12px 0 0; background: #E7ECF3; }
+  .sdesk .swin i { position: absolute; left: 12px; height: 7px; border-radius: 4px; background: #D5DCE6; }
+  .sdesk .sink { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .sdesk .sink path { fill: none; stroke: var(--ink-c, #E5484D); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+  .sdesk .swheel { position: absolute; left: 0; top: 0; z-index: 2; }
+  .sdesk .swheel .wheel { filter: drop-shadow(0 6px 12px rgba(20, 18, 28, 0.2)); }
+  .sdesk .scur { position: absolute; left: 0; top: 0; z-index: 3; will-change: transform; }
+  .sdesk .scur svg { display: block; width: 17px; height: 24px; margin: -2.2px 0 0 -2.6px; filter: drop-shadow(0 1px 1.2px rgba(0, 0, 0, 0.32)) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.16)); }
+  .sdesk .schip {
+    position: absolute; left: 13px; top: 16px; width: 20px; height: 20px; border-radius: 7px; display: grid; place-items: center;
+    background: var(--accent); box-shadow: 0 2px 0 var(--accent-lip); color: var(--ink);
+    opacity: 0; scale: 0.3; rotate: -20deg; transition: opacity 160ms ease, scale 380ms var(--bouncy), rotate 380ms var(--bouncy);
+  }
+  .sdesk .scur.holding .schip { opacity: 1; scale: 1; rotate: 0deg; }
+
   /* ---------- good to know: a few tips for each tool, in the space under the left column ---------- */
   .tips {
     --fill: var(--card); --lip: 5px; --lip-color: var(--card-lip); --r: 24px;
@@ -798,7 +905,7 @@
   .dp-fix i + i { width: 60%; margin-top: 4px; }
   .dp-fix b { display: inline-block; margin-top: 6px; padding: 3px 9px; border-radius: 8px; background: var(--accent); color: #FFF; font-size: 9.5px; font-weight: 800; box-shadow: 0 2px 0 var(--accent-lip); animation: dpbtn 7s ease infinite; }
   @keyframes dpbtn { 0%, 50% { transform: none; } 52% { transform: translateY(2px); box-shadow: 0 0 0 var(--accent-lip); } 55%, 100% { transform: none; } }
-  .ddesk .dcur { position: absolute; width: 15px; height: 21px; left: 60px; top: 170px; animation: dcur 7s cubic-bezier(.45, .05, .4, 1) infinite; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2)); }
+  .ddesk .dcur { position: absolute; width: 15px; height: 21px; left: 60px; top: 170px; animation: dcur 7s cubic-bezier(.45, .05, .4, 1) infinite; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.32)) drop-shadow(0 2px 3px rgba(0, 0, 0, 0.14)); }
   @keyframes dcur { 0%, 30% { transform: none; } 46%, 54% { transform: translate(158px, -20px); } 70%, 100% { transform: translate(60px, 20px); } }
 
   /* A little desktop: crop marks hop between files, one is clicked, and the editor opens over it. */
@@ -824,7 +931,7 @@
     24%, 34% { opacity: 1; transform: translate(74px, 0); } 40%, 52% { opacity: 1; transform: translate(0, 78px); }
     54% { transform: translate(0, 78px) scale(0.9); } 58% { opacity: 1; transform: translate(0, 78px); } 62%, 100% { opacity: 0; transform: translate(0, 78px); }
   }
-  .tdesk .tpt { position: absolute; left: 66px; top: 62px; width: 14px; height: 20px; animation: tpt 8s var(--smooth) infinite; filter: drop-shadow(0 2px 2px rgba(12,13,31,0.3)); }
+  .tdesk .tpt { position: absolute; left: 66px; top: 62px; width: 14px; height: 20px; animation: tpt 8s var(--smooth) infinite; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.32)) drop-shadow(0 2px 3px rgba(0, 0, 0, 0.14)); }
   @keyframes tpt { 0%, 18% { transform: none; } 24%, 34% { transform: translate(74px, 0); } 40%, 100% { transform: translate(0, 78px); } }
   .twin {
     position: absolute; left: 132px; top: 20px; width: 276px; height: 170px; border-radius: 12px; background: var(--card); overflow: hidden;
@@ -853,11 +960,19 @@
   }
   /* Working in another app: the looping demos hold still (see settings.js). */
   /* Only the loops: entrance animations still finish, so a window shown in the background never looks half-drawn. */
-  html.idle :is(.jdesk, .tdesk, .ddesk, .screen, .now) *, html.idle :is(.jdesk, .tdesk, .ddesk, .screen, .now) *::before,
-  html.idle :is(.jdesk, .tdesk, .ddesk, .screen, .now) *::after, html.idle .keywell .ants rect, html.idle .status .dot::after { animation-play-state: paused !important; }
+  html.idle :is(.jdesk, .tdesk, .ddesk, .sdesk, .screen, .now) *, html.idle :is(.jdesk, .tdesk, .ddesk, .sdesk, .screen, .now) *::before,
+  html.idle :is(.jdesk, .tdesk, .ddesk, .sdesk, .screen, .now) *::after, html.idle .keywell .ants rect, html.idle .status .dot::after { animation-play-state: paused !important; }
 </style>
 </head>
 <body>
+<!-- The macOS pointer, as it looks today: a black arrow with rounded corners, a white rim and a soft shadow.
+     Every demo on this page uses it. Its tip is at (2.6, 2.2). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="macCursor" viewBox="0 0 17 24">
+    <path d="M2.6 2.2V17.6L6.3 14.1L8.7 19.9L11.4 18.8L9 13.2H14.2Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="3.2" stroke-linejoin="round"/>
+    <path d="M2.6 2.2V17.6L6.3 14.1L8.7 19.9L11.4 18.8L9 13.2H14.2Z" fill="#000000" stroke="#000000" stroke-width="0.7" stroke-linejoin="round"/>
+  </symbol>
+</defs></svg>
 <div class="page" id="page" data-tool="scrawl">
   <section>
     <div class="brand rise" style="--d:0ms">
@@ -929,6 +1044,15 @@
       <div class="preview" id="preview"></div>
     </div>
     <div class="tiles" id="tiles"></div>
+    <div class="screen-wrap">
+      <div class="sdesk" id="sdesk" aria-hidden="true">
+        <div class="swin"><i style="top:30px;width:70%"></i><i style="top:44px;width:52%"></i><i style="top:58px;width:64%"></i></div>
+        <div class="swin s2"><i style="top:30px;width:60%"></i><i style="top:44px;width:76%"></i></div>
+        <svg class="sink" viewBox="0 0 440 200"><path id="sdeskInk" pathLength="1" d="M168 128c18 26 66 32 80 4c10-20-9-40-24-27c-15 13 6 50 42 48c23-1 38-16 47-33"/></svg>
+        <div class="swheel" id="sdeskWheel"></div>
+        <div class="scur"><svg viewBox="0 0 17 24"><use href="#macCursor"/></svg><span class="schip" id="sdeskChip"></span></div>
+      </div>
+    </div>
 
     <div class="rows">
       <div class="row rise" style="--d:300ms">
@@ -1073,6 +1197,7 @@
     </div>
     <h1 class="rise" style="--d:60ms">Hold a key.<br>Spin the music.</h1>
     <p class="lede rise" style="--d:120ms" id="spinLede">Hold the Spin key, slide to a slice or a song, and let go. Back to the middle cancels.</p>
+    <button class="demo-btn rise" style="--d:150ms" data-demo="spin"><svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 2.2v7.6L9.8 6z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>Show me how</button>
 
     <div class="seg rise" style="--d:150ms" role="radiogroup" aria-label="Open the music wheel with" id="spinMode">
       <span class="seg-thumb"></span>
@@ -1179,6 +1304,7 @@
     </div>
     <h1 class="rise" style="--d:60ms">Tap twice.<br>Jot it down.</h1>
     <p class="lede rise" style="--d:120ms" id="jotLede">Double-tap the Jot key and a note opens at your pointer. Pick a timer, send it off, and it comes back in the top-left corner when it’s time.</p>
+    <button class="demo-btn rise" style="--d:150ms" data-demo="jot"><svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 2.2v7.6L9.8 6z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>Show me how</button>
 
     <div class="seg rise" style="--d:150ms" role="radiogroup" aria-label="Open a note with" id="jotMode">
       <span class="seg-thumb"></span>
@@ -1280,6 +1406,7 @@
     </div>
     <h1 class="rise" style="--d:60ms">Point at a file.<br>Fix it right there.</h1>
     <p class="lede rise" style="--d:120ms" id="tweakLede">Double-tap the Tweak key and point at a file on your desktop, in Finder, or in an app’s Open dialog. Click it to crop, trim, cut or rewrite it, change its type, and save it back.</p>
+    <button class="demo-btn rise" style="--d:150ms" data-demo="tweak"><svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 2.2v7.6L9.8 6z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>Show me how</button>
     <div class="seg rise" style="--d:150ms" role="radiogroup" aria-label="Start pointing with" id="tweakMode">
       <span class="seg-thumb"></span>
       <button role="radio" data-mode="double"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="3"/><path d="M9 6.5 8 4M12 5.5V3M15 6.5 16 4"/></svg>Double-tap</button>
@@ -1344,7 +1471,7 @@
         <div class="ic"><span></span>clip.mov</div>
         <div class="ic"><span></span>notes.md</div>
         <div class="tmark"><svg viewBox="0 0 18 18"><path class="lp" d="M15 3H3V15"/><path d="M15 3H3V15"/></svg><svg viewBox="0 0 18 18"><path class="lp" d="M3 3H15V15"/><path d="M3 3H15V15"/></svg><svg viewBox="0 0 18 18"><path class="lp" d="M15 15H3V3"/><path d="M15 15H3V3"/></svg><svg viewBox="0 0 18 18"><path class="lp" d="M3 15H15V3"/><path d="M3 15H15V3"/></svg></div>
-        <svg class="tpt" viewBox="0 0 17 24"><path d="M1.5 1.5v17.2l4.3-4.1 3 6.9 3.1-1.3-3-6.8h6z" fill="#14161C" stroke="#FFFFFF" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        <svg class="tpt" viewBox="0 0 17 24"><use href="#macCursor"/></svg>
         <div class="twin"><div class="tb"><i></i><i></i><i></i></div><div class="bd"><div class="mat"><div class="vid"></div></div><div class="side"><i></i><i></i><i></i><i></i></div></div><div class="ft"><b>Save</b></div></div>
       </div>
       <button class="try" id="tryTweak">
@@ -1382,6 +1509,7 @@
     </div>
     <h1 class="rise" style="--d:60ms">Mac acting up?<br>Find out why.</h1>
     <p class="lede rise" style="--d:120ms" id="debugLede">Press the Debug keys and a small panel opens over whatever you’re doing. It shows what’s slowing things down or draining your battery, and fixes you can click.</p>
+    <button class="demo-btn rise" style="--d:150ms" data-demo="debug"><svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 2.2v7.6L9.8 6z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>Show me how</button>
     <div class="seg rise" style="--d:150ms" role="radiogroup" aria-label="Open Debug with" id="debugMode">
       <span class="seg-thumb"></span>
       <button role="radio" data-mode="shortcut"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg>Shortcut</button>
@@ -1455,7 +1583,7 @@
           </div>
           <div class="dp-fix"><i></i><i></i><b>Quit Chrome</b></div>
         </div>
-        <svg class="dcur" viewBox="0 0 17 24"><path d="M1.5 1.5v17.2l4.3-4.1 3 6.9 3.1-1.3-3-6.8h6z" fill="#14161C" stroke="#FFFFFF" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        <svg class="dcur" viewBox="0 0 17 24"><use href="#macCursor"/></svg>
       </div>
       <button class="try" id="tryDebug">
         <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 2.2v7.6L9.8 6z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
@@ -1507,9 +1635,10 @@
       <div class="dtint"></div>
       <div class="dblob"></div><div class="dblob"></div><div class="dblob"></div>
       <div class="dnote"><span class="mcup" id="stageCup"></span><b id="stageMsg"></b><small id="stageSince"></small></div>
+      <div class="dlayer" id="stageLayer"></div>
       <div class="dwheel" id="stageWheel"></div>
       <div class="cursor" id="stageCursor">
-        <svg class="arrow" width="17" height="24" viewBox="0 0 17 24"><path d="M1.5 1.5v17.2l4.3-4.1 3 6.9 3.1-1.3-3-6.8h6z" fill="#14161C" stroke="#FFFFFF" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        <svg class="arrow" width="17" height="24" viewBox="0 0 17 24"><use href="#macCursor"/></svg>
         <span class="dchip" id="stageChip"></span>
       </div>
     </div>

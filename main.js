@@ -1717,6 +1717,10 @@ function openEditor(file, from = null) {
     setTimeout(land, 1500); // or regardless, if it's slow to appear
   }
   w.on('closed', () => { editors.delete(w); if (ghost && !ghost.isDestroyed()) ghost.destroy(); });
+  // Floating only while you're using it: once another app (Finder, say) comes forward, the editor drops to an
+  // ordinary window's level so that app can sit over it, and it floats again when you click back into it.
+  w.on('blur', () => { if (!w.isDestroyed()) w.setAlwaysOnTop(false); });
+  w.on('focus', () => { if (!w.isDestroyed()) w.setAlwaysOnTop(true, 'floating'); });
   return w;
 }
 // A see-through layer over the screen, where a stand-in of the editor springs out of the file (grow.html).
@@ -1743,7 +1747,7 @@ ipcMain.handle('tweak:load', async (e) => {
   const w = editorFor(e);
   if (!w) return null;
   try {
-    const info = await TweakFiles.load(w.filePath);
+    const info = await TweakFiles.load(w.filePath, { helper: helperPath() });
     w.setTitle(info.name);
     w.setRepresentedFilename(w.filePath);
     return { ...info, prefs: { copy: settings.tweak.copy, trash: settings.tweak.trash } };
@@ -1775,6 +1779,7 @@ ipcMain.handle('tweak:save', async (e, job) => {
     if (job.kind === 'image') dest = await TweakFiles.saveImage(src, job, p, opts);
     else if (job.kind === 'text') dest = await TweakFiles.saveText(src, job, p, opts);
     else if (job.kind === 'media') dest = await TweakFiles.saveMedia(src, job, p, opts);
+    else if (job.kind === 'zip') dest = await TweakFiles.saveZip(src, job, p, opts);
     else return { error: 'Nothing to save.' };
     // Saved over (or replaced): the window now edits the new file. A copy keeps editing the original.
     if (p.replace) { w.filePath = dest; w.setTitle(path.basename(dest)); w.setRepresentedFilename(dest); }
@@ -1785,6 +1790,49 @@ ipcMain.handle('tweak:save', async (e, job) => {
   } catch (err) {
     return { error: err.message || 'Saving didn’t work.' };
   }
+});
+// How big a save would come out, for the Compress card. Pictures are encoded for real (in a temp file) and measured.
+ipcMain.handle('tweak:estimate', async (e, job) => {
+  if (!editorFor(e) || !job || typeof job.ext !== 'string' || !/^[a-z0-9]{1,10}$/.test(job.ext)) return null;
+  try { return { size: await TweakFiles.estimateImage(job, { helper: helperPath() }) }; } catch (err) { return { error: err.message }; }
+});
+// A ZIP's size: of the text as it is now (`text`), or of the file on disk.
+ipcMain.handle('tweak:zipEstimate', async (e, { text, level, name } = {}) => {
+  const w = editorFor(e);
+  if (!w) return null;
+  try {
+    if (typeof text === 'string') return { size: TweakFiles.zipEstimate(Buffer.from(text, 'utf8'), String(name || 'file'), level) };
+    const st = fs.statSync(w.filePath);
+    if (!st.isFile()) return null;
+    const fd = fs.openSync(w.filePath, 'r');
+    const buf = Buffer.alloc(Math.min(st.size, 16 * 1024 * 1024));
+    try { fs.readSync(fd, buf, 0, buf.length, 0); } finally { fs.closeSync(fd); }
+    return { size: TweakFiles.zipEstimate(buf, path.basename(w.filePath), level, st.size) };
+  } catch (err) { return { error: err.message }; }
+});
+// A ZIP of the file as it is, beside it (the original stays).
+ipcMain.handle('tweak:zip', async (e, { level } = {}) => {
+  const w = editorFor(e);
+  if (!w) return { error: 'Nothing to zip.' };
+  try {
+    const dest = TweakFiles.freeName(path.dirname(w.filePath), path.basename(w.filePath), 'zip');
+    await TweakFiles.zipInto(dest, w.filePath, level);
+    return { ok: true, path: dest, name: path.basename(dest), size: fs.statSync(dest).size };
+  } catch (err) { return { error: err.message || 'Couldn’t zip it.' }; }
+});
+// A video's or song's frame rate and bit rates, for guessing how big a squeezed copy comes out.
+ipcMain.handle('tweak:probe', async (e) => {
+  const w = editorFor(e);
+  if (!w) return null;
+  try { return JSON.parse(String(await TweakFiles.run(helperPath(), ['probe', w.filePath])).trim().split('\n').pop()); } catch { return null; }
+});
+// A picked part of a picture onto the clipboard (Copy and Cut in the editor).
+ipcMain.handle('tweak:copyImage', (e, bytes) => {
+  if (!editorFor(e) || !bytes) return false;
+  const img = nativeImage.createFromBuffer(Buffer.from(bytes));
+  if (img.isEmpty()) return false;
+  clipboard.writeImage(img);
+  return true;
 });
 // A new name (and maybe ending) for the file or folder in this window, straight away: nothing inside changes.
 ipcMain.handle('tweak:rename', async (e, job) => {
@@ -1859,7 +1907,19 @@ ipcMain.on('tweak:window', (e, what) => {
 });
 ipcMain.on('tweak:reveal', (e, file) => {
   const w = editorFor(e);
-  if (w && typeof file === 'string' && path.isAbsolute(file)) shell.showItemInFolder(file);
+  if (!w || typeof file !== 'string' || !path.isAbsolute(file)) return;
+  w.setAlwaysOnTop(false); // so the Finder window opens over the editor, not behind it
+  shell.showItemInFolder(file);
+});
+// The bar's Delete button: the file (or folder) goes to the Trash, after asking. It can be put back from there.
+ipcMain.handle('tweak:trash', async (e) => {
+  const w = editorFor(e);
+  if (!w) return { error: 'Nothing to delete.' };
+  const name = path.basename(w.filePath);
+  const r = await dialog.showMessageBox(w, { type: 'warning', buttons: ['Move to Trash', 'Cancel'], defaultId: 1, cancelId: 1,
+    message: `Move “${name}” to the Trash?`, detail: 'You can put it back from the Trash in the Dock.' });
+  if (r.response !== 0) return { canceled: true };
+  try { await shell.trashItem(w.filePath); return { ok: true, name }; } catch (err) { return { error: err.message || 'Couldn’t move it to the Trash.' }; }
 });
 // Open a different file in this window (from the editor's Open button or a file dropped on it).
 ipcMain.handle('tweak:swap', async (e, file) => {
@@ -1908,6 +1968,12 @@ DebugStats.setIconLoader(async (p) => {
     if (!img.isEmpty()) return img.toDataURL();
   } catch {}
   return (await app.getFileIcon(p, { size: 'normal' })).toDataURL();
+});
+// Per-app disk numbers come from Tweak's helper (proc_pid_rusage). Found once, built once while working on Pane.
+let debugHelper;
+DebugStats.setHelper(() => {
+  if (debugHelper === undefined) { const p = helperPath(); debugHelper = fs.existsSync(p) ? p : null; }
+  return debugHelper;
 });
 let dbg = null; // { win, front, mini, timer, busy, closing }
 let debugBinding = false; // the settings window is listening for Debug's shortcut
@@ -2012,6 +2078,9 @@ async function openDebug(near) {
     writeJSON('settings.json', settings);
   });
   w.on('closed', () => { if (dbg === d) { clearTimeout(d.timer); dbg = null; buildMenu(); } });
+  // Hidden by macOS (not by closing it): bring it straight back.
+  w.on('hide', () => setTimeout(() => { if (dbg === d && !d.closing) keepDebugAround(d); }, 60));
+  w.on('blur', () => keepDebugAround(d));
   debugTick();
 }
 // Close it: the panel shrinks and fades, then goes. (It never hands the keyboard back to another app on its
@@ -2062,7 +2131,27 @@ function showDebug(d) {
   if (d.shown || dbg !== d || !d.win || d.win.isDestroyed()) return;
   d.shown = true;
   d.win.showInactive();
+  keepDebugAround(d);
   d.win.webContents.send('debug:shown');
+}
+// Debug (panel or pill) stays put while you swipe between Spaces and full-screen apps. Joining every Space
+// once isn't enough: macOS can drop a panel from the other Spaces once it's been shown or clicked, and orders
+// it out when Pane stops being the active app. So it joins again each time it's shown, and after every Space
+// change it's put back (without taking the keyboard) if macOS hid it.
+function keepDebugAround(d) {
+  const w = d?.win;
+  if (!w || w.isDestroyed() || dbg !== d || !d.shown) return;
+  joinSpaces(w);
+  w.setAlwaysOnTop(true, OVERLAY_LEVEL, 1);
+  if (!w.isVisible()) w.showInactive();
+}
+if (process.platform === 'darwin') {
+  try {
+    systemPreferences.subscribeWorkspaceNotification('NSWorkspaceActiveSpaceDidChangeNotification', () => {
+      keepDebugAround(dbg);
+      setTimeout(() => keepDebugAround(dbg), 250); // the swipe's animation can hide it again on its way
+    });
+  } catch {}
 }
 function debugSettingsChanged() {
   if (!dbg?.win || dbg.win.isDestroyed()) return;
@@ -2095,7 +2184,27 @@ ipcMain.on('debug:fit', (e, size) => {
   w.setBounds({ x, y, width, height });
   if (!dbg.shown && size.ready) setTimeout(() => dbg && showDebug(dbg), 30); // its first look is drawn and sized: now it can appear
 });
-ipcMain.on('debug:mini', (e, on) => { if (fromDebug(e)) { dbg.mini = !!on; if (!on) debugTick(); } });
+ipcMain.on('debug:mini', (e, on) => { if (fromDebug(e)) { dbg.mini = !!on; keepDebugAround(dbg); if (!on) debugTick(); } });
+// The pill is dragged by the page itself (anywhere on it, not just its handle): it sends where the
+// pointer is on screen, and the window follows, kept on a screen. Where it ends up is remembered.
+ipcMain.on('debug:drag', (e, phase, p) => {
+  if (!fromDebug(e)) return;
+  const w = dbg.win;
+  if (phase === 'start') { const b = w.getBounds(); dbg.drag = { x: b.x, y: b.y, px: p?.x, py: p?.y }; return; }
+  const g = dbg.drag;
+  if (!g || !p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return;
+  if (phase === 'move') {
+    const b = w.getBounds();
+    const x = Math.round(g.x + p.x - g.px), y = Math.round(g.y + p.y - g.py);
+    const wa = screen.getDisplayNearestPoint({ x: Math.round(p.x), y: Math.round(p.y) }).workArea;
+    w.setPosition(Math.max(wa.x - b.width + 40, Math.min(x, wa.x + wa.width - 40)), Math.max(wa.y, Math.min(y, wa.y + wa.height - 30)));
+  } else if (phase === 'end') {
+    dbg.drag = null;
+    const b = w.getBounds();
+    settings = { ...settings, debug: { ...settings.debug, at: { x: b.x, y: b.y } } };
+    writeJSON('settings.json', settings);
+  }
+});
 ipcMain.on('debug:close', (e) => { if (fromDebug(e)) closeDebug(); });
 ipcMain.on('debug:refresh', (e) => { if (fromDebug(e)) debugTick(); });
 ipcMain.on('debug:openSettings', (e) => {

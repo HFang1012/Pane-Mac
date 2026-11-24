@@ -10,6 +10,15 @@
 //                                  "smaller" is HEVC video at ~0.1 bits a pixel / 96 kbps sound, "smallest" caps video
 //                                  at 960×540 and ~0.06 bits a pixel, and sound at 64 kbps.
 //   pane-files frame <in> <sec> <out.png>   Saves one frame of a video as a picture.
+//   pane-files frames <in> <outdir>          Every frame of a picture (a GIF's or APNG's frames, an icon's sizes, a
+//                                            TIFF's pages) as PNGs in outdir. Prints {"count":n,"frames":[…]}; one
+//                                            frame prints just {"count":1} and writes nothing.
+//   pane-files assemble '<json>'             The other way: PNGs (with delays, or @2x sizes) into one animated GIF or
+//                                            PNG, an icon (ICNS, ICO), or a TIFF or PDF of pages.
+//   pane-files probe <in>                    A video's or song's size, frame rate and bit rates, for size estimates.
+//
+// "quality" (0…1) for media squeezes continuously; 1 is as it is. Pane's editor estimates the result with the
+// same numbers (edit.js, mediaEstimate), so keep the two in step.
 //
 // Built by scripts/native.js (and by Pane itself the first time, while you're working on it).
 import Cocoa
@@ -206,8 +215,16 @@ struct MediaOpts: Decodable {
   var mute: Bool?
   var gifFps: Double?
   var gifWidth: Double?
-  var size: String? // full | smaller | smallest: how hard to squeeze the file
+  var size: String? // full | smaller | smallest: how hard to squeeze the file (older; quality wins)
+  var quality: Double? // 0…1: how much to keep. 1 is as it is
+  var q: Double { quality ?? (size == "smallest" ? 0.15 : size == "smaller" ? 0.55 : 1) }
+  var squeezed: Bool { q < 0.999 }
 }
+
+// What a squeeze keeps, from quality q (0…1). Mirrored in edit.js.
+func squeezeLongSide(_ q: Double) -> CGFloat? { q < 0.2 ? 960 : q < 0.45 ? 1280 : q < 0.7 ? 1920 : nil }
+func squeezeBitsPerPixel(_ q: Double) -> Double { 0.025 + 0.2 * q }
+func squeezeAudioRate(_ q: Double) -> Int { q < 0.25 ? 64000 : q < 0.5 ? 96000 : q < 0.75 ? 128000 : 160000 }
 
 func fail(_ msg: String) -> Never { emit(["error": msg]); exit(1) }
 
@@ -261,10 +278,10 @@ func media(_ json: String) {
     if quarter != 0 { (t, size) = normalizedAfter(t, size, CGAffineTransform(rotationAngle: CGFloat(quarter) * .pi / 180)) }
     if o.flipH == true { (t, size) = normalizedAfter(t, size, CGAffineTransform(scaleX: -1, y: 1)) }
     if o.flipV == true { (t, size) = normalizedAfter(t, size, CGAffineTransform(scaleX: 1, y: -1)) }
-    // Smallest: no bigger than 960×540 (or 540×960 standing up).
-    if o.size == "smallest" {
+    // A hard squeeze also makes it smaller on screen: no bigger than 960×540, 1280×720 or 1920×1080.
+    if o.squeezed, let cap = squeezeLongSide(o.q) {
       let long = max(size.width, size.height), short = min(size.width, size.height)
-      let k = min(1, 960 / long, 540 / short)
+      let k = min(1, cap / long, cap * 9 / 16 / short)
       if k < 1 {
         t = t.concatenating(CGAffineTransform(scaleX: k, y: k))
         size = CGSize(width: size.width * k, height: size.height * k)
@@ -307,7 +324,7 @@ func media(_ json: String) {
   // sound as they are instead of encoding them again. For a big video that's seconds instead of minutes.
   let cropped = (o.crop?.count ?? 0) == 4 && (o.crop![2] > 4 && o.crop![3] > 4)
   let untouched = !cropped && ((o.rotate ?? 0) % 360 + 360) % 360 == 0 && o.flipH != true && o.flipV != true &&
-    (o.volume ?? 1) >= 0.999 && (o.size ?? "full") == "full"
+    (o.volume ?? 1) >= 0.999 && !o.squeezed
   if untouched && ["mp4", "mov", "m4v", "m4a"].contains(o.format) {
     if let v = srcVideo { compVideo?.preferredTransform = v.preferredTransform } // a phone video stays upright
     if let ex = AVAssetExportSession(asset: comp, presetName: AVAssetExportPresetPassthrough), ex.supportedFileTypes.contains(fileType) {
@@ -321,14 +338,16 @@ func media(_ json: String) {
       compVideo?.preferredTransform = .identity // the encoders below apply the turn themselves
     }
   }
-  if !audioOut, let vc = videoComp, o.size == "smaller" || o.size == "smallest" {
-    squeezeVideo(comp, vc, mix, smallest: o.size == "smallest", fileType: fileType, out: outURL)
+  if !audioOut, let vc = videoComp, o.squeezed {
+    let srcRate = Double(srcVideo?.estimatedDataRate ?? 0)
+    let srcAudio = Double(asset.tracks(withMediaType: .audio).first?.estimatedDataRate ?? 0)
+    squeezeVideo(comp, vc, mix, q: o.q, srcRate: srcRate, srcAudio: srcAudio, fileType: fileType, out: outURL)
     return
   }
 
   // wav / aiff / caf: make an m4a first, then afconvert turns it into plain samples.
   // A smaller m4a also goes through afconvert, which can set the bit rate (the export preset can't).
-  let squeeze = o.format == "m4a" && (o.size == "smaller" || o.size == "smallest")
+  let squeeze = o.format == "m4a" && o.squeezed
   let viaM4A = ["wav", "aiff", "caf"].contains(o.format) || squeeze
   let exportURL = viaM4A ? URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("pane-\(UUID().uuidString).m4a") : outURL
   let preset = audioOut ? AVAssetExportPresetAppleM4A : AVAssetExportPresetHighestQuality
@@ -344,7 +363,10 @@ func media(_ json: String) {
   guard ex.status == .completed else { fail(ex.error?.localizedDescription ?? "Saving didn't work.") }
 
   if viaM4A {
-    let kbps = o.size == "smallest" ? "64000" : "96000" // AAC won't go lower than 64 kbps for stereo here
+    let srcAudio = Int(asset.tracks(withMediaType: .audio).first?.estimatedDataRate ?? 0)
+    var rate = squeezeAudioRate(o.q) // AAC won't go lower than 64 kbps for stereo here
+    if srcAudio > 64000 { rate = min(rate, max(64000, srcAudio / 32000 * 32000)) } // never more than it had
+    let kbps = String(rate)
     let fmt: [String] = squeeze ? ["-f", "m4af", "-d", "aac", "-b", kbps] : o.format == "wav" ? ["-f", "WAVE", "-d", "LEI16"] : o.format == "aiff" ? ["-f", "AIFF", "-d", "BEI16"] : ["-f", "caff", "-d", "LEI16"]
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/bin/afconvert")
@@ -358,7 +380,7 @@ func media(_ json: String) {
 
 // Reads the edited picture and sound (crop, turns, trim, volume all applied by the composition) and writes
 // them again with HEVC at a set bit rate (H.264 where HEVC can't go) and AAC sound.
-func squeezeVideo(_ comp: AVComposition, _ vc: AVVideoComposition, _ mix: AVAudioMix?, smallest: Bool, fileType: AVFileType, out: URL) {
+func squeezeVideo(_ comp: AVComposition, _ vc: AVVideoComposition, _ mix: AVAudioMix?, q: Double, srcRate: Double, srcAudio: Double, fileType: AVFileType, out: URL) {
   let reader: AVAssetReader, writer: AVAssetWriter
   do { reader = try AVAssetReader(asset: comp); writer = try AVAssetWriter(outputURL: out, fileType: fileType) } catch { fail("Couldn't start making it smaller.") }
   let vOut = AVAssetReaderVideoCompositionOutput(videoTracks: comp.tracks(withMediaType: .video),
@@ -379,7 +401,10 @@ func squeezeVideo(_ comp: AVComposition, _ vc: AVVideoComposition, _ mix: AVAudi
   }
   let w = vc.renderSize.width, h = vc.renderSize.height
   let fps = vc.frameDuration.seconds > 0 ? 1 / vc.frameDuration.seconds : 30
-  let bitrate = max(300_000, Double(w * h) * fps * (smallest ? 0.06 : 0.1))
+  var bitrate = max(300_000, Double(w * h) * fps * squeezeBitsPerPixel(q))
+  if srcRate > 0 { bitrate = min(bitrate, max(300_000, srcRate * 0.95)) } // a squeeze never comes out bigger
+  var aRate = squeezeAudioRate(q)
+  if srcAudio > 64000 { aRate = min(aRate, max(64000, Int(srcAudio) / 32000 * 32000)) }
   func videoSettings(_ codec: AVVideoCodecType) -> [String: Any] {
     [AVVideoCodecKey: codec, AVVideoWidthKey: w, AVVideoHeightKey: h,
      AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: bitrate, AVVideoExpectedSourceFrameRateKey: fps]]
@@ -390,7 +415,7 @@ func squeezeVideo(_ comp: AVComposition, _ vc: AVVideoComposition, _ mix: AVAudi
   writer.add(vIn)
   var aIn: AVAssetWriterInput?
   if aOut != nil {
-    let i = AVAssetWriterInput(mediaType: .audio, outputSettings: [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 44100, AVNumberOfChannelsKey: 2, AVEncoderBitRateKey: smallest ? 64000 : 96000])
+    let i = AVAssetWriterInput(mediaType: .audio, outputSettings: [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 44100, AVNumberOfChannelsKey: 2, AVEncoderBitRateKey: aRate])
     i.expectsMediaDataInRealTime = false
     writer.add(i)
     aIn = i
@@ -464,10 +489,120 @@ func frame(_ input: String, _ at: Double, _ output: String) {
   emit(["ok": true])
 }
 
+// ---------- io: how much each process has read from and written to storage ----------
+// Debug's per-app Disk numbers. proc_pid_rusage needs no permission for your own processes (every app you
+// opened); macOS's own root tasks are refused and simply left out. One "pid read written" line each.
+// With no pids it looks at every process there is.
+func allPids() -> [Int32] {
+  let n = proc_listallpids(nil, 0)
+  guard n > 0 else { return [] }
+  var buf = [Int32](repeating: 0, count: Int(n) + 64)
+  let got = buf.withUnsafeMutableBytes { proc_listallpids($0.baseAddress, Int32($0.count)) }
+  return Array(buf.prefix(Int(max(0, got)))).filter { $0 > 0 }
+}
+func io(_ args: [String]) {
+  var out = ""
+  for pid in args.isEmpty ? allPids() : args.compactMap({ Int32($0) }) {
+    var info = rusage_info_v2()
+    let r = withUnsafeMutablePointer(to: &info) { p in
+      p.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { proc_pid_rusage(pid, RUSAGE_INFO_V2, $0) }
+    }
+    if r == 0 { out += "\(pid) \(info.ri_diskio_bytesread) \(info.ri_diskio_byteswritten)\n" }
+  }
+  FileHandle.standardOutput.write(out.data(using: .utf8)!)
+}
+
+// ---------- pictures with more than one frame ----------
+
+func delayOf(_ props: [CFString: Any]) -> Double {
+  for key in [kCGImagePropertyGIFDictionary, kCGImagePropertyPNGDictionary, kCGImagePropertyHEICSDictionary] {
+    guard let d = props[key] as? [CFString: Any] else { continue }
+    for k in [kCGImagePropertyGIFUnclampedDelayTime, kCGImagePropertyGIFDelayTime, kCGImagePropertyAPNGUnclampedDelayTime,
+              kCGImagePropertyAPNGDelayTime, kCGImagePropertyHEICSUnclampedDelayTime, kCGImagePropertyHEICSDelayTime] {
+      if let v = d[k] as? Double, v > 0 { return v }
+    }
+  }
+  return 0
+}
+
+func frames(_ input: String, _ dir: String) {
+  guard let src = CGImageSourceCreateWithURL(URL(fileURLWithPath: input) as CFURL, nil) else { fail("Pane can't read this picture.") }
+  let n = CGImageSourceGetCount(src)
+  if n <= 1 { emit(["count": n]); return }
+  let max = min(n, 600)
+  var out: [[String: Any]] = []
+  for i in 0..<max {
+    guard let img = CGImageSourceCreateImageAtIndex(src, i, nil) else { continue }
+    let props = (CGImageSourceCopyPropertiesAtIndex(src, i, nil) as? [CFString: Any]) ?? [:]
+    let path = (dir as NSString).appendingPathComponent("\(i).png")
+    guard let dest = CGImageDestinationCreateWithURL(URL(fileURLWithPath: path) as CFURL, UTType.png.identifier as CFString, 1, nil) else { continue }
+    CGImageDestinationAddImage(dest, img, nil)
+    guard CGImageDestinationFinalize(dest) else { continue }
+    let dpi = (props[kCGImagePropertyDPIWidth] as? Double) ?? 72
+    out.append(["path": path, "w": img.width, "h": img.height, "delay": delayOf(props), "dpi": dpi])
+  }
+  var loop = 0
+  if let all = CGImageSourceCopyProperties(src, nil) as? [CFString: Any] {
+    if let g = all[kCGImagePropertyGIFDictionary] as? [CFString: Any], let l = g[kCGImagePropertyGIFLoopCount] as? Int { loop = l }
+    if let p = all[kCGImagePropertyPNGDictionary] as? [CFString: Any], let l = p[kCGImagePropertyAPNGLoopCount] as? Int { loop = l }
+  }
+  emit(["count": n, "frames": out, "loop": loop, "partial": n > max])
+}
+
+struct AssembleFrame: Decodable { let path: String; var delay: Double?; var dpi: Double? }
+struct AssembleOpts: Decodable { let output: String; let type: String; let frames: [AssembleFrame]; var loop: Int? }
+
+func assemble(_ json: String) {
+  guard let data = json.data(using: .utf8), let o = try? JSONDecoder().decode(AssembleOpts.self, from: data), !o.frames.isEmpty else { fail("Bad options.") }
+  let types: [String: String] = ["gif": UTType.gif.identifier, "png": UTType.png.identifier, "tiff": UTType.tiff.identifier,
+    "icns": UTType.icns.identifier, "ico": UTType.ico.identifier, "pdf": UTType.pdf.identifier]
+  guard let uti = types[o.type] else { fail("Pane can't write that kind of picture with frames.") }
+  let url = URL(fileURLWithPath: o.output)
+  try? FileManager.default.removeItem(at: url)
+  guard let dest = CGImageDestinationCreateWithURL(url as CFURL, uti as CFString, o.frames.count, nil) else { fail("Can't write that kind of picture.") }
+  let loop = o.loop ?? 0
+  if o.type == "gif" { CGImageDestinationSetProperties(dest, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: loop]] as CFDictionary) }
+  if o.type == "png" { CGImageDestinationSetProperties(dest, [kCGImagePropertyPNGDictionary: [kCGImagePropertyAPNGLoopCount: loop]] as CFDictionary) }
+  for (i, f) in o.frames.enumerated() {
+    guard let s = CGImageSourceCreateWithURL(URL(fileURLWithPath: f.path) as CFURL, nil), let img = CGImageSourceCreateImageAtIndex(s, 0, nil) else { fail("Couldn't read frame \(i + 1).") }
+    var props: [CFString: Any] = [:]
+    let d = max(0.02, f.delay ?? 0.1)
+    if o.type == "gif" { props[kCGImagePropertyGIFDictionary] = [kCGImagePropertyGIFDelayTime: d] }
+    if o.type == "png" { props[kCGImagePropertyPNGDictionary] = [kCGImagePropertyAPNGDelayTime: d] }
+    if let dpi = f.dpi, dpi > 0 { props[kCGImagePropertyDPIWidth] = dpi; props[kCGImagePropertyDPIHeight] = dpi }
+    if o.type == "tiff" { props[kCGImagePropertyTIFFDictionary] = [kCGImagePropertyTIFFCompression: 5] } // LZW
+    CGImageDestinationAddImage(dest, img, props as CFDictionary)
+  }
+  guard CGImageDestinationFinalize(dest) else { fail("Couldn't finish writing it.") }
+  emit(["ok": true])
+}
+
+func probe(_ input: String) {
+  let asset = AVURLAsset(url: URL(fileURLWithPath: input))
+  var out: [String: Any] = ["duration": asset.duration.seconds]
+  if let v = asset.tracks(withMediaType: .video).first {
+    let (_, size) = normalized(v.preferredTransform, v.naturalSize)
+    out["w"] = size.width; out["h"] = size.height
+    out["fps"] = v.nominalFrameRate > 0 ? Double(v.nominalFrameRate) : 30
+    out["vRate"] = Double(v.estimatedDataRate)
+  }
+  if let a = asset.tracks(withMediaType: .audio).first {
+    out["aRate"] = Double(a.estimatedDataRate)
+    if let f = a.formatDescriptions.first, let d = CMAudioFormatDescriptionGetStreamBasicDescription(f as! CMAudioFormatDescription)?.pointee {
+      out["sampleRate"] = d.mSampleRate; out["channels"] = Int(d.mChannelsPerFrame)
+    }
+  }
+  emit(out)
+}
+
 let args = CommandLine.arguments
 switch args.count > 1 ? args[1] : "" {
 case "hover": hover(panePid: args.count > 2 ? pid_t(args[2]) ?? 0 : 0)
 case "media": media(args.count > 2 ? args[2] : "")
 case "frame": frame(args[2], Double(args[3]) ?? 0, args[4])
-default: fail("Usage: pane-files hover <pid> | media <json> | frame <in> <sec> <out>")
+case "io": io(Array(args.dropFirst(2)))
+case "frames": frames(args[2], args[3])
+case "assemble": assemble(args.count > 2 ? args[2] : "")
+case "probe": probe(args[2])
+default: fail("Usage: pane-files hover <pid> | media <json> | frame <in> <sec> <out> | io <pid>…")
 }

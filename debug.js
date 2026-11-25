@@ -890,6 +890,7 @@ $('pickBack').addEventListener('click', () => { picking = false; render(); });
 
 // ---------- folding up, closing ----------
 function setMini(on) {
+  if (mini === on) return;
   mini = on;
   $('card').hidden = on;
   $('pill').hidden = !on;
@@ -900,15 +901,17 @@ $('mini').addEventListener('click', () => setMini(true));
 // The pill moves wherever you drag it, from anywhere on it. A press that barely moves is still a click
 // (so the middle still opens the panel); one that travels is a drag, and its click is swallowed.
 const pillDrag = { id: null, x: 0, y: 0, moved: false };
+// The pointer is only captured once it really moves: captured from the press, the click would land on the
+// pill itself rather than the button under it, and the pill could never open again.
 $('pill').addEventListener('pointerdown', (e) => {
   if (e.button !== 0 || e.target.closest('#pillClose')) return;
   Object.assign(pillDrag, { id: e.pointerId, x: e.screenX, y: e.screenY, moved: false });
-  $('pill').setPointerCapture(e.pointerId);
   scrawl.send('debug:drag', 'start', { x: e.screenX, y: e.screenY });
 });
 $('pill').addEventListener('pointermove', (e) => {
   if (e.pointerId !== pillDrag.id) return;
   if (!pillDrag.moved && Math.hypot(e.screenX - pillDrag.x, e.screenY - pillDrag.y) < 4) return;
+  if (!pillDrag.moved) { try { $('pill').setPointerCapture(e.pointerId); } catch {} }
   pillDrag.moved = true;
   $('pill').classList.add('dragging');
   scrawl.send('debug:drag', 'move', { x: e.screenX, y: e.screenY });
@@ -918,6 +921,7 @@ const endPillDrag = (e) => {
   pillDrag.id = null;
   $('pill').classList.remove('dragging');
   if (pillDrag.moved) scrawl.send('debug:drag', 'end', { x: e.screenX, y: e.screenY });
+  else if (e.type === 'pointerup' && !e.target.closest('#pillClose')) setMini(false); // a press that stayed put opens it, from anywhere on the pill
 };
 $('pill').addEventListener('pointerup', endPillDrag);
 $('pill').addEventListener('pointercancel', endPillDrag);

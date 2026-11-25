@@ -337,6 +337,17 @@ function drawMark(ctx, m, s) {
     }
   } else if (m.t === 'clear') {
     ctx.clearRect(m.r.x * s, m.r.y * s, m.r.w * s, m.r.h * s);
+  } else if (m.t === 'img') {
+    // A pasted picture: `c` is its middle in the picture's own pixels, `w`/`h` its size as it shows, upright
+    // in the view it was pasted into (o = that view's turn and flips), so it's drawn undoing them.
+    const bmp = PASTES.get(m.id);
+    if (bmp) {
+      ctx.translate(m.c.x * s, m.c.y * s);
+      ctx.rotate((-m.o.rot * Math.PI) / 180);
+      ctx.scale(m.o.fh ? -1 : 1, m.o.fv ? -1 : 1);
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(bmp, (-m.w * s) / 2, (-m.h * s) / 2, m.w * s, m.h * s);
+    }
   } else if (m.t === 'move') {
     const { x, y, w, h } = m.r;
     const tw = Math.max(1, Math.round(w * s)), th = Math.max(1, Math.round(h * s));
@@ -347,6 +358,10 @@ function drawMark(ctx, m, s) {
   }
   ctx.restore();
 }
+
+// Pasted pictures, by id. Marks only carry the id, so undo (which keeps state as JSON) still works.
+const PASTES = new Map();
+let pasteSeq = 0;
 
 const ImageKind = {
   async init() {
@@ -369,6 +384,7 @@ const ImageKind = {
     this.tool = 'select'; this.color = PEN_COLORS[2][0]; this.penSize = 1; this.eraseSize = 1; this.every = false;
     this.zoom = null; // null fits it to the window; otherwise screen points per pixel of what's shown
     this.sel = null; // a picked box, in the turned picture's pixels
+    this.selPaste = null; // or the pasted picture that box is around (its id)
     this.playing = 0;
     state = { rot: 0, fh: false, fv: false, crop: null, out: null, adj: { b: 100, c: 100, s: 100, blur: 0, bw: false }, q: 0.9, colors: 100, marks: [] };
     stage.innerHTML = `<div class="imgstage${this.multi ? ' multi' : ''}">${this.multi ? '<div class="frames" id="frames"></div>' : ''}
@@ -517,6 +533,10 @@ const ImageKind = {
     return c;
   },
   apply() {
+    if (this.selPaste) { // after an undo the pasted picture may have moved, or be gone
+      const m = state.marks.find((q) => q.t === 'img' && q.id === this.selPaste);
+      if (m) this.sel = this.roundBox(this.pasteBox(m)); else { this.sel = null; this.selPaste = null; }
+    }
     this.draw(); this.syncResize(); this.cropUI.sync(); this.adjUI?.();
     this.rs.hidden = this.sizes;
     this.syncStrip(); this.syncTools();
@@ -652,6 +672,62 @@ const ImageKind = {
     const a = (-state.rot * Math.PI) / 180, cs = Math.round(Math.cos(a)), sn = Math.round(Math.sin(a));
     return { x: u * cs - v * sn + this.W0 / 2, y: u * sn + v * cs + this.H0 / 2 };
   },
+  // The other way: the picture's own pixels to the turned picture's.
+  fromImage(x, y) {
+    const { w, h } = this.dims();
+    const a = (state.rot * Math.PI) / 180, cs = Math.round(Math.cos(a)), sn = Math.round(Math.sin(a));
+    const u = x - this.W0 / 2, v = y - this.H0 / 2;
+    let px = u * cs - v * sn, py = u * sn + v * cs;
+    if (state.fh) px = -px;
+    if (state.fv) py = -py;
+    return { x: px + w / 2, y: py + h / 2 };
+  },
+  // ---------- pasted pictures ----------
+  pasteMarks() { return state.marks.filter((m) => m.t === 'img' && (m.f === -1 || m.f === this.fi)); },
+  // Where a pasted picture shows now, as a box in the turned picture's pixels (it turns with the picture).
+  pasteBox(m) {
+    const c = this.fromImage(m.c.x, m.c.y);
+    const turned = ((state.rot - m.o.rot + 360) % 180) !== 0;
+    const w = turned ? m.h : m.w, h = turned ? m.w : m.h;
+    return { x: c.x - w / 2, y: c.y - h / 2, w, h };
+  },
+  pasteAt(p) {
+    const list = this.pasteMarks();
+    for (let i = list.length - 1; i >= 0; i--) { const b = this.pasteBox(list[i]); if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return list[i]; }
+    return null;
+  },
+  // Put the picked box's place and size back onto the pasted picture it's around.
+  boxToPaste(m, b) {
+    const turned = ((state.rot - m.o.rot + 360) % 180) !== 0;
+    return { ...m, c: this.toImage(b.x + b.w / 2, b.y + b.h / 2), w: turned ? b.h : b.w, h: turned ? b.w : b.h };
+  },
+  selectPaste(m) { this.tool = 'select'; this.selPaste = m.id; this.sel = this.roundBox(this.pasteBox(m)); this.placeSel(); },
+  roundBox(b) { return { x: Math.round(b.x), y: Math.round(b.y), w: Math.max(1, Math.round(b.w)), h: Math.max(1, Math.round(b.h)) }; },
+  async paste() {
+    if (this.crop.isLive()) return;
+    const bytes = await scrawl.invoke('tweak:pasteImage');
+    if (!bytes) { toast('There’s no picture on the clipboard to paste.', null, true); return; }
+    let bmp;
+    try { bmp = await createImageBitmap(new Blob([bytes], { type: 'image/png' })); } catch { toast('Couldn’t paste that picture.', null, true); return; }
+    const id = `p${Date.now().toString(36)}${pasteSeq++}`;
+    PASTES.set(id, bmp);
+    // It lands in the middle of what you can see, at its own size, or smaller if it wouldn't fit.
+    const r = this.cropRect(), wrap = $('wrap'), wb = wrap.getBoundingClientRect(), vb = this.view.getBoundingClientRect();
+    const k = this.toDims({ clientX: 0, clientY: 0 }).k;
+    const vis = {
+      x0: Math.max(r.x, r.x + (wb.left - vb.left) / k), y0: Math.max(r.y, r.y + (wb.top - vb.top) / k),
+      x1: Math.min(r.x + r.w, r.x + (wb.right - vb.left) / k), y1: Math.min(r.y + r.h, r.y + (wb.bottom - vb.top) / k),
+    };
+    if (vis.x1 <= vis.x0 || vis.y1 <= vis.y0) Object.assign(vis, { x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h });
+    const g = Math.min(1, ((vis.x1 - vis.x0) * 0.8) / bmp.width, ((vis.y1 - vis.y0) * 0.8) / bmp.height);
+    const w = Math.max(1, Math.round(bmp.width * g)), h = Math.max(1, Math.round(bmp.height * g));
+    const c = this.toImage((vis.x0 + vis.x1) / 2, (vis.y0 + vis.y1) / 2);
+    const m = { t: 'img', id, c, w, h, o: { rot: state.rot, fh: state.fh, fv: state.fv }, f: this.multi && !this.every ? this.fi : -1 };
+    commit({ ...state, marks: [...state.marks, m] });
+    this.selectPaste(m);
+    toast('Pasted. Drag it to move it, or a corner to size it.');
+  },
+  removePaste(id) { commit({ ...state, marks: state.marks.filter((m) => !(m.t === 'img' && m.id === id)) }); this.sel = null; this.selPaste = null; this.placeSel(); },
   rectToImage(r) {
     const a = this.toImage(r.x, r.y), b = this.toImage(r.x + r.w, r.y + r.h);
     return { x: Math.round(Math.min(a.x, b.x)), y: Math.round(Math.min(a.y, b.y)), w: Math.round(Math.abs(b.x - a.x)), h: Math.round(Math.abs(b.y - a.y)) };
@@ -664,7 +740,11 @@ const ImageKind = {
       e.preventDefault();
       this.stop();
       v.setPointerCapture(e.pointerId);
-      if (this.tool === 'select') this.selectDrag(e); else this.strokeDrag(e);
+      if (this.tool === 'select') {
+        const hit = this.pasteAt(this.toDims(e));
+        if (hit) { this.selectPaste(hit); this.adjustDrag(e); return; }
+        this.selectDrag(e);
+      } else this.strokeDrag(e);
     });
     $('sel').addEventListener('pointerdown', (e) => {
       if (e.target.closest('.selbar') || e.button !== 0) return;
@@ -718,7 +798,7 @@ const ImageKind = {
       if (this.sel && (this.sel.w < 2 || this.sel.h < 2)) this.sel = null;
       this.placeSel();
     };
-    this.sel = null; this.placeSel();
+    this.sel = null; this.selPaste = null; this.placeSel();
     v.addEventListener('pointermove', move);
     v.addEventListener('pointerup', up, { once: true });
   },
@@ -728,6 +808,8 @@ const ImageKind = {
     const s = $('sel'), h = e.target.dataset?.h || 'move';
     const s0 = { ...this.sel }, a = this.toDims(e), r = this.cropRect();
     s.setPointerCapture(e.pointerId);
+    const pid = this.selPaste, pm = pid && state.marks.find((m) => m.t === 'img' && m.id === pid);
+    if (pm) return this.pasteDrag(e, s, h, pm, a);
     const move = (ev) => {
       const b = this.toDims(ev), dx = b.x - a.x, dy = b.y - a.y;
       let x0 = s0.x, y0 = s0.y, x1 = s0.x + s0.w, y1 = s0.y + s0.h;
@@ -748,29 +830,90 @@ const ImageKind = {
     s.addEventListener('pointerup', up, { once: true });
     s.addEventListener('pointercancel', up, { once: true });
   },
+  // A pasted picture moves anywhere (even partly off the edge), and a corner sizes it, keeping its shape
+  // (⇧ frees it); a side stretches it. It lands as one undo step when you let go.
+  pasteDrag(e, s, h, pm, a) {
+    const before = JSON.stringify(state), b0 = this.pasteBox(pm), ratio = b0.w / b0.h;
+    let moved = false;
+    const move = (ev) => {
+      const b = this.toDims(ev), dx = b.x - a.x, dy = b.y - a.y;
+      if (!moved && Math.hypot(dx * b.k, dy * b.k) < 2) return;
+      moved = true;
+      let x0 = b0.x, y0 = b0.y, x1 = b0.x + b0.w, y1 = b0.y + b0.h;
+      if (h === 'move') { x0 += dx; x1 += dx; y0 += dy; y1 += dy; }
+      else {
+        if (h.includes('w')) x0 = Math.min(b0.x + dx, x1 - 4);
+        if (h.includes('e')) x1 = Math.max(x1 + dx, x0 + 4);
+        if (h.includes('n')) y0 = Math.min(b0.y + dy, y1 - 4);
+        if (h.includes('s')) y1 = Math.max(y1 + dy, y0 + 4);
+        if (h.length === 2 && !ev.shiftKey) { // a corner: keep its shape, pinned at the opposite corner
+          let w = x1 - x0, ht = y1 - y0;
+          if (w / ht > ratio) ht = w / ratio; else w = ht * ratio;
+          if (h.includes('w')) x0 = x1 - w; else x1 = x0 + w;
+          if (h.includes('n')) y0 = y1 - ht; else y1 = y0 + ht;
+        }
+      }
+      const box = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+      state = { ...state, marks: state.marks.map((m) => (m.t === 'img' && m.id === pm.id ? this.boxToPaste(m, box) : m)) };
+      this.sel = this.roundBox(box);
+      this.draw();
+      this.placeSel(true);
+    };
+    const up = () => {
+      s.removeEventListener('pointermove', move);
+      if (moved && before !== JSON.stringify(state)) { hist.past.push(before); hist.future = []; changed(); }
+      this.placeSel();
+    };
+    s.addEventListener('pointermove', move);
+    s.addEventListener('pointerup', up, { once: true });
+    s.addEventListener('pointercancel', up, { once: true });
+  },
   placeSel(dragging = false) {
     const s = $('sel');
     if (!s) return;
     const c = this.sel;
+    if (!c) this.selPaste = null;
     s.hidden = !c || this.crop.isLive();
     if (!c || s.hidden) { this.syncTools(); return; }
     const r = this.cropRect(), o = this.outSize(), k = this.z * (o.w / r.w);
     Object.assign(s.style, { left: `${(c.x - r.x) * k}px`, top: `${(c.y - r.y) * k}px`, width: `${c.w * k}px`, height: `${c.h * k}px` });
-    const bar = $('selbar');
-    if (!bar.childElementCount) {
-      bar.append(button('Crop to this', () => this.cropToSel(), 'sb'), button('Copy', () => this.copySel(), 'sb'), button('Cut', () => this.copySel(true), 'sb'), button('Clear', () => this.clearSel(), 'sb'));
-      bar.addEventListener('pointerdown', (e) => e.stopPropagation());
+    const bar = $('selbar'), mode = this.selPaste ? 'paste' : 'sel';
+    if (bar.dataset.mode !== mode) {
+      bar.dataset.mode = mode;
+      bar.replaceChildren(...(mode === 'paste'
+        ? [button('Done', () => { this.sel = null; this.selPaste = null; this.placeSel(); }, 'sb'), button('Copy', () => this.copySel(), 'sb'), button('Cut', () => this.copySel(true), 'sb'), button('Delete', () => this.removePaste(this.selPaste), 'sb')]
+        : [button('Crop to this', () => this.cropToSel(), 'sb'), button('Copy', () => this.copySel(), 'sb'), button('Cut', () => this.copySel(true), 'sb'), button('Clear', () => this.clearSel(), 'sb')]));
+      if (!bar.dataset.wired) { bar.dataset.wired = 1; bar.addEventListener('pointerdown', (e) => e.stopPropagation()); }
     }
-    bar.querySelector('.sb').textContent = 'Crop to this';
     bar.dataset.dims = `${c.w} × ${c.h}`;
     s.classList.toggle('dragging', dragging);
+    // The bar sits below the box, clear of its handles. If that would run off the bottom of what you can
+    // see, it goes above instead, and if neither has room, just inside the box's bottom edge.
+    if (!dragging) {
+      s.classList.remove('bar-up', 'bar-in');
+      const wb = $('wrap').getBoundingClientRect(), sb = s.getBoundingClientRect(), bh = bar.offsetHeight + 18;
+      if (sb.bottom + bh > wb.bottom - 4) s.classList.add(sb.top - bh >= wb.top + 54 ? 'bar-up' : 'bar-in'); // 54: the tools along the top
+      // …and sideways it stays inside the stage, so a box by the edge doesn't push it out of sight.
+      bar.style.marginLeft = '0px';
+      const br = bar.getBoundingClientRect();
+      bar.style.marginLeft = `${Math.max(0, wb.left + 8 - br.left) - Math.max(0, br.right - (wb.right - 8))}px`;
+    }
     this.syncTools();
   },
   cropToSel() { const c = this.sel; if (!c) return; this.sel = null; this.zoom = null; commit({ ...state, crop: c, out: null }); },
-  clearSel() { const c = this.sel; if (!c) return; this.addMark({ t: 'clear', r: this.rectToImage(c) }); },
+  clearSel() { const c = this.sel; if (!c) return; if (this.selPaste) { this.removePaste(this.selPaste); return; } this.addMark({ t: 'clear', r: this.rectToImage(c) }); },
   async copySel(cut = false) {
     const c = this.sel; if (!c) return;
-    const blob = await this.render(this.fi, c).convertToBlob({ type: 'image/png' });
+    let blob;
+    const pm = this.selPaste && PASTES.get(this.selPaste);
+    if (pm) { // a pasted picture copies as itself, at the size it shows, not what's behind it
+      const oc = new OffscreenCanvas(c.w, c.h), x = oc.getContext('2d');
+      const m = state.marks.find((q) => q.t === 'img' && q.id === this.selPaste);
+      x.translate(c.w / 2, c.h / 2); x.scale(state.fh !== m.o.fh ? -1 : 1, state.fv !== m.o.fv ? -1 : 1); x.rotate(((state.rot - m.o.rot) * Math.PI) / 180);
+      const turned = ((state.rot - m.o.rot + 360) % 180) !== 0, w = turned ? c.h : c.w, h = turned ? c.w : c.h;
+      x.drawImage(pm, -w / 2, -h / 2, w, h);
+      blob = await oc.convertToBlob({ type: 'image/png' });
+    } else blob = await this.render(this.fi, c).convertToBlob({ type: 'image/png' });
     const ok = await scrawl.invoke('tweak:copyImage', await blob.arrayBuffer());
     if (!ok) { toast('Couldn’t copy that part.', null, true); return; }
     if (cut) this.clearSel();
@@ -912,9 +1055,17 @@ const ImageKind = {
   },
   keys(e) {
     if ((e.key === 'Escape' || e.key === 'Enter') && this.crop.isLive()) { this.crop.live(false); this.cropUI.sync(); this.syncTools(); this.draw(); return true; }
+    if ((e.key === 'Escape' || e.key === 'Enter') && this.selPaste) { this.sel = null; this.selPaste = null; this.placeSel(); return true; }
     if (e.key === 'Escape' && this.sel) { this.sel = null; this.placeSel(); return true; }
     if ((e.key === 'Delete' || e.key === 'Backspace') && this.sel) { this.clearSel(); return true; }
     if (e.key === 'Enter' && this.sel) { this.cropToSel(); return true; }
+    if (this.selPaste && e.key.startsWith('Arrow')) { // nudge the pasted picture (⇧ for 10)
+      const n = e.shiftKey ? 10 : 1, c = this.sel;
+      const dx = e.key === 'ArrowLeft' ? -n : e.key === 'ArrowRight' ? n : 0, dy = e.key === 'ArrowUp' ? -n : e.key === 'ArrowDown' ? n : 0;
+      const box = { ...c, x: c.x + dx, y: c.y + dy };
+      commit({ ...state, marks: state.marks.map((m) => (m.t === 'img' && m.id === this.selPaste ? this.boxToPaste(m, box) : m)) });
+      this.sel = box; this.placeSel(); return true;
+    }
     if (this.sel && e.key.startsWith('Arrow')) { // nudge the box (⇧ for 10)
       const r = this.cropRect(), n = e.shiftKey ? 10 : 1, c = this.sel;
       const dx = e.key === 'ArrowLeft' ? -n : e.key === 'ArrowRight' ? n : 0, dy = e.key === 'ArrowUp' ? -n : e.key === 'ArrowDown' ? n : 0;
@@ -933,9 +1084,10 @@ const ImageKind = {
     if (e.key === '-') { this.zoomStep(-1); return true; }
     if (e.key === '9') { this.setZoom(null); return true; }
     if (this.crop.isLive()) return false;
-    if (e.key === 'a') { const r = this.cropRect(); this.tool = 'select'; this.sel = { ...r }; this.placeSel(); return true; }
+    if (e.key === 'a') { const r = this.cropRect(); this.tool = 'select'; this.selPaste = null; this.sel = { ...r }; this.placeSel(); return true; }
     if (e.key === 'c' && this.sel) { this.copySel(); return true; }
     if (e.key === 'x' && this.sel) { this.copySel(true); return true; }
+    if (e.key === 'v') { this.paste(); return true; }
     return false;
   },
 };

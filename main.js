@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, screen, systemPreferences, shell, globalShortcut, desktopCapturer, clipboard, nativeImage, dialog, powerMonitor } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, screen, systemPreferences, shell, globalShortcut, desktopCapturer, clipboard, ClipboardItem, nativeImage, dialog, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { uIOhook, UiohookKey } = require('uiohook-napi');
@@ -1827,12 +1827,28 @@ ipcMain.handle('tweak:probe', async (e) => {
   try { return JSON.parse(String(await TweakFiles.run(helperPath(), ['probe', w.filePath])).trim().split('\n').pop()); } catch { return null; }
 });
 // A picked part of a picture onto the clipboard (Copy and Cut in the editor).
-ipcMain.handle('tweak:copyImage', (e, bytes) => {
+// (This Electron's clipboard is the async one, in ClipboardItems like the web's: there's no writeImage.)
+ipcMain.handle('tweak:copyImage', async (e, bytes) => {
   if (!editorFor(e) || !bytes) return false;
-  const img = nativeImage.createFromBuffer(Buffer.from(bytes));
-  if (img.isEmpty()) return false;
-  clipboard.writeImage(img);
-  return true;
+  const png = Buffer.from(bytes);
+  if (nativeImage.createFromBuffer(png).isEmpty()) return false;
+  try { await clipboard.write([new ClipboardItem({ 'image/png': new Blob([png], { type: 'image/png' }) })]); return true; } catch (err) { console.warn('Copy failed:', err.message); return false; }
+});
+// What's on the clipboard, as a PNG, for Paste in the editor: a picture, or a picture file copied in Finder.
+ipcMain.handle('tweak:pasteImage', async (e) => {
+  if (!editorFor(e)) return null;
+  try {
+    for (const item of await clipboard.read()) {
+      if (item.types.includes('image/png')) return Buffer.from(await (await item.getType('image/png')).arrayBuffer());
+      const ft = item.types.find((t) => t === 'text/uri-list' || t.includes('public.file-url'));
+      if (ft) {
+        const url = String(await (await item.getType(ft)).text()).split(/\r?\n/).find((l) => l.startsWith('file://'));
+        const img = url ? nativeImage.createFromPath(decodeURIComponent(new URL(url).pathname)) : null;
+        if (img && !img.isEmpty()) return img.toPNG();
+      }
+    }
+  } catch (err) { console.warn('Paste failed:', err.message); }
+  return null;
 });
 // A new name (and maybe ending) for the file or folder in this window, straight away: nothing inside changes.
 ipcMain.handle('tweak:rename', async (e, job) => {

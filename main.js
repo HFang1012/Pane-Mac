@@ -1705,6 +1705,8 @@ function openEditor(file, from = null) {
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
   w.filePath = file;
+  w.front = null; // the app you were in, to hand the front back to when the editor goes (see editorAway)
+  frontApp().then((id) => { if (!Music.isSelf(id)) w.front = id; });
   editors.add(w);
   // A pop-up over whatever you're in, even a full-screen app: it floats above other apps' windows and stays on
   // the Space you're looking at. (Turning that off later would make macOS carry it, and you, off a full-screen
@@ -1731,9 +1733,20 @@ function openEditor(file, from = null) {
     setTimeout(land, 1500); // or regardless, if it's slow to appear
   }
   w.on('closed', () => { editors.delete(w); if (ghost && !ghost.isDestroyed()) ghost.destroy(); });
+  // Closing (⌘W, its × button) hands the front back first, then closes for real.
+  w.on('close', (e) => {
+    if (quitting || w.handedBack) return;
+    e.preventDefault();
+    editorAway(w, () => { if (!w.isDestroyed()) w.destroy(); });
+  });
   // Floating only while you're using it: once another app (Finder, say) comes forward, the editor drops to an
   // ordinary window's level so that app can sit over it, and it floats again when you click back into it.
-  w.on('blur', () => { if (!w.isDestroyed()) w.setAlwaysOnTop(false); });
+  // Note that app too: it's the one you'd expect to land in when the editor goes.
+  w.on('blur', () => {
+    if (w.isDestroyed()) return;
+    w.setAlwaysOnTop(false);
+    setTimeout(() => frontApp().then((id) => { if (id && !Music.isSelf(id) && !w.isDestroyed()) w.front = id; }), 120);
+  });
   w.on('focus', () => { if (!w.isDestroyed()) w.setAlwaysOnTop(true, 'floating'); });
   return w;
 }
@@ -1756,6 +1769,26 @@ function growGhost(display, from, to) {
   return g;
 }
 const editorFor = (e) => [...editors].find((w) => !w.isDestroyed() && w.webContents === e.sender);
+// An editor closing or hiding while Pane is in front leaves Pane active with nothing to show, and macOS then
+// goes looking for a Pane window: the settings window on another Space, or Pane itself on your next swipe
+// between Spaces. Like Jot and Away, hand the front to the app you were in *before* the window goes.
+// (Another editor still up takes it instead: it's on every Space, so focusing it moves nothing.)
+function editorAway(w, go) {
+  w.handedBack = true;
+  const other = [...editors].find((o) => o !== w && !o.isDestroyed() && o.isVisible());
+  if (!w.isFocused()) return go(); // you're already somewhere else
+  if (other) { go(); other.focus(); return; }
+  if (!w.front) return go();
+  // Through AppKit, not `tell … to activate`, which needs permission to control that app and fails silently.
+  Music.giveFront(w.front).catch(() => {}).finally(() => setTimeout(go, 40));
+}
+// Spin: Spotify took the front while Pane had it. Pane takes it back only if an editor is up to receive it.
+Music.onSelfFront(() => {
+  const w = [...editors].find((o) => !o.isDestroyed() && o.isVisible());
+  if (!w) return false;
+  w.show(); w.focus(); app.focus({ steal: true });
+  return true;
+});
 
 ipcMain.handle('tweak:load', async (e) => {
   const w = editorFor(e);
@@ -1933,7 +1966,7 @@ ipcMain.on('tweak:window', (e, what) => {
   const w = editorFor(e);
   if (!w) return;
   if (what === 'close') w.close();
-  else if (what === 'hide') w.hide(); // a panel can't go to the Dock; clicking Pane's Dock icon brings it back
+  else if (what === 'hide') editorAway(w, () => { w.handedBack = false; if (!w.isDestroyed()) w.hide(); }); // a panel can't go to the Dock; clicking Pane's Dock icon brings it back
 });
 ipcMain.on('tweak:reveal', (e, file) => {
   const w = editorFor(e);
@@ -2288,7 +2321,39 @@ function createSettings() {
     binding = false;
     settingsWin.hide();
   });
+  // Every other Pane window is a panel on every Space; this is the one that stays on a single Space. macOS
+  // ("When switching to an application, switch to a Space with open windows for the application") swipes you
+  // over to it whenever Pane comes forward, even by accident: landing on an empty desktop, Spotify handing
+  // the front back after Spin, an editor closing. So once you've left Pane for another app, it steps out of
+  // the way. The Dock icon, the Pane menu or ⌘-Tab bring it back, on the Space you're on.
+  settingsWin.on('blur', () => {
+    setTimeout(() => {
+      if (!settingsWin || settingsWin.isDestroyed() || !settingsWin.isVisible() || settingsWin.isFocused()) return;
+      if (BrowserWindow.getFocusedWindow()) return; // another Pane window (an editor, a note) has it
+      frontApp().then((id) => {
+        // Still Pane in front (a file dialog, say): stay. Only park once another app really has the front.
+        if (!id || Music.isSelf(id) || settingsWin.isDestroyed() || settingsWin.isFocused()) return;
+        binding = false;
+        settingsWin.hide();
+        settingsParked = true;
+      });
+    }, 150);
+  });
+  settingsWin.on('show', () => { settingsParked = false; });
 }
+// The settings window stepped aside when you left Pane (see createSettings). ⌘-Tab back to Pane shows it
+// again; Pane coming forward any other way (no ⌘ just let go) leaves it put away, so nothing swipes you.
+let settingsParked = false;
+let metaUpAt = 0;
+uIOhook.on('keyup', (e) => { if (e.keycode === UiohookKey.Meta || e.keycode === UiohookKey.MetaRight) metaUpAt = Date.now(); });
+app.on('did-become-active', () => {
+  if (!settingsParked) return;
+  // ⌘-Tab lands as ⌘ is let go, and that key-up can reach Pane a moment either side of this.
+  setTimeout(() => {
+    if (!settingsParked || Date.now() - metaUpAt > 700 || BrowserWindow.getFocusedWindow() || !settingsWin || settingsWin.isDestroyed()) return;
+    settingsWin.show(); settingsWin.focus();
+  }, 120);
+});
 
 const trusted = () => systemPreferences.isTrustedAccessibilityClient(false);
 

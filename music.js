@@ -266,6 +266,12 @@ async function giveFront(bundle) {
   if ((await frontBundle()) === bundle) return;
   await osa(`tell application id ${lit(bundle)} to activate`, { js: false }).catch(() => {});
 }
+// Pane itself (the built app, or Electron while working on it). Never handed the front through
+// LaunchServices or Apple Events: `open -b` on Pane counts as a Dock click, which shows the settings
+// window and carries you to whichever Space it's on. Pane brings itself back through `selfFront`.
+const isSelf = (id) => id === 'com.pane.app' || !!id?.startsWith('com.github.Electron');
+let selfFront = () => false;
+function onSelfFront(fn) { selfFront = fn; }
 async function keepFront(appId, run, { watch = 3000 } = {}) {
   const musicBundle = APPS[appId]?.bundle;
   const before = musicBundle ? await frontBundle() : null;
@@ -280,7 +286,12 @@ async function keepFront(appId, run, { watch = 3000 } = {}) {
     if ((await frontBundle()) === musicBundle) {
       // Hidden before? Hide it again: macOS then hands the front back by itself.
       if (wasHidden) await hideApp(musicBundle);
-      if ((await frontBundle()) === musicBundle) await giveFront(before);
+      if ((await frontBundle()) === musicBundle) {
+        // Pane was in front (a Tweak editor, say): it takes the front back itself if one of its windows is
+        // still up to take it; otherwise the music app steps aside and macOS picks an app on this Space.
+        if (isSelf(before)) { if (!selfFront()) await hideApp(musicBundle); }
+        else await giveFront(before);
+      }
       until = Math.max(until, Date.now() + 1000);
     }
   }
@@ -686,4 +697,4 @@ async function spotifyList(np) {
   return { source: 'spotify', context: ctx?.uri || null, items: [...back.reverse(), current, ...up], index: back.length, loop: loops, ordered };
 }
 
-module.exports = { playlists, playPlaylist, keepFront, frontBundle, APPS, refresh, snapshot, onChange, act, playAt, connectSpotify, disconnectSpotify, spotifyAccount, REDIRECT };
+module.exports = { playlists, playPlaylist, keepFront, frontBundle, giveFront, isSelf, onSelfFront, APPS, refresh, snapshot, onChange, act, playAt, connectSpotify, disconnectSpotify, spotifyAccount, REDIRECT };

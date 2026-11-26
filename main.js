@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, screen, systemPreferences, shell, globalShortcut, desktopCapturer, clipboard, ClipboardItem, nativeImage, dialog, powerMonitor } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, screen, systemPreferences, shell, globalShortcut, desktopCapturer, clipboard, ClipboardItem, nativeImage, dialog, powerMonitor, powerSaveBlocker } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { uIOhook, UiohookKey } = require('uiohook-napi');
@@ -1017,6 +1017,18 @@ ipcMain.handle('spotify:disconnect', () => { Music.disconnectSpotify(); return M
 let away = null; // { since, preview, wins, closing, front }
 let awayBinding = false; // the settings window is listening for new Away keys
 let awayKeyOn = false; // the Away shortcut is registered
+let awakeId = null; // power assertion while Away is up, so the screen stays on and the note stays visible
+
+// The blur is the whole point of stepping away, so the display must not sleep out from under it.
+// Closing the lid still sleeps the Mac. The assertion ends as soon as Away does.
+function stayAwake() {
+  if (awakeId != null && powerSaveBlocker.isStarted(awakeId)) return;
+  awakeId = powerSaveBlocker.start('prevent-display-sleep');
+}
+function letSleep() {
+  if (awakeId != null && powerSaveBlocker.isStarted(awakeId)) powerSaveBlocker.stop(awakeId);
+  awakeId = null;
+}
 
 // ---------- shortcuts: Away's, Jot's and Tweak's, each when it's set to a shortcut rather than a double-tap ----------
 // All set together, because the only way to drop one is to drop them all. Off while any are being chosen.
@@ -1132,6 +1144,7 @@ function showAway(preview = false) {
   const cursor = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   const a = { since: Date.now(), preview, wins: [], closing: false, front: null };
   away = a;
+  stayAwake();
   if (!preview) frontApp().then((id) => { if (id && id !== 'com.pane.app' && !id.startsWith('com.github.Electron')) a.front = id; });
   // Bringing Pane forward (to hide the pointer) and closing Away later both make macOS look for another
   // Pane window to focus. If the settings window is open on a different Space, macOS would jump there.
@@ -1187,6 +1200,7 @@ function hideAway() {
   const a = away;
   if (!a || a.closing) return;
   a.closing = true;
+  letSleep();
   for (const w of a.wins) if (!w.isDestroyed()) w.webContents.send('away:leave');
   // Hand the keyboard back *before* the Away windows close: to the app you were in, or to the settings
   // window after a preview (it's on the Space you're looking at). Otherwise macOS picks a Pane window
@@ -2605,6 +2619,7 @@ app.on('activate', () => {
 app.on('window-all-closed', () => { /* stay running: the overlay is the app */ });
 app.on('before-quit', () => {
   quitting = true;
+  letSleep();
   clearTimeout(saveTimer);
   if (drawings) writeJSON('drawings.json', drawings);
   globalShortcut.unregisterAll();

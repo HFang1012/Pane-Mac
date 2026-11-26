@@ -60,9 +60,9 @@ function cpuSeconds(t) {
 function parsePs(text) {
   const procs = new Map();
   for (const line of text.split('\n')) {
-    const m = /^\s*(\d+)\s+(\d+)\s+([\d.]+)\s+(\S+)\s+(\d+)\s+(.+)$/.exec(line);
+    const m = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+([\d.]+)\s+(\S+)\s+(\d+)\s+(.+)$/.exec(line);
     if (!m) continue;
-    procs.set(Number(m[1]), { pid: Number(m[1]), ppid: Number(m[2]), pcpu: Number(m[3]), time: cpuSeconds(m[4]), rss: Number(m[5]) * 1024, exe: m[6].trim() });
+    procs.set(Number(m[1]), { pid: Number(m[1]), ppid: Number(m[2]), uid: Number(m[3]), pcpu: Number(m[4]), time: cpuSeconds(m[5]), rss: Number(m[6]) * 1024, exe: m[7].trim() });
   }
   return procs;
 }
@@ -105,7 +105,12 @@ const S = {
   slow: { at: 0, data: null }, // battery, disk, heat, sleep blockers: every 10 s
   icons: new Map(), // bundle path -> data URL (or null while it loads)
   io: null, // the last network, disk and graphics totals, for turning into speeds
+  procs: new Map(), // pid -> { exe, hist: [% of one core], since }: single processes doing real work
 };
+const PROC_HISTORY = 30;
+// Processes Pane never offers to end, even when they're yours: macOS needs them to keep running.
+const PROTECTED = /^(launchd|loginwindow|WindowServer|kernel_task|UserEventAgent|cfprefsd|distnoted|lsd|tccd|secd|securityd|trustd|notifyd|opendirectoryd|logd|runningboardd)$/;
+const MY_UID = typeof process.getuid === 'function' ? process.getuid() : -1;
 
 function cpuTotals() {
   let idle = 0, total = 0;
@@ -395,8 +400,8 @@ const push = (arr, v) => { arr.push(v); if (arr.length > HISTORY) arr.shift(); r
 // One look at the whole Mac. `selfPids` are Pane's own processes (kept apart, as "Pane").
 async function sample({ selfPid, thermal, display } = {}) {
   startTicker();
-  const [psOut, appsOut, mem, slow, gpuOut, feet, io, chipNow] = await Promise.all([
-    run('ps', ['-Axo', 'pid=,ppid=,pcpu=,time=,rss=,comm=']),
+  const [psOut, appsOut, mem, slow, gpuOut, feet, io, chipNow, front] = await Promise.all([
+    run('ps', ['-Axo', 'pid=,ppid=,uid=,pcpu=,time=,rss=,comm=']),
     run('lsappinfo', ['list']),
     memory(),
     slowStats(),
@@ -405,6 +410,7 @@ async function sample({ selfPid, thermal, display } = {}) {
     footprints(),
     counters(),
     chip(),
+    frontApp(),
   ]);
   const gpuPids = new Set(gpuOut.split('\n').map(Number).filter(Boolean));
   const now = Date.now();
@@ -467,6 +473,7 @@ async function sample({ selfPid, thermal, display } = {}) {
   for (const p of procs.values()) {
     const c = cpuOf(p), m = memOf(p);
     const a = owner(p);
+    p.cpuNow = c; p.app = a;
     if (a) {
       const g = groups.get(a.pid);
       g.cpu += c; g.mem += m; g.procs++;
@@ -534,6 +541,7 @@ async function sample({ selfPid, thermal, display } = {}) {
     live: liveOf(systemIo, systemCount),
   });
   list.sort((a, b) => b.cpu - a.cpu || b.mem - a.mem);
+  const procsTop = topProcesses(procs, now, { front, selfPid, blockersByPid });
 
   const snap = {
     at: now, cores, uptime: os.uptime(), chip: chipNow, load: os.loadavg().map((v) => Math.round(v * 100) / 100),
@@ -541,9 +549,57 @@ async function sample({ selfPid, thermal, display } = {}) {
     mem, battery: slow.battery, disk: slow.disk, heat: heatNow(slow.heat, thermal),
     live: { gpu: L.gpu, gpuMem: L.gpuMem, down: L.down, up: L.up, read: L.read, write: L.write }, display: display || null, procCount: procs.size,
     apps: list, appCount: apps.length, memExact: feet.size > 0,
+    procs: procsTop, frontKey: front ? front.bundle || front.name : null,
   };
   snap.health = health(snap);
   return snap;
+}
+
+// ---------- single processes: the ones burning the processor ----------
+// Apps add up all their parts, which hides the one part doing the damage: a single Chrome tab, a stuck
+// Spotlight worker, a script left running in a terminal. So each process doing real work gets its own
+// short history, and the busiest come back with what's needed to explain them and, where Pane can, end them.
+//   avg      % of one core over the last three looks (more than 100 means several cores)
+//   busyFor  seconds it's stayed above half a core without a break
+//   steady   pinned at one core, barely moving: what a program stuck in a loop looks like
+//   idle     its app isn't the one in front and isn't playing or showing anything: power going nowhere
+//   chronic  it has used a big slice of all the processor time since the Mac started
+function topProcesses(procs, now, { front, selfPid, blockersByPid }) {
+  const seen = new Set();
+  const rows = [];
+  const uptime = os.uptime();
+  for (const p of procs.values()) {
+    let h = S.procs.get(p.pid);
+    if (h && h.exe !== p.exe) h = null; // the pid was handed to a new program
+    if (!h && p.cpuNow < 3) continue;
+    if (!h) { h = { exe: p.exe, hist: [], since: null }; S.procs.set(p.pid, h); }
+    seen.add(p.pid);
+    h.hist.push(p.cpuNow);
+    if (h.hist.length > PROC_HISTORY) h.hist.shift();
+    const last = h.hist.slice(-3);
+    const avg = last.reduce((n, v) => n + v, 0) / last.length;
+    if (avg >= 50) h.since ??= now; else h.since = null;
+    // Quiet for a while: stop watching it (it comes back the moment it's busy again).
+    if (h.hist.length >= 6 && h.hist.slice(-6).every((v) => v < 3)) { S.procs.delete(p.pid); continue; }
+    if (avg < 1) continue;
+    const five = h.hist.slice(-5);
+    const steady = five.length >= 5 && five.every((v) => v >= 88 && v <= 112) && Math.max(...five) - Math.min(...five) < 12;
+    const a = p.app;
+    const { cat, name } = categorize(p.exe);
+    const awake = a ? (blockersByPid.get(a.pid) || []).length > 0 : false;
+    rows.push({
+      pid: p.pid, exe: p.exe, name: path.basename(p.exe), cat: cat.id, catLabel: cat.label, passes: !!cat.passes,
+      helperOf: a ? null : cat.id === 'helpers' ? name : null,
+      ownerKey: a ? a.bundle || a.name : null, ownerName: a?.name || null, ownerPid: a?.pid || null, main: !!a && a.pid === p.pid,
+      self: p.pid === selfPid || p.ppid === selfPid || a?.pid === selfPid,
+      mine: p.uid === MY_UID, protected: PROTECTED.test(path.basename(p.exe)),
+      cpu: Math.round(p.cpuNow), avg: Math.round(avg), steady, busyFor: h.since ? Math.round((now - h.since) / 1000) : 0,
+      idle: !!a && !!front && a.pid !== front.pid && !awake,
+      cpuTime: Math.round(p.time), chronic: uptime > 3600 && p.time > uptime * 0.2 && !['kernel', 'screen'].includes(cat.id),
+    });
+  }
+  for (const pid of S.procs.keys()) if (!seen.has(pid)) S.procs.delete(pid);
+  return rows.sort((x, y) => y.avg - x.avg).slice(0, 12);
 }
 
 // ---------- the overall answer: do you need to debug? ----------
@@ -557,6 +613,8 @@ function health(s) {
   else if (cpu15 >= 50) hit(12, 'Processor busy');
   const busy = s.apps.filter((a) => !a.self && !a.system && avg(a.history.slice(-3)) >= 20);
   busy.slice(0, 2).forEach((a) => hit(10, `${a.name} working hard`));
+  const stuck = (s.procs || []).find((p) => !p.self && !p.passes && p.cat !== 'kernel' && p.avg >= 85 && (p.steady || p.busyFor >= 60));
+  if (stuck && !busy.some((a) => a.key === stuck.ownerKey)) hit(10, `${stuck.name} burning the processor`);
   if (s.mem.pressure === 'critical') hit(40, 'Out of memory');
   else if (s.mem.pressure === 'warn') hit(20, 'Memory tight');
   if (s.mem.swapUsed > Math.max(2 * 1073741824, s.mem.total * 0.15)) hit(10, 'Using storage as memory');
@@ -657,11 +715,28 @@ const SETTINGS_PANES = {
   login: 'x-apple.systempreferences:com.apple.LoginItems-Settings.extension',
   display: 'x-apple.systempreferences:com.apple.Accessibility-Settings.extension?Display',
   automation: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Automation',
+  spotlight: 'x-apple.systempreferences:com.apple.Spotlight-Settings.extension',
 };
 
 // Run one fix. `app` is the app it's for, as the page last saw it ({ pid, bundle, name }), checked
 // against what's running now. `shell` is Electron's, for opening System Settings and apps.
+// End one process (not a whole app): a runaway tab, a stuck helper, a script left running. Only yours,
+// only if it's still the same program the page saw (pids get reused), never Pane or one macOS needs.
+async function endProcess(t, hard, selfPid) {
+  if (!t?.pid || typeof t.exe !== 'string') return { ok: false, message: 'Couldn’t tell which task that was.' };
+  const out = (await run('ps', ['-o', 'uid=,ppid=,comm=', '-p', String(t.pid)])).trim();
+  const m = /^(\d+)\s+(\d+)\s+(.+)$/.exec(out);
+  const name = path.basename(t.exe);
+  if (!m || m[3].trim() !== t.exe) return { ok: true, message: `${name} already stopped.` };
+  if (Number(m[1]) !== MY_UID) return { ok: false, message: `${name} is part of macOS. Only a restart stops it.` };
+  if (t.pid === selfPid || Number(m[2]) === selfPid || PROTECTED.test(name)) return { ok: false, message: `Pane won’t end ${name}: your Mac needs it.` };
+  try { process.kill(t.pid, hard ? 'SIGKILL' : 'SIGTERM'); } catch { return { ok: false, message: `Couldn’t end ${name}.` }; }
+  if (await waitGone(t.pid, hard ? 2000 : 3500)) return { ok: true, message: `Ended ${name}.` };
+  return { ok: false, message: `${name} didn’t stop. Try Force end.` };
+}
+
 async function fix(kind, app, { shell, selfPid }) {
+  if (kind === 'endproc' || kind === 'killproc') return endProcess(app, kind === 'killproc', selfPid);
   const running = app?.pid ? parseApps(await run('lsappinfo', ['list'])).find((a) => a.pid === app.pid) : null;
   const needApp = ['quit', 'force', 'reopen', 'tabs'].includes(kind);
   if (needApp && !running) return { ok: false, message: 'That app isn’t open anymore.' };
@@ -716,5 +791,5 @@ module.exports = {
   sample, frontApp, fix, isBrowser, startTicker, tickCpu, warm, TRAIL_MS,
   setIconLoader: (fn) => { iconLoader = fn; },
   setHelper: (fn) => { helperFor = fn; },
-  _test: { parseApps, parsePs, cpuSeconds, parseTop, categorize, counters, heatNow, parseNettop, parseIo, parseGpuClients },
+  _test: { topProcesses, parseApps, parsePs, cpuSeconds, parseTop, categorize, counters, heatNow, parseNettop, parseIo, parseGpuClients },
 };

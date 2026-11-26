@@ -65,12 +65,108 @@ const quitAct = (a, label = `Quit ${short(a.name)}`) => ({ label, kind: 'quit', 
 const lookAct = (a) => ({ label: 'Look closer', kind: 'view', app: a, calm: true });
 const hot = (a) => recent(a.history) >= 20 || (recent(a.history) * (snap?.cores || 8)) >= 85;
 
+// ---------- single processes burning the processor ----------
+// The panel's per-app numbers add up every part of an app, so this looks one level down: the single
+// process doing the work (see topProcesses in debug-stats.js), what it is, and the fix that fits it.
+const mins = (sec) => (sec >= 3600 ? `${Math.floor(sec / 3600)} hr${sec >= 7200 ? 's' : ''}${Math.round((sec % 3600) / 60) ? ` ${Math.round((sec % 3600) / 60)} min` : ''}` : sec >= 60 ? `${Math.round(sec / 60)} min` : `${sec} s`);
+// "Extreme": most of a core for 10 seconds or more, or pinned at one core like it's stuck.
+const extreme = (p) => !p.self && (p.steady || (p.avg >= 80 && p.busyFor >= 8) || p.avg >= 150);
+const RENDERER = /Helper \([^)]*Renderer\)|com\.apple\.WebKit\.WebContent/;
+const GPUPROC = /Helper \(GPU\)|com\.apple\.WebKit\.GPU/;
+function procSuggestion(p, s) {
+  const app = p.ownerKey ? appByKey(p.ownerKey) : null;
+  const owner = p.ownerName ? short(p.ownerName) : null;
+  const pctTxt = `${p.avg}% of one core`;
+  const forTxt = p.busyFor >= 30 ? ` for ${mins(p.busyFor)}` : '';
+  const onBattery = s.battery && !s.battery.plugged;
+  const endable = p.mine && !p.protected && !p.self;
+  const end = (label = 'End it', confirm = 'Anything it hasn’t saved is lost.') => ({ label, kind: 'endproc', proc: p, confirm });
+  const force = { label: 'Force end', kind: 'killproc', proc: p, confirm: 'It stops at once. Unsaved work is lost.', calm: true };
+  const level = (p.avg >= 90 && (p.busyFor >= 60 || p.steady)) || p.avg >= 200 ? 'bad' : 'warn';
+  const base = { id: `proc:${p.pid}:${p.name}`, level, proc: p };
+  const idleNote = p.idle ? ` while you’re not even using ${owner}` : '';
+  const chronicNote = p.chronic ? ` It’s used ${mins(p.cpuTime)} of processor time since your Mac started.` : '';
+  // A browser tab (or extension): ending its process just crashes that one tab.
+  if (RENDERER.test(p.name) && owner) {
+    const chromium = CHROMIUM.includes(app?.bundle);
+    return { ...base, title: `A tab in ${owner} is burning the processor`,
+      why: `One tab or extension is using ${pctTxt}${forTxt}${idleNote}.${chromium ? ` Window › Task Manager in ${owner} shows which one.` : ''} Ending it only stops that tab; reload it to get it back.${chronicNote}`,
+      acts: endable ? [end('End that tab', 'That tab shows a crash page until you reload it.'), ...(app ? [lookAct(app)] : [])] : [] };
+  }
+  if (GPUPROC.test(p.name) && owner) {
+    return { ...base, title: `${owner}’s graphics part is working hard`,
+      why: `It’s using ${pctTxt}${forTxt}. A video, a game or an animated page usually does it. Ending it makes ${owner} redraw for a second, then it settles.`,
+      acts: endable ? [end('Reset its graphics', `${owner} flickers for a moment.`)] : [] };
+  }
+  switch (p.cat) {
+    case 'kernel':
+      return { ...base, level: 'warn', title: 'Your Mac is holding itself back to cool off',
+        why: `kernel_task is at ${pctTxt}. That isn’t a bug: macOS takes processor time away from apps when the Mac is hot, or charging hard. Quit busy apps, unplug extra displays and give it air.`,
+        acts: [{ label: 'Activity Monitor', kind: 'activity', calm: true }] };
+    case 'screen':
+      return { ...base, level: 'warn', title: `${p.name} is working hard drawing the screen`,
+        why: `It’s at ${pctTxt}${forTxt}. Lots of open windows, a big or high-refresh external display, and see-through effects all add up.${p.name === 'WindowServer' ? '' : ` Restarting ${p.name} is safe; macOS opens it again.`}`,
+        acts: [{ label: 'Reduce motion & transparency', kind: 'open:display', calm: true }, ...(p.name === 'Dock' ? [{ label: 'Restart Dock', kind: 'dock' }] : /^(ControlCenter|SystemUIServer)$/.test(p.name) ? [{ label: 'Fix menu bar', kind: 'menubar' }] : [])] };
+    case 'search': {
+      const long = p.busyFor >= 20 * 60 || p.chronic;
+      return { ...base, level: long ? 'warn' : 'tip', title: long ? `Spotlight has been indexing for ${mins(Math.max(p.busyFor, p.cpuTime))}` : 'Spotlight is indexing your files',
+        why: long ? `${p.name} is at ${pctTxt}. Indexing that never ends is usually stuck: a restart unsticks it. Keeping huge folders (code projects, virtual machines, downloads) out of Spotlight stops it from coming back.`
+          : `${p.name} is at ${pctTxt}. It catches up after big changes and finishes on its own, so it’s fine to wait.`,
+        acts: long ? [{ label: 'Spotlight settings', kind: 'open:spotlight', calm: true }, { label: 'Restart…', kind: 'restart' }] : [{ label: 'Spotlight settings', kind: 'open:spotlight', calm: true }] };
+    }
+    case 'dev':
+      return { ...base, title: p.steady ? `${p.name} looks stuck` : `${p.name} is burning the processor`,
+        why: `Something started from a terminal or code editor is at ${pctTxt}${forTxt}${p.steady ? ', pinned at one core, which usually means a loop that won’t end' : ''}. If you didn’t mean for it to still be running, end it.${chronicNote}`,
+        acts: endable ? [end(), ...(p.steady ? [force] : [])] : [] };
+    case 'helpers':
+      if (!owner) {
+        return { ...base, title: `${p.helperOf || p.name} is busy in the background`,
+          why: `${p.name}, a background part of ${p.helperOf || 'an app you installed'}, is at ${pctTxt}${forTxt}, with the app itself closed.${chronicNote} Ending it is safe; turning it off in Login Items keeps it from starting again.`,
+          acts: [...(endable ? [end()] : []), { label: 'Login Items', kind: 'open:login', calm: true }] };
+      }
+      break;
+    case 'sound':
+      return { ...base, level: 'tip', title: 'Sound or video is taking real work',
+        why: `${p.name} is at ${pctTxt}. It plays sound and decodes video for every app, so quitting apps you aren’t watching or listening to calms it.`, acts: [] };
+    default:
+      if (p.passes) {
+        return { ...base, level: p.busyFor >= 3600 ? 'warn' : 'tip', title: `${p.catLabel}: ${p.name} is busy`,
+          why: `It’s at ${pctTxt}${forTxt}. This finishes on its own, faster if your Mac stays plugged in and awake.${p.busyFor >= 3600 ? ' After an hour or more it may be stuck; a restart settles it.' : ''}`,
+          acts: p.busyFor >= 3600 ? [{ label: 'Restart…', kind: 'restart', calm: true }] : [] };
+      }
+  }
+  // A part of an open app, or the app itself.
+  if (owner && app) {
+    const what = p.main ? owner : `${p.name}, part of ${owner},`;
+    return { ...base, title: p.steady ? `${owner} looks stuck` : p.idle ? `${owner} is wasting power in the background` : `${owner} is burning the processor`,
+      why: `${what} is using ${pctTxt}${forTxt}${idleNote}${p.steady ? ', pinned at one core like it’s stuck in a loop' : ''}${onBattery ? ', draining your battery' : ''}.${chronicNote} ${p.steady ? 'If it isn’t responding, force it to quit.' : 'Quitting it frees that up.'}`,
+      acts: app.self ? [] : [quitAct(app), ...(p.main ? (p.steady ? [{ label: 'Force quit', kind: 'force', app, confirm: 'Anything you haven’t saved is lost.', calm: true }] : []) : endable ? [end(`End just ${p.name.length > 22 ? 'that part' : p.name}`)] : [])] };
+  }
+  if (endable) {
+    return { ...base, title: p.steady ? `${p.name} looks stuck` : `${p.name} is burning the processor`,
+      why: `It’s at ${pctTxt}${forTxt}${p.steady ? ', pinned at one core like it’s stuck in a loop' : ''}.${chronicNote} It isn’t part of an open app, so ending it is usually safe.`,
+      acts: [end(), ...(p.steady ? [force] : [])] };
+  }
+  return { ...base, level: p.busyFor >= 600 ? 'warn' : 'tip', title: `${p.name} (part of macOS) is busy`,
+    why: `It’s at ${pctTxt}${forTxt}. It belongs to macOS, so Pane can’t end it. If it stays this busy for a long time, a restart settles it.${chronicNote}`,
+    acts: [{ label: 'Restart…', kind: 'restart', calm: true }] };
+}
+// Process fixes for the worst offenders, and which apps and background groups they already explain
+// (so "Chrome is working hard" doesn't show next to "A tab in Chrome is burning the processor").
+function procFixes(s, filter = () => true, max = 2) {
+  const hogs = (s.procs || []).filter((p) => extreme(p) && filter(p)).slice(0, max);
+  const fixes = hogs.map((p) => procSuggestion(p, s));
+  return { fixes, apps: new Set(hogs.map((p) => p.ownerKey).filter(Boolean)), cats: new Set(hogs.filter((p) => !p.ownerKey).map((p) => p.cat)) };
+}
+
 function macSuggestions(s) {
   const out = [];
   const apps = s.apps.filter((a) => !a.self && !a.system);
   const onBattery = s.battery && !s.battery.plugged;
+  const pf = procFixes(s);
+  out.push(...pf.fixes);
   // Apps working hard: the biggest drain on speed and battery.
-  for (const a of apps.filter(hot).slice(0, 2)) {
+  for (const a of apps.filter(hot).filter((a) => !pf.apps.has(a.key)).slice(0, 2)) {
     const share = Math.round(recent(a.history));
     const stuck = share < 20; // one core flat out: often an app stuck in a loop
     out.push({
@@ -83,7 +179,7 @@ function macSuggestions(s) {
   }
   // Something in the background busy: often it finishes on its own.
   const sys = s.apps.find((a) => a.system);
-  for (const p of (sys?.parts || []).filter((p) => p.id !== 'other' && p.core >= 60).slice(0, 1)) out.push(catSuggestion(p, sys));
+  for (const p of (sys?.parts || []).filter((p) => p.id !== 'other' && p.core >= 60 && !pf.cats.has(p.id)).slice(0, 1)) out.push(catSuggestion(p, sys));
   // Memory.
   const heavy = [...apps].sort((a, b) => b.mem - a.mem)[0];
   if (s.mem.pressure !== 'normal') {
@@ -217,14 +313,16 @@ function memLimits(a, s) {
 }
 function appSuggestions(s, a) {
   const out = [];
+  const pf = procFixes(s, (p) => (a.system ? !p.ownerKey : p.ownerKey === a.key), 3);
+  out.push(...pf.fixes);
   if (a.system) {
-    for (const p of (a.parts || []).filter((p) => p.core >= 50).slice(0, 2)) out.push(catSuggestion(p, a));
+    for (const p of (a.parts || []).filter((p) => p.core >= 50 && !pf.cats.has(p.id)).slice(0, 2)) out.push(catSuggestion(p, a));
     if (!out.length && recent(a.history) >= 25) out.push({ id: 'sys-busy', level: 'tip', title: 'Your Mac is busy in the background', why: 'Updates, backups and indexing run when they can. A restart helps if it never calms down.', acts: [{ label: 'Restart…', kind: 'restart', calm: true }] });
     return out;
   }
   const share = Math.round(recent(a.history));
   const onBattery = s.battery && !s.battery.plugged;
-  if (hot(a)) {
+  if (hot(a) && !pf.apps.has(a.key)) {
     out.push({
       id: `hot:${a.key}`, level: share >= 40 ? 'bad' : 'warn',
       // A stuck app pins exactly one core, on and on. Anything spread over more is just real work.
@@ -553,6 +651,34 @@ function partHTML(p, i, max, link) {
     <span class="nm">${esc(p.label)}<small>${esc(sub)}</small></span>
     <span class="meter ${lv}"><i style="width:${width}%"></i></span><span class="num"><b>${p.cpu < 1 && p.cpu > 0 ? '<1' : Math.round(p.cpu)}%</b> · ${bytes(p.mem)}</span></${link ? 'button' : 'div'}>`;
 }
+// Single processes, busiest first: in % of one core, like Activity Monitor. The app's or background's own
+// in their views. Clicking one that belongs to an app opens that app's view.
+function procRowHTML(p, i, max, link) {
+  const lv = p.avg >= 80 ? 'bad' : p.avg >= 35 ? 'warn' : 'good';
+  const width = Math.max(4, Math.min(100, (p.avg / max) * 100));
+  const app = p.ownerKey ? appByKey(p.ownerKey) : null;
+  const icon = app ? appIcon(app) : `<svg class="macic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${CAT_ICON[p.cat] || CAT_ICON.other}</svg>`;
+  const flags = [p.steady ? 'looks stuck' : null, p.busyFor >= 30 ? `busy ${mins(p.busyFor)}` : null, p.idle && p.avg >= 20 ? 'app not in use' : null].filter(Boolean);
+  const where = p.ownerName ? (p.main ? 'The app itself' : `Part of ${short(p.ownerName)}`) : p.helperOf ? `From ${p.helperOf}` : p.catLabel;
+  const sub = [where, ...flags].join(' · ');
+  const tag = link && p.ownerKey ? `button class="rowb" data-key="${esc(p.ownerKey)}"` : 'div class="rowb static"';
+  const tip = `${p.exe}\npid ${p.pid} · ${p.mine ? 'yours' : 'runs as macOS'} · ${mins(p.cpuTime)} of processor time so far`;
+  return `<${tag} data-rk="proc:${p.pid}" style="--d:${i * 30}ms" title="${esc(tip)}">${icon}<span class="nm">${esc(p.name)}<small>${esc(sub)}</small></span>
+    <span class="meter ${lv}"><i style="width:${width}%"></i></span><span class="num"><b>${p.avg}%</b> core</span></${tag.startsWith('button') ? 'button' : 'div'}>`;
+}
+function renderProcs(a) {
+  const all = (snap.procs || []).filter((p) => !p.self);
+  const list = (a ? all.filter((p) => (a.system ? !p.ownerKey : p.ownerKey === a.key)) : all).filter((p) => p.avg >= 1).slice(0, a ? 6 : 5);
+  // An app with only one busy part says nothing its own row doesn't.
+  const show = list.length && !(a && !a.system && list.length === 1 && list[0].main && !extreme(list[0]));
+  $('procBox').hidden = !show;
+  if (!show) return;
+  const hogs = all.filter(extreme).length;
+  $('procNote').textContent = hogs ? `${hogs} burning it` : '% of one core';
+  const max = Math.max(100, ...list.map((p) => p.avg));
+  syncRows($('procRows'), list.map((p, i) => procRowHTML(p, i, max, !a)).join(''));
+}
+
 // The background categories worth showing in the whole Mac's view: only ones doing real work.
 const bigCat = (p) => p.cpu >= 1 || p.core >= 15 || p.mem >= 1.5 * GB;
 function renderList(a) {
@@ -671,6 +797,7 @@ function renderFacts(a) {
       ['Cores', c?.fast && c?.efficient ? `${c.fast} fast + ${c.efficient} efficient` : `${s.cores}`],
       ['Load (1·5·15 min)', s.load ? s.load.map((v) => v.toFixed(1)).join(' · ') : '–'],
       ['Tasks running', `${s.procCount}`],
+      ...(s.procs?.[0] ? [['Busiest task', `${s.procs[0].name.length > 16 ? `${s.procs[0].name.slice(0, 15)}…` : s.procs[0].name} · ${s.procs[0].avg}%`]] : []),
       ['Memory used', `${bytes(s.mem.used)} of ${bytes(s.mem.total)}`],
       ['Apps · wired', `${bytes(s.mem.app)} · ${bytes(s.mem.wired)}`],
       ['Compressed', bytes(s.mem.compressed)],
@@ -785,6 +912,7 @@ function render() {
   const RANK = { bad: 0, warn: 1, tip: 2, ok: 3 }; // reassurances (\u201cnormal for a browser\u201d) go last
   renderFixes(list.sort((x, y) => RANK[x.level] - RANK[y.level]));
   renderList(a);
+  renderProcs(a);
   renderFacts(a);
   renderChips(a);
   renderPill();
@@ -842,7 +970,7 @@ async function runAct(btn, id, act) {
   unsure(btn);
   running.add(id);
   btn.classList.add('busy');
-  const r = await scrawl.invoke('debug:fix', act.kind, act.app ? { pid: act.app.pid } : null);
+  const r = await scrawl.invoke('debug:fix', act.kind, act.proc ? { pid: act.proc.pid, exe: act.proc.exe } : act.app ? { pid: act.app.pid } : null);
   running.delete(id);
   btn.classList.remove('busy');
   toast(r?.message || (r?.ok ? 'Done.' : 'That didn’t work.'), !r?.ok);
@@ -880,7 +1008,7 @@ function choose(key) {
   render();
   $('body').scrollTo({ top: 0, behavior: 'smooth' });
 }
-function resetBoxes() { for (const id of ['rows', 'bgRows', 'fixes', 'tiles']) { $(id).dataset.keys = ''; $(id).dataset.sig = ''; $(id).dataset.view = ''; } }
+function resetBoxes() { for (const id of ['rows', 'bgRows', 'procRows', 'fixes', 'tiles']) { $(id).dataset.keys = ''; $(id).dataset.sig = ''; $(id).dataset.view = ''; } }
 $('appTab').addEventListener('click', (e) => {
   if (e.target.closest('#chev') || view === 'app') { picking = !picking; $('pickRows').dataset.keys = ''; render(); return; }
   view = 'app'; picking = false; showAll = false; resetBoxes(); render();

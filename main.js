@@ -2231,7 +2231,7 @@ ipcMain.on('debug:openSettings', (e) => {
 });
 ipcMain.handle('debug:fix', async (e, kind, target) => {
   if (!fromDebug(e) || typeof kind !== 'string') return { ok: false, message: 'Couldn’t run that.' };
-  const app0 = target && Number.isInteger(target.pid) ? { pid: target.pid } : null;
+  const app0 = target && Number.isInteger(target.pid) ? { pid: target.pid, exe: typeof target.exe === 'string' ? target.exe : null } : null;
   const result = await DebugStats.fix(kind, app0, { shell, selfPid: process.pid }).catch((err) => ({ ok: false, message: err.message }));
   setTimeout(debugTick, 600); // show what changed
   return result;

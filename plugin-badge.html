@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en" data-theme="plugin">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'">
+<title>Plugin badge</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  body { font-family: var(--font); -webkit-font-smoothing: antialiased; user-select: none; cursor: default; --glide: cubic-bezier(0.22, 1, 0.36, 1); }
+  button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; }
+  button:focus { outline: none; }
+  /* The window is the pill plus room for its lip and shadow, anchored at its bottom-right corner. */
+  /* The window is exactly the pill plus its lip: no see-through margin around it to catch clicks. */
+  #wrap { position: fixed; right: 0; bottom: 0; padding: 1px 0 3px; }
+
+  /* A dark pill, so it reads on any app, light or dark. */
+  .pill {
+    display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px 0 7px; border-radius: 12px; cursor: grab; touch-action: none;
+    background: var(--ink); color: #F3EEF6; box-shadow: 0 3px 0 #110E17, 0 0 0 1px rgba(255, 255, 255, 0.07) inset;
+    font-size: 10.5px; font-weight: 800; letter-spacing: -0.005em; white-space: nowrap;
+    transform-origin: 100% 100%; opacity: 0; transform: translateX(14px) scale(0.6);
+    transition: transform 260ms var(--bouncy), box-shadow 160ms ease, background 200ms ease;
+  }
+  body.in .pill { opacity: 1; transform: none; animation: plugin 620ms var(--bouncy) both; }
+  /* Plugged in: it slides into the corner like a plug into a socket, overshooting a little. */
+  @keyframes plugin { 0% { opacity: 0; transform: translateX(22px) scale(0.6); } 55% { opacity: 1; transform: translateX(-3px) scale(1.04); } 100% { transform: none; } }
+  /* Coming back (you switched back to the app, or its corner came out from under another window): just a quick fade up. */
+  body.in.again .pill { animation: back 280ms var(--glide) both; }
+  body.in.again .led { animation: none; }
+  @keyframes back { from { opacity: 0; transform: translateY(5px) scale(0.92); } }
+  .pill:hover { transform: translateY(-1px); box-shadow: 0 4px 0 #110E17, 0 0 0 1px rgba(255, 255, 255, 0.1) inset; }
+  .pill:active { transform: translateY(2px); box-shadow: 0 1px 0 #110E17; transition-duration: 80ms; }
+  body.out .pill { animation: unseat 220ms cubic-bezier(0.4, 0, 1, 1) both; }
+  @keyframes unseat { to { opacity: 0; transform: translateX(10px) scale(0.7); } }
+  /* Unplugged for good: a yank to the right, then it drops away. */
+  body.unplug .pill { animation: yank 520ms cubic-bezier(0.5, 0, 0.7, 1) both; }
+  @keyframes yank { 0% { transform: none; } 30% { transform: translateX(-6px) rotate(-3deg); } 55% { opacity: 1; transform: translateX(16px) rotate(4deg); } 100% { opacity: 0; transform: translate(30px, 26px) rotate(18deg) scale(0.8); } }
+
+  /* The light: is the plugin on, and how is it doing. */
+  body.dragging .pill { cursor: grabbing; transform: translateY(-1px); background: #322B3F; transition-duration: 160ms; }
+  .led { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--accent); box-shadow: 0 0 0 3px rgba(63, 205, 191, 0.22), 0 0 8px rgba(63, 205, 191, 0.75); transition: background 240ms ease, box-shadow 240ms ease; }
+  body.in .led { animation: spark 700ms steps(1) 160ms both; }
+  @keyframes spark { 0% { opacity: 0.2; } 18% { opacity: 1; } 30% { opacity: 0.25; } 46%, 100% { opacity: 1; } }
+  [data-tone="off"] .led, [data-tone="idle"] .led { background: transparent; box-shadow: inset 0 0 0 2px #8D8497; }
+  [data-tone="warn"] .led { background: var(--warn); box-shadow: 0 0 0 3px rgba(245, 181, 63, 0.22), 0 0 8px rgba(245, 181, 63, 0.7); }
+  [data-tone="bad"] .led, [data-tone="boost"] .led { background: var(--peach); box-shadow: 0 0 0 3px rgba(242, 102, 139, 0.24), 0 0 9px rgba(242, 102, 139, 0.8); }
+  [data-tone="hot"] .led { background: var(--peach); animation: hot 900ms ease-in-out infinite !important; }
+  @keyframes hot { 0%, 100% { box-shadow: 0 0 0 2px rgba(242, 102, 139, 0.3), 0 0 6px rgba(242, 102, 139, 0.6); } 50% { box-shadow: 0 0 0 5px rgba(242, 102, 139, 0.14), 0 0 14px rgba(242, 102, 139, 1); } }
+  [data-tone="focus"] .led { background: #FFFFFF; box-shadow: 0 0 0 3px rgba(63, 205, 191, 0.55); }
+  [data-tone="new"] .led { animation: ready 1.6s ease-in-out infinite !important; }
+  @keyframes ready { 0%, 100% { box-shadow: 0 0 0 2px rgba(63, 205, 191, 0.3), 0 0 6px rgba(63, 205, 191, 0.6); } 50% { box-shadow: 0 0 0 6px rgba(63, 205, 191, 0), 0 0 12px rgba(63, 205, 191, 1); } }
+  [data-tone="off"] .pill { background: #3A3443; color: #BDB4C6; }
+
+  .st { display: inline-block; transition: opacity 150ms ease, transform 220ms var(--glide); }
+  .st.out { opacity: 0; transform: translateY(5px); }
+
+  /* Five bars, one per share (processor, memory, network, sound, microphone): short and quiet when it's
+     free, turquoise up to its limit, tall raspberry when it's boosted. */
+  .pips { display: flex; align-items: flex-end; gap: 1.5px; height: 11px; }
+  .pips i { width: 2.5px; border-radius: 2px; background: #5D5568; height: 5px; transition: height 520ms var(--bouncy), background 260ms ease; transition-delay: calc(var(--k) * 40ms); }
+  .pips i.lim { background: var(--accent); }
+  .pips i.boost { background: var(--peach); height: 11px; }
+  .pips i.od { background: var(--peach); height: 11px; box-shadow: 0 0 6px rgba(242, 102, 139, 0.9); }
+  [data-tone="off"] .pips i { background: #5D5568 !important; box-shadow: none !important; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation-duration: 1ms !important; transition-duration: 1ms !important; } }
+</style>
+</head>
+<body data-tone="new">
+<div id="wrap"><button class="pill" id="pill"><i class="led"></i><span class="st" id="st">Plugged in</span><span class="pips" id="pips"></span></button></div>
+<script src="plugin-badge.js"></script>
+</body>
+</html>

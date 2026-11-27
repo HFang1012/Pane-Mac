@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en" data-theme="plugin">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'">
+<title>Plugin</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  body { font-family: var(--font); color: var(--ink); -webkit-font-smoothing: antialiased; user-select: none; cursor: default; --glide: cubic-bezier(0.22, 1, 0.36, 1); }
+
+  /* The dim is the spotlight's own shadow: one rounded hole over the window you're pointing at, everything
+     else under a veil of the plugin's ink. The hole glides from window to window. */
+  #spot {
+    position: absolute; left: 50%; top: 50%; width: 0; height: 0; border-radius: 12px; z-index: 1;
+    box-shadow: 0 0 0 200vmax rgba(36, 31, 46, 0.42); opacity: 0; pointer-events: none;
+    transition: left 300ms var(--glide), top 300ms var(--glide), width 300ms var(--glide), height 300ms var(--glide), border-radius 300ms var(--glide), box-shadow 240ms ease, opacity 200ms ease;
+  }
+  body.in #spot { opacity: 1; }
+  /* The ring: a chunky turquoise band drawn just inside the window's edge, so it shows whole even when the
+     window touches the side of the screen or sits under the menu bar. */
+  #ring {
+    position: absolute; left: 50%; top: 50%; width: 0; height: 0; z-index: 2; pointer-events: none; box-sizing: border-box;
+    border: 4px solid var(--accent); border-radius: 12px; box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.45), inset 0 3px 0 1.5px rgba(31, 162, 149, 0.55);
+    opacity: 0; transform: scale(1.03);
+    transition: left 300ms var(--glide), top 300ms var(--glide), width 300ms var(--glide), height 300ms var(--glide), border-radius 300ms var(--glide), opacity 160ms ease, transform 360ms var(--bouncy);
+  }
+  #ring.on { opacity: 1; transform: none; }
+
+  /* The name of what you're pointing at. Placed by the page so it never runs off the screen or under the hint. */
+  #tag {
+    position: absolute; left: 0; top: 0; z-index: 5; display: flex; align-items: center; gap: 9px; max-width: 340px;
+    padding: 6px 14px 6px 6px; border-radius: 16px; background: var(--card); box-shadow: 0 4px 0 var(--card-lip), 0 14px 30px -10px rgba(17, 14, 23, 0.55);
+    opacity: 0; transform: translateY(-6px) scale(0.9); transform-origin: 0 0; pointer-events: none;
+    transition: opacity 160ms ease, transform 380ms var(--bouncy), left 300ms var(--glide), top 300ms var(--glide);
+  }
+  #tag.on { opacity: 1; transform: none; }
+  #tag img, #tag .avatar { width: 30px; height: 30px; border-radius: 8px; flex: none; object-fit: contain; }
+  #tag .avatar { display: grid; place-items: center; background: var(--ink-2); color: var(--card); font-weight: 800; font-size: 14px; }
+  #tag b { display: block; font-size: 14.5px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #tag small { display: flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; color: var(--ink-2); white-space: nowrap; }
+  #tag small i { width: 7px; height: 7px; border-radius: 4px; background: var(--edge); flex: none; }
+  #tag.plugged small i { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  #tag .txt { min-width: 0; }
+  #tag.swap .txt { animation: swap 260ms var(--glide); }
+  @keyframes swap { from { opacity: 0.2; transform: translateY(4px); } }
+
+  /* What to do, at the top of the screen you started on. */
+  #hint {
+    position: absolute; z-index: 4; left: 50%; top: 54px; translate: -50% 0; display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 8px; border-radius: 20px;
+    background: var(--card); box-shadow: 0 5px 0 var(--card-lip), 0 18px 34px -12px rgba(17, 14, 23, 0.5);
+    opacity: 0; transform: translateY(-18px) scale(0.94); transition: opacity 200ms ease, transform 520ms var(--bouncy);
+  }
+  body.in #hint { opacity: 1; transform: none; }
+  #hint .mark { width: 34px; height: 34px; border-radius: 12px; background: var(--well); display: grid; place-items: center; }
+  #hint .mark svg { height: 21px; width: auto; }
+  #hint .mark .glyph-plugin .prongs { animation: nudge 1.6s var(--glide) infinite; }
+  @keyframes nudge { 0%, 55%, 100% { transform: none; } 70% { transform: translateX(2.5px); } }
+  #hint b { font-size: 14px; font-weight: 800; }
+  #hint .keys { display: inline-flex; gap: 4px; align-items: center; font-size: 11.5px; font-weight: 700; color: var(--ink-2); }
+  .cap { min-width: 26px; height: 24px; padding: 0 7px; border-radius: 8px; background: var(--well); box-shadow: 0 2px 0 var(--edge); display: inline-grid; place-items: center; font-size: 11px; font-weight: 800; color: var(--ink); }
+
+  /* The tray: every app that's open, for one whose window isn't on this screen (another Space, hidden, or none). */
+  #tray {
+    position: absolute; z-index: 3; left: 50%; bottom: 34px; translate: -50% 0; display: flex; align-items: flex-end; gap: 6px; padding: 26px 12px 12px; border-radius: 26px;
+    background: var(--card); box-shadow: 0 6px 0 var(--card-lip), 0 22px 40px -14px rgba(17, 14, 23, 0.55); max-width: calc(100% - 80px);
+    opacity: 0; transform: translateY(30px); transition: opacity 220ms ease, transform 560ms var(--bouncy);
+  }
+  body.in #tray { opacity: 1; transform: none; }
+  #tray::before { content: attr(data-label); position: absolute; left: 16px; top: 8px; font-size: 11px; font-weight: 800; color: var(--ink-2); }
+  .tile { position: relative; width: 56px; display: grid; justify-items: center; gap: 3px; padding: 6px 2px 5px; border-radius: 16px; transition: background 140ms ease, box-shadow 160ms ease; }
+  .tile img, .tile .avatar { width: 38px; height: 38px; border-radius: 10px; object-fit: contain; transition: transform 320ms var(--bouncy); }
+  .tile .avatar { display: grid; place-items: center; background: var(--ink-2); color: var(--card); font-weight: 800; }
+  .tile span { font-size: 10px; font-weight: 800; color: var(--ink-2); max-width: 50px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Pointed at: the tile lights up with the same turquoise ring, in place (it doesn't move, so where you
+     point stays where the tile is). */
+  .tile.hot { background: var(--accent-soft); box-shadow: inset 0 0 0 3px var(--accent); }
+  .tile.hot img, .tile.hot .avatar { transform: scale(1.08); }
+  .tile.hot span { color: var(--accent-ink); }
+  /* Already plugged in: a little lit plug on its corner. */
+  .tile .on { position: absolute; right: 5px; top: 3px; width: 14px; height: 14px; border-radius: 7px; background: var(--accent); box-shadow: 0 2px 0 var(--accent-lip); }
+  body.in .tile { animation: tile 460ms var(--bouncy) both; animation-delay: calc(140ms + var(--k) * 26ms); }
+  @keyframes tile { from { opacity: 0; transform: translateY(16px) scale(0.7); } }
+
+  /* Picked: the ring flashes once and draws itself into the window's bottom-right corner, where the plug
+     lands. Then the veil lifts. */
+  body.picked #ring { animation: flash 420ms var(--glide) both; transition: left 420ms var(--glide) 160ms, top 420ms var(--glide) 160ms, width 420ms var(--glide) 160ms, height 420ms var(--glide) 160ms, border-radius 420ms var(--glide) 160ms, opacity 200ms ease 500ms; opacity: 0; }
+  @keyframes flash { 0% { filter: drop-shadow(0 0 0 rgba(63, 205, 191, 0.9)); } 40% { filter: drop-shadow(0 0 14px rgba(63, 205, 191, 0.9)); } 100% { filter: none; } }
+  body.picked #spot { transition: left 420ms var(--glide) 160ms, top 420ms var(--glide) 160ms, width 420ms var(--glide) 160ms, height 420ms var(--glide) 160ms, box-shadow 380ms ease 160ms, opacity 200ms ease 480ms; box-shadow: 0 0 0 200vmax rgba(36, 31, 46, 0); }
+  body.picked #tag, body.picked #hint, body.picked #tray, body.out #hint, body.out #tray, body.out #tag { opacity: 0; transform: scale(0.9); transition: opacity 160ms ease, transform 200ms ease; }
+  body.out #spot, body.out #ring { opacity: 0; transition: opacity 200ms ease; }
+  body.nope #ring { animation: nope 360ms var(--bouncy); border-color: var(--peach); box-shadow: 0 3px 0 var(--peach-lip); }
+  @keyframes nope { 25% { transform: translateX(-6px); } 50% { transform: translateX(5px); } 75% { transform: translateX(-3px); } }
+
+  @media (prefers-reduced-motion: reduce) { *, *::before { animation-duration: 1ms !important; transition-duration: 1ms !important; } }
+</style>
+</head>
+<body>
+<div id="spot"></div><div id="ring"></div>
+<div id="tag"><span id="tagIc"></span><span class="txt"><b id="tagName"></b><small><i></i><span id="tagHint"></span></small></span></div>
+<div id="hint" hidden><span class="mark" id="hintMark"></span><b>Pick an app to plug in</b><span class="keys"><span class="cap">esc</span>to cancel</span></div>
+<div id="tray" hidden data-label="Or pick from what’s open"></div>
+<script src="tools.js"></script>
+<script src="plugin-pick.js"></script>
+</body>
+</html>

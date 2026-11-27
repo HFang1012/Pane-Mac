@@ -962,6 +962,76 @@
   /* Only the loops: entrance animations still finish, so a window shown in the background never looks half-drawn. */
   html.idle :is(.jdesk, .tdesk, .ddesk, .sdesk, .screen, .now) *, html.idle :is(.jdesk, .tdesk, .ddesk, .sdesk, .screen, .now) *::before,
   html.idle :is(.jdesk, .tdesk, .ddesk, .sdesk, .screen, .now) *::after, html.idle .keywell .ants rect, html.idle .status .dot::after { animation-play-state: paused !important; }
+
+  /* ---------- Plugin ---------- */
+  [data-theme="plugin"] .stage { --stage-bg: linear-gradient(135deg, #D9D0DE, #E9E4EA 50%, #D3E3E1); --win: #FFFFFF; --bar: #EEE9EF; --line: #DCD4DF; --dark: #2E2838; }
+  [data-theme="plugin"] .card { --r: 26px; }
+  [data-theme="plugin"] .tips { --r: 22px; }
+  [data-theme="plugin"] .callout { --r: 20px; }
+  [data-theme="plugin"] .brand .mark svg .prongs { transition: transform 420ms var(--bouncy); }
+  [data-theme="plugin"] .brand:hover .mark svg .prongs { transform: translateX(3px); }
+  [data-theme="plugin"] .tips .ic { color: var(--accent-ink); }
+  /* A little desktop that plays on its own: the ring finds a window, the plug lands on its corner, the
+     menu grows out of it and its rails charge up. */
+  .pdesk {
+    position: relative; height: 210px; margin-top: 14px; border-radius: 22px; overflow: hidden; isolation: isolate;
+    background: linear-gradient(135deg, #D9D0DE, #E9E4EA 50%, #D3E3E1); box-shadow: 0 5px 0 var(--card-lip);
+  }
+  .pwin { position: absolute; left: 18px; top: 22px; width: 196px; height: 150px; border-radius: 12px; background: #FFFFFF; box-shadow: 0 6px 14px -8px rgba(36, 31, 46, 0.3); }
+  .pwin::before { content: ""; position: absolute; left: 10px; right: 10px; top: 10px; height: 8px; border-radius: 4px; background: var(--edge); }
+  .pwin i { position: absolute; left: 10px; height: 6px; border-radius: 3px; background: var(--well); }
+  .pring { position: absolute; inset: -5px; border-radius: 16px; border: 3px solid var(--accent); box-shadow: 0 2px 0 var(--accent-lip); animation: pring 8s var(--smooth) infinite; }
+  @keyframes pring { 0%, 6% { opacity: 0; transform: scale(1.06); } 12%, 26% { opacity: 1; transform: none; } 34%, 100% { opacity: 0; transform: scale(0.98); } }
+  .pbadge { position: absolute; right: 7px; bottom: 7px; display: flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: 10px; background: var(--ink); color: #F3EEF6; font-size: 9px; font-weight: 800; box-shadow: 0 2px 0 #110E17; transform-origin: 100% 100%; animation: pbadge 8s var(--bouncy) infinite; }
+  .pbadge i { width: 6px; height: 6px; border-radius: 3px; background: var(--accent); box-shadow: 0 0 5px var(--accent); }
+  .pbadge em { display: flex; align-items: flex-end; gap: 1.5px; height: 9px; }
+  .pbadge u { width: 2px; height: 4px; border-radius: 1px; background: #5D5568; }
+  .pbadge u:first-child { height: 7px; background: var(--accent); } .pbadge u:nth-child(3) { height: 9px; background: var(--peach); }
+  @keyframes pbadge { 0%, 28% { opacity: 0; transform: translateX(12px) scale(0.5); } 34%, 46% { opacity: 1; transform: none; } 50%, 90% { opacity: 0; transform: scale(0.8); } 96%, 100% { opacity: 1; transform: none; } }
+  .pm { position: absolute; right: 14px; top: 14px; width: 168px; padding: 9px; border-radius: 16px; background: var(--card); box-shadow: 0 4px 0 var(--card-lip), 0 12px 24px -8px rgba(36, 31, 46, 0.35); transform-origin: 0 100%; animation: pmenu 8s var(--smooth) infinite; }
+  @keyframes pmenu { 0%, 48% { opacity: 0; transform: scale(0.3) translate(-60px, 40px); } 54%, 88% { opacity: 1; transform: none; } 94%, 100% { opacity: 0; transform: scale(0.4) translate(-50px, 40px); } }
+  .pm-top { display: flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 800; margin-bottom: 7px; }
+  .pm-ic { width: 16px; height: 16px; border-radius: 5px; background: conic-gradient(#EA4335 0 33%, #FBBC05 0 66%, #34A853 0); }
+  .pm-top b { flex: 1; }
+  .pm-rock { width: 22px; height: 13px; border-radius: 7px; background: var(--accent); position: relative; }
+  .pm-rock::after { content: ""; position: absolute; right: 2px; top: 2px; width: 9px; height: 9px; border-radius: 5px; background: var(--card); }
+  .pm-rail { display: flex; gap: 2px; margin-top: 5px; padding: 5px; border-radius: 9px; background: var(--well); }
+  .pm-rail s { flex: 1; height: 10px; border-radius: 3px; background: var(--card); box-shadow: inset 0 0 0 1px var(--edge); }
+  .pm-rail s.b { margin-left: 2px; flex: 1.1; }
+  .pm-rail s.b + s.b { margin-left: 0; }
+  /* Rail one is held to four; two stays free; three is boosted. */
+  .pm-rail s:nth-child(-n+4) { animation: pcellL 8s steps(1) infinite; }
+  .pm-rail.two s:not(.b) { animation: pcellF 8s steps(1) infinite; }
+  .pm-rail.three s:not(.b) { animation: pcellL 8s steps(1) infinite; }
+  .pm-rail.three s.b:first-of-type, .pm-rail.three s:nth-child(11) { animation: pcellB 8s steps(1) infinite; }
+  .pm-rail s:nth-child(1) { animation-delay: 0ms; } .pm-rail s:nth-child(2) { animation-delay: 60ms; } .pm-rail s:nth-child(3) { animation-delay: 120ms; } .pm-rail s:nth-child(4) { animation-delay: 180ms; }
+  @keyframes pcellL { 0%, 58% { background: var(--card); } 59%, 92% { background: var(--accent); box-shadow: 0 2px 0 var(--accent-lip); } 93%, 100% { background: var(--card); } }
+  @keyframes pcellF { 0%, 60% { background: var(--card); } 61%, 92% { background: #DCD3E0; box-shadow: 0 2px 0 #C5B9CB; } 93%, 100% { background: var(--card); } }
+  @keyframes pcellB { 0%, 66% { background: var(--card); } 67%, 92% { background: var(--peach); box-shadow: 0 2px 0 var(--peach-lip); } 93%, 100% { background: var(--card); } }
+  .pcur { position: absolute; width: 15px; height: 21px; left: 250px; top: 170px; animation: pcur 8s cubic-bezier(.45, .05, .4, 1) infinite; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.32)) drop-shadow(0 2px 3px rgba(0, 0, 0, 0.14)); }
+  @keyframes pcur { 0%, 4% { transform: none; } 14%, 30% { transform: translate(-130px, -70px); } 40%, 48% { transform: translate(-70px, -14px); } 60%, 100% { transform: translate(-20px, -90px); } }
+  html.idle .pdesk * { animation-play-state: paused; }
+  /* The list of plugins: each app, how it's doing, its shares at a glance, and on/off. */
+  .plist { display: grid; gap: 6px; }
+  .plist:empty { display: none; }
+  .prow { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto auto; gap: 10px; align-items: center; padding: 9px 10px 9px 12px; border-radius: 16px; background: var(--well); animation: pop 420ms var(--bouncy) both; animation-delay: calc(var(--k) * 40ms); }
+  .prow img, .prow .av { width: 30px; height: 30px; border-radius: 8px; object-fit: contain; }
+  .prow .av { display: grid; place-items: center; background: var(--ink-2); color: var(--card); font-weight: 800; }
+  .prow b { display: block; font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prow small { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prow small i { width: 7px; height: 7px; border-radius: 4px; background: var(--accent); flex: none; }
+  .prow.warn small i { background: var(--warn); } .prow.hot small i, .prow.boost small i, .prow.bad small i { background: var(--peach); }
+  .prow.off small i, .prow.idle small i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--edge); }
+  .prow .pips { display: flex; align-items: flex-end; gap: 2px; height: 14px; }
+  .prow .pips u { width: 3px; border-radius: 2px; background: var(--edge); }
+  .prow .pips u.l { background: var(--accent); } .prow .pips u.b { background: var(--peach); }
+  .prow .pbtn { height: 26px; padding: 0 10px; border-radius: 13px; font-size: 11.5px; font-weight: 800; background: var(--card); box-shadow: 0 2px 0 var(--card-lip); transition: transform 220ms var(--bouncy), background 140ms ease, color 140ms ease; }
+  .prow .pbtn:hover { transform: translateY(-1px); background: var(--accent-soft); color: var(--accent-ink); }
+  .prow .pbtn.x { color: var(--peach-lip); }
+  .prow .pbtn.x.sure { background: var(--peach); color: #FFF; box-shadow: 0 2px 0 var(--peach-lip); }
+  .prow.going { animation: unplugRow 420ms ease-in forwards; }
+  @keyframes unplugRow { to { opacity: 0; transform: translateX(30px) rotate(2deg); } }
+  .pill.ghost { background: var(--well); color: var(--ink); box-shadow: 0 2px 0 var(--edge); }
 </style>
 </head>
 <body>
@@ -1619,6 +1689,101 @@
     </div>
   </section>
 </div>
+<div class="page" id="pluginPage" data-tool="plugin" hidden>
+  <section>
+    <div class="brand rise" style="--d:0ms">
+      <span class="mark" data-glyph="plugin"></span>
+      Plugin
+      <span class="version"></span>
+    </div>
+    <h1 class="rise" style="--d:60ms">Give an app more<br>of your Mac. Or less.</h1>
+    <p class="lede rise" style="--d:120ms" id="pluginLede">Press the Plugin keys and click any app. A plug lands on its corner. Click the plug to share out your processor, memory, network and sound, give it a network of its own, or let it take over in Focus mode.</p>
+    <div class="keyrow rise" style="--d:160ms">
+      <div class="keyslot">
+        <button class="keywell" id="pluginWell" aria-describedby="pluginCaption">
+          <svg class="ants" aria-hidden="true"><rect rx="15"/></svg>
+          <span class="keys"></span>
+        </button>
+        <span class="keylabel">Plugin keys</span>
+      </div>
+    </div>
+    <p class="caption rise" style="--d:200ms" id="pluginCaption">Click the keys to change them.</p>
+
+    <div class="collapse access"><div>
+      <div class="callout chunky">
+        <h3>Allow Pane to see your clicks</h3>
+        <p>Plugin needs it so a click picks an app instead of landing in it. Turn on Pane in Privacy &amp; Security › Accessibility.</p>
+        <button class="pill access-btn">Open Accessibility settings</button>
+      </div>
+    </div></div>
+
+    <div class="power rise" style="--d:240ms">
+      <button class="power-btn" id="pluginPower" aria-pressed="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 3.5v8"/><path d="M6.6 6.8a7.5 7.5 0 1 0 10.8 0"/></svg>
+        <span class="swap" id="pluginPowerText">Turn off</span>
+      </button>
+      <div class="status" id="pluginStatus">
+        <span class="dot"></span><span class="swap" id="pluginStatusText">Checking…</span>
+      </div>
+    </div>
+    <label class="login-line rise" style="--d:280ms"><button class="switch login small" role="switch" aria-checked="false" aria-label="Open at login"></button>Open Pane at login</label>
+    <div class="tips chunky rise" style="--d:330ms" aria-label="Good to know">
+      <span class="tips-tag">Good to know</span>
+      <ul>
+        <li><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16"/><path d="M8 8v8M12 6v12M16 9v6"/></svg></span><span>Each share is your Mac in <b>tenths</b>. Fewer is a limit; the raspberry cells past ten are <b>boosts</b>.</span></li>
+        <li><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span>Turn a share off, unplug, or quit Pane, and <b>everything goes back</b>.</span></li>
+        <li><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span><span>Drag a rail <b>all the way left</b> to turn that share off.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="card chunky rise" style="--d:90ms" aria-label="Plugin settings">
+    <div class="head solo">
+      <div>
+        <h2>Plugins</h2>
+        <p>Pick, plug in, share out.</p>
+      </div>
+    </div>
+    <div class="screen-wrap">
+      <div class="pdesk" aria-hidden="true">
+        <div class="pwin"><i style="top:30px;width:70%"></i><i style="top:44px;width:52%"></i><i style="top:58px;width:64%"></i>
+          <span class="pring"></span>
+          <span class="pbadge"><i></i>Limited<em><u></u><u></u><u></u><u></u><u></u></em></span>
+        </div>
+        <div class="pm">
+          <div class="pm-top"><span class="pm-ic"></span><b>Chrome</b><span class="pm-rock"></span></div>
+          <div class="pm-rail"><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s class="b"></s><s class="b"></s></div>
+          <div class="pm-rail two"><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s class="b"></s><s class="b"></s></div>
+          <div class="pm-rail three"><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s><s class="b"></s><s class="b"></s></div>
+        </div>
+        <svg class="pcur" viewBox="0 0 17 24"><use href="#macCursor"/></svg>
+      </div>
+      <button class="try" id="tryPlugin">
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 2.2v7.6L9.8 6z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        Try it
+      </button>
+    </div>
+
+    <div class="rows">
+      <div class="row rise" style="--d:280ms">
+        <div><h3>Your plugins</h3><p id="plugCount">None yet.</p></div>
+      </div>
+      <div class="plist" id="plist"></div>
+      <div class="row rise" style="--d:320ms">
+        <div><h3>Badge</h3><p>The plug on each app’s corner.</p></div>
+        <div class="picks" data-key="badge" role="radiogroup" aria-label="Badge"><button role="radio" data-v="always">Always</button><button role="radio" data-v="front">Only in the app</button></div>
+      </div>
+      <div class="row rise" style="--d:350ms">
+        <div><h3>Music players</h3><p>Sound shares set Spotify’s and Music’s own volume. macOS asks once; allow it in Automation.</p></div>
+        <button class="pill ghost" data-perm="automation">Automation</button>
+      </div>
+      <div class="row rise" style="--d:380ms">
+        <div><h3>Memory warnings</h3><p>Shown as notifications when an app goes past its line.</p></div>
+        <button class="pill ghost" data-perm="notifications">Notifications</button>
+      </div>
+    </div>
+  </section>
+</div>
 <div class="demo" id="demo" role="dialog" aria-modal="true" aria-labelledby="demoTitle">
   <div class="demo-sheet">
     <div class="demo-head">
@@ -1696,6 +1861,7 @@
 <script src="jot-settings.js"></script>
 <script src="tweak-settings.js"></script>
 <script src="debug-settings.js"></script>
+<script src="plugin-settings.js"></script>
 <script src="switcher.js"></script>
 <script src="demo.js"></script>
 <script src="update.js"></script>

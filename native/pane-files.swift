@@ -16,6 +16,12 @@
 //   pane-files assemble '<json>'             The other way: PNGs (with delays, or @2x sizes) into one animated GIF or
 //                                            PNG, an icon (ICNS, ICO), or a TIFF or PDF of pages.
 //   pane-files probe <in>                    A video's or song's size, frame rate and bit rates, for size estimates.
+//   pane-files wifi scan                     Plugin's Wi-Fi list: {"wifi":[{device,ssid,current}],"networks":[{ssid,rssi,secure,device}],"named":bool}.
+//                                            macOS hides network names from apps without Location access (named:false).
+//   pane-files wifi join                     Reads {"device","ssid","password"} from stdin and joins that network.
+//   pane-files windows <panePid>             Plugin's eyes. Reads one command a line on stdin and answers each with
+//                                            one JSON line (see windowsServe): the windows on screen, front to back,
+//                                            the apps that are running, and hiding or showing apps for Focus mode.
 //
 // "quality" (0…1) for media squeezes continuously; 1 is as it is. Pane's editor estimates the result with the
 // same numbers (edit.js, mediaEstimate), so keep the two in step.
@@ -24,6 +30,8 @@
 import Cocoa
 import AVFoundation
 import UniformTypeIdentifiers
+import CoreWLAN
+import CoreLocation
 
 setvbuf(stdout, nil, _IOLBF, 0)
 
@@ -595,6 +603,132 @@ func probe(_ input: String) {
   emit(out)
 }
 
+
+// ---------- windows: what Plugin's picker outlines and where its badges sit ----------
+// Window frames need no permission (their titles need Screen Recording, and are left out without it).
+// Commands, one a line, each starting with a number the answer carries back as "n" (so a late answer can't
+// be taken for the next one's):
+//   w              {"w":[{pid,x,y,w,h,title}]}  every normal window on screen, frontmost first
+//   a              {"a":[{pid,bundle,name,path,active,hidden}]}  running apps with a Dock icon
+//   hide <pid>…    hide those apps          unhide <pid>…  show them again
+//   only <pid>     hide every other app (Focus mode), answering with the pids it hid
+// Hiding goes through NSRunningApplication, so it needs no Automation permission either.
+func listWindows(skip: pid_t) -> [[String: Any]] {
+  guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return [] }
+  var out: [[String: Any]] = []
+  for w in list {
+    guard let pid = w[kCGWindowOwnerPID as String] as? pid_t, pid != skip else { continue }
+    if ((w[kCGWindowLayer as String] as? Int) ?? 0) != 0 { continue }
+    if let a = w[kCGWindowAlpha as String] as? Double, a < 0.05 { continue }
+    let owner = (w[kCGWindowOwnerName as String] as? String) ?? ""
+    if owner == "Window Server" || owner == "Dock" { continue }
+    guard let bd = w[kCGWindowBounds as String] as? NSDictionary, let b = CGRect(dictionaryRepresentation: bd as CFDictionary),
+          b.width >= 60, b.height >= 40 else { continue }
+    out.append(["pid": pid, "x": b.origin.x, "y": b.origin.y, "w": b.width, "h": b.height,
+                "title": (w[kCGWindowName as String] as? String) ?? "", "owner": owner])
+  }
+  return out
+}
+func regularApps(skip: pid_t) -> [NSRunningApplication] {
+  NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular && $0.processIdentifier != skip && !$0.isTerminated }
+}
+func listApps(skip: pid_t) -> [[String: Any]] {
+  regularApps(skip: skip).map { a in
+    ["pid": a.processIdentifier, "bundle": a.bundleIdentifier ?? "", "name": a.localizedName ?? "",
+     "path": a.bundleURL?.path ?? "", "active": a.isActive, "hidden": a.isHidden]
+  }
+}
+func windowsServe(panePid: pid_t) {
+  // NSWorkspace keeps its list of apps fresh on the main run loop, so stdin is read on another thread.
+  Thread.detachNewThread {
+    while let line = readLine() {
+      var parts = line.split(separator: " ").map(String.init)
+      let n = Int(parts.first ?? "") ?? 0
+      if !parts.isEmpty && Int(parts[0]) != nil { parts.removeFirst() }
+      guard let cmd = parts.first else { continue }
+      let pids = Set(parts.dropFirst().compactMap { pid_t($0) })
+      func emit(_ obj: [String: Any]) { var o = obj; o["n"] = n; if let d = try? JSONSerialization.data(withJSONObject: o), let s = String(data: d, encoding: .utf8) { print(s) } }
+      DispatchQueue.main.sync {
+        switch cmd {
+        case "w": emit(["w": listWindows(skip: panePid)])
+        case "a": emit(["a": listApps(skip: panePid)])
+        case "hide":
+          for p in pids { _ = NSRunningApplication(processIdentifier: p)?.hide() }
+          emit(["ok": true])
+        case "unhide":
+          for p in pids { _ = NSRunningApplication(processIdentifier: p)?.unhide() }
+          emit(["ok": true])
+        case "only":
+          var hid: [pid_t] = []
+          for a in regularApps(skip: panePid) where !pids.contains(a.processIdentifier) && !a.isHidden && a.bundleIdentifier != "com.apple.finder" {
+            if a.hide() { hid.append(a.processIdentifier) }
+          }
+          emit(["hid": hid])
+        default: emit(["error": "unknown command"])
+        }
+      }
+    }
+    exit(0)
+  }
+  RunLoop.main.run()
+}
+
+// ---------- wifi: Plugin's "join a network" ----------
+// Since macOS 14 an app only sees Wi-Fi names with Location access, so a scan first asks for it (once; macOS
+// shows the prompt for Pane). Without it the networks still come back, nameless, and Pane says why.
+final class LocWait: NSObject, CLLocationManagerDelegate {
+  let m = CLLocationManager()
+  var done = false
+  override init() { super.init(); m.delegate = self }
+  func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+    if manager.authorizationStatus != .notDetermined { done = true }
+  }
+}
+func askLocation() -> Bool {
+  let w = LocWait()
+  if w.m.authorizationStatus == .notDetermined {
+    w.m.requestWhenInUseAuthorization()
+    let until = Date().addingTimeInterval(12)
+    while !w.done && Date() < until { RunLoop.main.run(until: Date().addingTimeInterval(0.2)) }
+  }
+  let s = w.m.authorizationStatus
+  return s == .authorizedAlways || s.rawValue == 4 // 4: authorized when in use
+}
+func wifi(_ args: [String]) {
+  let client = CWWiFiClient.shared()
+  let ifs = client.interfaces() ?? []
+  if args.first == "join" {
+    guard let line = readLine(), let d = line.data(using: .utf8),
+          let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any], let ssid = o["ssid"] as? String else { fail("Nothing to join.") }
+    let dev = o["device"] as? String
+    let pw = o["password"] as? String
+    guard let i = ifs.first(where: { dev == nil || $0.interfaceName == dev }) ?? ifs.first else { fail("This Mac has no Wi-Fi.") }
+    do {
+      let found = try i.scanForNetworks(withName: ssid)
+      guard let net = found.first else { fail("Couldn’t find \(ssid). Move closer, or check the name.") }
+      try i.associate(to: net, password: (pw?.isEmpty ?? true) ? nil : pw)
+      emit(["ok": true, "ssid": ssid, "device": i.interfaceName ?? ""])
+    } catch {
+      let ns = error as NSError
+      fail(ns.code == -3900 || ns.code == -3905 ? "Wrong password for \(ssid)." : "Couldn’t join \(ssid).")
+    }
+    return
+  }
+  let named = askLocation()
+  var list: [[String: Any]] = []
+  var seen = Set<String>()
+  for i in ifs {
+    let nets = (try? i.scanForNetworks(withName: nil)) ?? []
+    for n in nets.sorted(by: { $0.rssiValue > $1.rssiValue }) {
+      let name = n.ssid ?? ""
+      if !name.isEmpty { if seen.contains(name) { continue }; seen.insert(name) }
+      let open = n.supportsSecurity(.none)
+      list.append(["ssid": name, "rssi": n.rssiValue, "secure": !open, "device": i.interfaceName ?? ""])
+    }
+  }
+  emit(["wifi": ifs.map { ["device": $0.interfaceName ?? "", "ssid": $0.ssid() ?? "", "on": $0.powerOn()] }, "networks": list, "named": named])
+}
+
 let args = CommandLine.arguments
 switch args.count > 1 ? args[1] : "" {
 case "hover": hover(panePid: args.count > 2 ? pid_t(args[2]) ?? 0 : 0)
@@ -604,5 +738,7 @@ case "io": io(Array(args.dropFirst(2)))
 case "frames": frames(args[2], args[3])
 case "assemble": assemble(args.count > 2 ? args[2] : "")
 case "probe": probe(args[2])
+case "wifi": wifi(Array(args.dropFirst(2)))
+case "windows": windowsServe(panePid: args.count > 2 ? pid_t(args[2]) ?? 0 : 0)
 default: fail("Usage: pane-files hover <pid> | media <json> | frame <in> <sec> <out> | io <pid>…")
 }

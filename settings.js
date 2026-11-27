@@ -621,6 +621,7 @@ function updateStatus() {
   if (typeof updateJotStatus === 'function') updateJotStatus();
   if (typeof updateTweakStatus === 'function') updateTweakStatus();
   if (typeof updateDebugStatus === 'function') updateDebugStatus();
+  if (typeof updatePluginStatus === 'function') updatePluginStatus();
 }
 async function pollStatus() {
   status = await scrawl.invoke('perm:check');
@@ -649,6 +650,7 @@ function update() {
   if (typeof updateJot === 'function') updateJot();
   if (typeof updateTweak === 'function') updateTweak();
   if (typeof updateDebug === 'function') updateDebug();
+  if (typeof updatePlugin === 'function') updatePlugin();
 }
 
 // Wait for every page's script (away-settings.js, spin-settings.js) before the first render: the

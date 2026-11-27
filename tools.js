@@ -12,6 +12,9 @@
   const TW = { ink: '#1B1D3A', inkLip: '#0C0D1F', cobalt: '#8192FF', cobaltLip: '#5567E3', lime: '#CDEB5A', limeLip: '#9CBD27' };
   // Debug: an outline bug in tomato red with near-black legs, and leaf green for "all good".
   const DB = { ink: '#2A1F24', inkLip: '#140E11', red: '#F25C54', redLip: '#C93A36', leaf: '#8CCB7E', leafLip: '#5FA552' };
+  // Plugin: a power plug. A turquoise body (the current is on), aubergine prongs, and a raspberry cord: the
+  // raspberry is boost and overdrive everywhere in Plugin.
+  const PL = { ink: '#241F2E', inkLip: '#110E17', teal: '#3FCDBF', tealLip: '#1FA295', rasp: '#F2668B', raspLip: '#CC4069' };
 
   // Chunky glyphs: a flat shape over a darker copy of itself, nudged down (the "lip").
   const lip = (shape, fill, under, dy) => `<g transform="translate(0 ${dy})" fill="${under}" stroke="${under}">${shape}</g><g fill="${fill}" stroke="${fill}">${shape}</g>`;
@@ -78,6 +81,18 @@
       },
     },
   };
+  // Plugin: a plug lying on its side, prongs out to the right, its cord curling away behind it.
+  GLYPHS.plugin = {
+    viewBox: '0 0 60 44',
+    body: () => {
+      const cord = '<path class="cord" d="M19 27 Q5 27 7 35.5 Q9 42 19 39.5" fill="none" stroke-width="4.6" stroke-linecap="round"/>';
+      const prongs = '<g class="prongs"><rect x="41" y="14" width="13" height="4.6" rx="2.3" stroke="none"/><rect x="41" y="25.4" width="13" height="4.6" rx="2.3" stroke="none"/></g>';
+      const collar = '<rect x="36" y="11.5" width="6.5" height="21" rx="2.6" stroke="none"/>';
+      const body = '<rect x="16" y="7" width="23" height="30" rx="9" stroke="none"/>';
+      return lip(cord, PL.rasp, PL.raspLip, 2) + lip(prongs, PL.ink, PL.inkLip, 1.6) + lip(collar, PL.ink, PL.inkLip, 2) + lip(body, PL.teal, PL.tealLip, 3) +
+        `<circle class="led" cx="24" cy="15" r="2.8" fill="#FFFFFF" fill-opacity="0.85"/>`;
+    },
+  };
   // `opts` is only read by Away's glyph: { icon, mood }.
   function glyph(id, h = 22, opts) {
     const g = GLYPHS[id];
@@ -92,6 +107,7 @@
     { id: 'jot', name: 'Jot', blurb: 'Quick notes that remind you later.', theme: 'jot', bg: '#DFEDF0' },
     { id: 'tweak', name: 'Tweak', blurb: 'Point at a file and edit it.', theme: 'tweak', bg: '#E4E5F3' },
     { id: 'debug', name: 'Debug', blurb: 'See what’s slowing your Mac down.', theme: 'debug', bg: '#F1E6E3' },
+    { id: 'plugin', name: 'Plugin', blurb: 'Give an app more of your Mac, or less.', theme: 'plugin', bg: '#E9E4EA' },
   ];
 
   // Away's moods: three soft colors that drift behind the blur, and the two the icon is painted in
@@ -154,7 +170,7 @@
 
   const DEFAULT_MESSAGE = 'I’m away from my computer right now.';
 
-  const api = { TOOLS, MOODS, mood, AWAY_ICONS, awayFor, glyph, DEFAULT_MESSAGE, COLORS: C, SPIN_COLORS: SP, JOT_COLORS: JT, TWEAK_COLORS: TW, DEBUG_COLORS: DB };
+  const api = { TOOLS, MOODS, mood, AWAY_ICONS, awayFor, glyph, DEFAULT_MESSAGE, COLORS: C, SPIN_COLORS: SP, JOT_COLORS: JT, TWEAK_COLORS: TW, DEBUG_COLORS: DB, PLUGIN_COLORS: PL };
   if (typeof window !== 'undefined') window.Tools = api;
   if (typeof module !== 'undefined') module.exports = api;
 })();

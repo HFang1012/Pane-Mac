@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, screen, systemPreferences, shell, globalShortcut, desktopCapturer, clipboard, ClipboardItem, nativeImage, dialog, powerMonitor, powerSaveBlocker } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, screen, systemPreferences, shell, globalShortcut, desktopCapturer, clipboard, ClipboardItem, nativeImage, dialog, powerMonitor, powerSaveBlocker, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { uIOhook, UiohookKey } = require('uiohook-napi');
@@ -93,6 +93,13 @@ const DEFAULTS = {
     placeV: 2, // settings from before Debug opened by the pointer get moved over to it once
     at: null, // { x, y }: where it was last dragged
     confirm: true, // ask before quitting an app
+    enabled: true,
+  },
+  plugin: {
+    // Press ⌃⌘P and pick an app: a plugin lands on it (see plugin-engine.js). Shortcut only.
+    mode: 'shortcut',
+    keys: { accelerator: 'Control+Command+P', symbols: ['⌃', '⌘', 'P'], name: 'Control Command P' },
+    badge: 'always', // the badge on a plugged-in app's corner: 'always' (whenever its corner shows) | 'front' (only while you're in it)
     enabled: true,
   },
 };
@@ -700,6 +707,8 @@ uIOhook.on('keydown', (e) => {
   noteKey(e, true);
   if (binding) { bindKeyDown(e); return; }
   if (target && e.keycode === UiohookKey.Escape) { endTarget(); return; } // Esc puts Tweak's pointer away
+  if (picker && e.keycode === UiohookKey.Escape) { endPicker(); return; } // and Plugin's picker
+  if (pmenu && e.keycode === UiohookKey.Escape) closePluginMenu();
   for (const t of tappers()) t.feed(e, true);
   clearWaits(e, false);
   if (away || awayBinding) return; // the Away screen is up (or its keys are being chosen): Scrawl sits still
@@ -750,6 +759,8 @@ uIOhook.on('keyup', (e) => {
 uIOhook.on('mousedown', (e) => {
   for (const t of tappers()) t.reset(); // ⌃-click is a click, not half a double-tap
   if (target) { targetClick(e.button); return; }
+  if (picker) { pickerClick(e.button); return; }
+  if (pmenu) pluginMenuClickAway();
   if (spin.open || spinTimer) { cancelSpin(); return; } // a click while the music wheel is up: leave it be
   if (away || awayBinding || !settings.enabled || !activeTool || menu.open) return;
   if (e.button === 1) penDown('mouse');
@@ -1032,9 +1043,9 @@ function letSleep() {
 
 // ---------- shortcuts: Away's, Jot's and Tweak's, each when it's set to a shortcut rather than a double-tap ----------
 // All set together, because the only way to drop one is to drop them all. Off while any are being chosen.
-const SHORTCUT_NAME = { away: 'Away', jot: 'Jot', tweak: 'Tweak', debug: 'Debug' };
-const shortcutOn = { away: false, jot: false, tweak: false, debug: false };
-const shortcutBinding = { away: false, jot: false, tweak: false, debug: false };
+const SHORTCUT_NAME = { away: 'Away', jot: 'Jot', tweak: 'Tweak', debug: 'Debug', plugin: 'Plugin' };
+const shortcutOn = { away: false, jot: false, tweak: false, debug: false, plugin: false };
+const shortcutBinding = { away: false, jot: false, tweak: false, debug: false, plugin: false };
 const usesShortcut = (tool) => settings[tool].enabled && settings[tool].mode === 'shortcut';
 // A tool set to a shortcut holds its keys even while it's turned off, so turning it on never clashes.
 const shortcutClash = (tool, acc) => Object.keys(SHORTCUT_NAME).find((t) => t !== tool && settings[t].mode === 'shortcut' && settings[t].keys.accelerator === acc);
@@ -1059,8 +1070,9 @@ function registerShortcuts() {
   jotBinding = shortcutBinding.jot;
   tweakBinding = shortcutBinding.tweak;
   debugBinding = shortcutBinding.debug;
-  if (awayBinding || jotBinding || tweakBinding || debugBinding) { awayKeyOn = jotKeyOn = false; return; }
-  const acts = { away: toggleAway, jot: () => { toggleComposer(); }, tweak: toggleTarget, debug: toggleDebug };
+  pluginBinding = shortcutBinding.plugin;
+  if (awayBinding || jotBinding || tweakBinding || debugBinding || pluginBinding) { awayKeyOn = jotKeyOn = false; return; }
+  const acts = { away: toggleAway, jot: () => { toggleComposer(); }, tweak: toggleTarget, debug: toggleDebug, plugin: togglePicker };
   for (const t in acts) {
     if (!usesShortcut(t)) continue;
     try { shortcutOn[t] = globalShortcut.register(settings[t].keys.accelerator, acts[t]); } catch { shortcutOn[t] = false; }
@@ -1256,7 +1268,7 @@ function cleanJot(j) {
 }
 function jotBlocked() {
   return !settings.jot.enabled || !!activeTool || !!pen || menu.open || spin.open || !!spinTimer || !!away ||
-    !!binding || awayBinding || jotBinding || tweakBinding || debugBinding;
+    !!binding || awayBinding || jotBinding || tweakBinding || debugBinding || pluginBinding || !!picker;
 }
 
 // ---------- double-tap ----------
@@ -1540,7 +1552,7 @@ function cleanTweak(t) {
 let tweakBinding = false; // the settings window is listening for Tweak's shortcut
 function tweakBlocked() {
   return !settings.tweak.enabled || !!activeTool || !!pen || menu.open || spin.open || !!spinTimer || !!away ||
-    !!binding || awayBinding || jotBinding || tweakBinding || debugBinding;
+    !!binding || awayBinding || jotBinding || tweakBinding || debugBinding || pluginBinding || !!picker;
 }
 function toggleTarget() {
   debug('tweak', { target: !!target, blocked: tweakBlocked() });
@@ -2059,7 +2071,7 @@ function cleanDebug(d) {
 }
 function debugBlocked() {
   return !settings.debug.enabled || !!activeTool || !!pen || menu.open || spin.open || !!spinTimer || !!away || !!target ||
-    !!binding || awayBinding || jotBinding || tweakBinding || debugBinding;
+    !!binding || awayBinding || jotBinding || tweakBinding || debugBinding || pluginBinding || !!picker;
 }
 function toggleDebug() {
   if (dbg) closeDebug();
@@ -2113,15 +2125,18 @@ function debugSpot(w, h, near) {
   return { x: wa.x + wa.width - w - 6, y: wa.y + 6 };
 }
 
-async function openDebug(near) {
-  if (dbg) { if (!dbg.win.isDestroyed()) dbg.win.showInactive(); return; }
+async function openDebug(near, focusApp = null) {
+  if (dbg) {
+    if (!dbg.win.isDestroyed()) { dbg.win.showInactive(); if (focusApp) dbg.win.webContents.send('debug:focus', focusApp.bundle || focusApp.name); }
+    return;
+  }
   const zoom = DEBUG_ZOOM[settings.debug.size];
   const w0 = Math.round(DEBUG_W * zoom), h0 = Math.round(460 * zoom);
   const d = { win: null, front: null, mini: false, timer: null, busy: false, closing: false, shown: false };
   dbg = d;
   buildMenu();
   DebugStats.warm(); // per-app memory takes a moment to read: start now, while the panel loads
-  const front = await DebugStats.frontApp().catch(() => null);
+  const front = focusApp || await DebugStats.frontApp().catch(() => null);
   if (dbg !== d) return;
   d.front = front && front.pid !== process.pid ? front : null;
   const { x, y } = debugSpot(w0, h0, near);
@@ -2182,6 +2197,8 @@ async function debugTick() {
   d.busy = true;
   try {
     const snap = await DebugStats.sample({ selfPid: process.pid, thermal: thermalState(), display: debugDisplay(d.win) });
+    snap.plugins = plug && settings.plugin.enabled ? plug.lastList : []; // Debug shows what each plugin is doing
+    snap.pluginOn = !!plug && settings.plugin.enabled;
     if (dbg === d && d.win && !d.win.isDestroyed()) d.win.webContents.send('debug:data', snap);
   } catch (err) {
     console.warn('Debug sample failed:', err.message);
@@ -2293,6 +2310,616 @@ ipcMain.on('debug:try', () => {
   const b = settingsWin?.getBounds();
   openDebug(b ? { x: Math.round(b.x + b.width / 2), y: Math.round(b.y + 60) } : undefined);
 });
+
+// ---------- Plugin: give an app more of your Mac, or less ----------
+// Press ⌃⌘P and the screen dims; point at any app's window (or pick it from the tray of open apps) and click.
+// A plugin lands on it: a badge on its window's bottom-right corner, which opens the plugin's menu. What a
+// plugin does lives in plugin-engine.js; this part is the picker, the badges and the menu.
+const PluginEngine = require('./plugin-engine.js');
+let plug = null; // the engine
+let picker = null; // { wins: Map(displayId -> BrowserWindow), windows, apps, trays: Map(displayId -> tiles), hit, poll, refresh, closing }
+let pmenu = null; // { id, win, anchor: { x, y } (its bottom-right corner), shown, closing }
+let pluginBinding = false; // the settings window is listening for Plugin's shortcut
+const badges = new Map(); // plugin id -> { win, size, shown, first, at }
+const appIcons = new Map(); // .app path -> data URL
+async function appIconFor(p) {
+  if (!p) return null;
+  if (appIcons.has(p)) return appIcons.get(p);
+  let url = null;
+  try { const img = await nativeImage.createThumbnailFromPath(p, { width: 64, height: 64 }); if (!img.isEmpty()) url = img.toDataURL(); } catch {}
+  if (!url) { try { url = (await app.getFileIcon(p, { size: 'normal' })).toDataURL(); } catch {} }
+  appIcons.set(p, url);
+  return url;
+}
+function cleanPlugin(x) {
+  const out = { ...DEFAULTS.plugin, ...x, mode: 'shortcut' };
+  if (!['always', 'front'].includes(out.badge)) out.badge = DEFAULTS.plugin.badge;
+  // Where each pod was dragged to: which corner of its app's window it's nearest, and how far in from it.
+  const spots = {};
+  for (const [id, sp] of Object.entries(out.spots && typeof out.spots === 'object' ? out.spots : {})) {
+    if (['tl', 'tr', 'bl', 'br'].includes(sp?.c) && Number.isFinite(sp.dx) && Number.isFinite(sp.dy)) spots[id] = { c: sp.c, dx: Math.max(0, Math.round(sp.dx)), dy: Math.max(0, Math.round(sp.dy)) };
+  }
+  out.spots = spots;
+  out.enabled = out.enabled !== false;
+  return out;
+}
+function pluginBlocked() {
+  return !settings.plugin.enabled || !plug || !!activeTool || !!pen || menu.open || spin.open || !!spinTimer || !!away || !!target ||
+    !!binding || awayBinding || jotBinding || tweakBinding || debugBinding || pluginBinding;
+}
+function startPlug() {
+  plug = new PluginEngine.Engine({
+    helperPath, selfPid: process.pid, power: powerSaveBlocker,
+    notify: (title, body) => { try { if (Notification.isSupported()) new Notification({ title, body, silent: true }).show(); } catch {} },
+    store: { get: () => readJSON('plugins.json', []), set: (v) => writeJSON('plugins.json', v) },
+    safety: { get: () => readJSON('plugin-safety.json', {}), set: (v) => writeJSON('plugin-safety.json', v) },
+    footprints: DebugStats.footprints,
+    onChange: pluginsChanged,
+  });
+  if (settings.plugin.enabled) plug.start(); else { plug.recover(); plug.suspend(true); }
+}
+// Once a second (and after every change): the badges, the open menu and the settings page hear about it.
+function pluginsChanged(list) {
+  const ids = new Set(list.map((v) => v.id));
+  for (const [id, b] of badges) {
+    if (!ids.has(id)) continue;
+    if (!b.win.isDestroyed()) b.win.webContents.send('badge:data', list.find((v) => v.id === id));
+  }
+  if (pmenu?.win && !pmenu.win.isDestroyed()) {
+    const v = list.find((x) => x.id === pmenu.id);
+    if (v) pmenu.win.webContents.send('pmenu:data', v); else closePluginMenu();
+  }
+  settingsWin?.webContents.send('plugin:list', list);
+  ensureBadgeLoop();
+  syncFocusBlur(list);
+}
+
+// ---------- Focus mode's blur ----------
+// While a plugin's Focus mode is on and you're in its app, every other screen blurs over (like Away), and on
+// the app's own screen the desktop behind your windows blurs. Other apps stay open and in place: you can
+// still click through to them. The blur eases off the moment you leave the app.
+const focusBlurs = new Map(); // displayId -> { win, kind: 'cover' | 'desk' }
+let lastWins = []; // the windows on screen, from the badges' last look
+function syncFocusBlur(list) {
+  const v = settings.plugin.enabled ? list.find((x) => x.focusOn && x.running) : null;
+  const want = new Map();
+  if (v) {
+    const own = lastWins.find((w) => w.pid === v.pid && w.w >= 160 && w.h >= 100);
+    const home = screen.getDisplayNearestPoint(own ? { x: Math.round(own.x + own.w / 2), y: Math.round(own.y + own.h / 2) } : screen.getCursorScreenPoint());
+    for (const d of screen.getAllDisplays()) want.set(String(d.id), { d, kind: d.id === home.id ? 'desk' : 'cover' });
+  }
+  for (const [id, b] of focusBlurs) {
+    if (want.get(id)?.kind === b.kind && b.app === v?.id) continue;
+    focusBlurs.delete(id);
+    if (!b.win.isDestroyed()) fadeWindow(b.win, b.win.getOpacity(), 0, 240, () => { if (!b.win.isDestroyed()) b.win.destroy(); });
+  }
+  for (const [id, { d, kind }] of want) {
+    if (focusBlurs.has(id)) continue;
+    const w = new BrowserWindow({
+      ...d.bounds, frame: false, transparent: true, backgroundColor: '#00000000', vibrancy: 'fullscreen-ui', visualEffectState: 'active',
+      hasShadow: false, roundedCorners: false, resizable: false, movable: false, minimizable: false, maximizable: false, fullscreenable: false,
+      focusable: false, skipTaskbar: true, enableLargerThanScreen: true, show: false,
+      // The app's own screen: a window at desktop level, under every app's windows, so only the desktop blurs.
+      ...(kind === 'desk' ? { type: 'desktop' } : { type: 'panel', alwaysOnTop: true }),
+      webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false },
+    });
+    w.setIgnoreMouseEvents(true);
+    w.setHiddenInMissionControl(true);
+    if (kind === 'cover') { w.setAlwaysOnTop(true, 'floating', 1); w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true }); }
+    w.loadFile(path.join(__dirname, 'plugin-blur.html'), { query: { name: v.name, kind } });
+    w.once('ready-to-show', () => { if (w.isDestroyed()) return; w.setBounds(d.bounds); w.setOpacity(0); w.showInactive(); fadeWindow(w, 0, 1, 420); });
+    focusBlurs.set(id, { win: w, kind, app: v.id });
+  }
+}
+const viewOf = (id) => plug?.lastList.find((v) => v.id === id) || (plug?.plugins.get(id) ? plug.view(plug.plugins.get(id)) : null);
+
+// ---------- the picker ----------
+function togglePicker() {
+  if (picker) endPicker();
+  else if (!pluginBlocked()) startPicker();
+}
+async function startPicker() {
+  if (picker || !plug) return;
+  if (pmenu) closePluginMenu();
+  if (menu.open) closeMenu(false);
+  cancelSpin();
+  endTarget();
+  const pk = { wins: new Map(), windows: [], apps: [], trays: new Map(), hit: null, poll: null, refresh: null, closing: false, key: '' };
+  picker = pk;
+  for (const id of badges.keys()) hideBadge(id);
+  const [wr, ar] = await Promise.all([plug.eyes.ask('w'), plug.eyes.ask('a')]);
+  if (picker !== pk) return;
+  if (!wr && !ar) { picker = null; console.warn('Plugin’s helper didn’t answer.'); return; }
+  pk.windows = wr?.w || [];
+  pk.apps = (ar?.a || []).filter((a) => a.pid !== process.pid && a.bundle !== 'com.pane.app');
+  await Promise.all(pk.apps.map(async (a) => { a.icon = await appIconFor(a.path); a.plugged = !!plug.has(a); }));
+  if (picker !== pk) return;
+  const here = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  for (const d of screen.getAllDisplays()) {
+    const w = new BrowserWindow({
+      ...d.bounds, frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false, resizable: false, movable: false,
+      minimizable: false, maximizable: false, fullscreenable: false, focusable: false, skipTaskbar: true, alwaysOnTop: true,
+      enableLargerThanScreen: true, acceptFirstMouse: true, roundedCorners: false, type: 'panel', show: false,
+      webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false },
+    });
+    w.displayId = String(d.id);
+    w.primary = d.id === here.id;
+    w.setHiddenInMissionControl(true);
+    w.setAlwaysOnTop(true, OVERLAY_LEVEL, 1); // like Tweak's pointer: over Scrawl's layers, under Away's
+    w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+    w.loadFile(path.join(__dirname, 'plugin-pick.html'), { query: { primary: w.primary ? '1' : '0' } });
+    w.once('ready-to-show', () => { if (picker !== pk || w.isDestroyed()) return; w.setBounds(d.bounds); w.showInactive(); pk.key = ''; });
+    pk.wins.set(String(d.id), w);
+  }
+  pk.poll = setInterval(pickerTick, 16);
+  // Windows move and open while you look: the list is read again a few times a second.
+  pk.refresh = setInterval(() => refreshPickerWindows(pk), 250);
+  buildMenu();
+}
+async function refreshPickerWindows(pk, drop = false) {
+  if (pk.reading) return;
+  pk.reading = true;
+  const r = await plug.eyes.ask('w');
+  pk.reading = false;
+  if (picker !== pk || !r?.w) return;
+  pk.windows = r.w;
+  pk.key = '';
+  if (drop) { pk.hit = null; sendPickerHit(); } // swiped: start fresh, so nothing is outlined where it used to be
+  pickerTick();
+}
+// Swiping to another Space moves every window: the outline goes at once, and the windows are read again as
+// the swipe lands (and once more after its animation), instead of on the next regular look.
+if (process.platform === 'darwin') {
+  try {
+    systemPreferences.subscribeWorkspaceNotification('NSWorkspaceActiveSpaceDidChangeNotification', () => {
+      const pk = picker;
+      if (!pk) return;
+      pk.hit = null;
+      sendPickerHit();
+      refreshPickerWindows(pk, true);
+      setTimeout(() => { if (picker === pk) refreshPickerWindows(pk, true); }, 350);
+    });
+  } catch {}
+}
+const inside = (p, r) => p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h;
+function pickerTick() {
+  const pk = picker;
+  if (!pk || pk.closing) return;
+  const p = screen.getCursorScreenPoint();
+  const key = `${p.x},${p.y}`;
+  if (key === pk.key) return;
+  pk.key = key;
+  let hit = null;
+  for (const tiles of pk.trays.values()) {
+    const t = tiles.find((x) => inside(p, x));
+    if (t) { const a = pk.apps.find((x) => x.pid === t.pid); if (a) hit = { kind: 'tray', app: a, rect: t }; break; }
+  }
+  if (!hit) {
+    for (const w of pk.windows) {
+      if (!inside(p, w)) continue;
+      const a = pk.apps.find((x) => x.pid === w.pid);
+      if (a) hit = { kind: 'window', app: a, rect: { x: w.x, y: w.y, w: w.w, h: w.h } };
+      break; // the window in front is the one you mean, even if it isn't an app Pane can plug into
+    }
+  }
+  const same = hit && pk.hit && hit.kind === pk.hit.kind && hit.app.pid === pk.hit.app.pid && hit.rect.x === pk.hit.rect.x && hit.rect.y === pk.hit.rect.y && hit.rect.w === pk.hit.rect.w && hit.rect.h === pk.hit.rect.h;
+  if (same || (!hit && !pk.hit)) return;
+  pk.hit = hit;
+  sendPickerHit();
+}
+function sendPickerHit() {
+  const pk = picker;
+  if (!pk) return;
+  const h = pk.hit;
+  for (const w of pk.wins.values()) {
+    if (w.isDestroyed()) continue;
+    const b = w.getBounds();
+    const r = h?.rect;
+    const meets = r && r.x < b.x + b.width && r.x + r.w > b.x && r.y < b.y + b.height && r.y + r.h > b.y;
+    if (!meets) { w.webContents.send('pick:hit', null); continue; }
+    const flat = h.kind === 'window' && Math.abs(r.x - b.x) < 2 && Math.abs(r.y - b.y) < 2 && Math.abs(r.w - b.width) < 2 && Math.abs(r.h - b.height) < 2;
+    w.webContents.send('pick:hit', {
+      kind: h.kind, pid: h.app.pid, x: r.x - b.x, y: r.y - b.y, w: r.w, h: r.h, flat,
+      name: h.app.name, icon: h.app.icon, plugged: !!plug.has(h.app),
+    });
+  }
+}
+function endPicker(opts = {}) {
+  const pk = picker;
+  if (!pk || pk.closing) return;
+  pk.closing = true;
+  picker = null;
+  clearInterval(pk.poll);
+  clearInterval(pk.refresh);
+  for (const w of pk.wins.values()) {
+    if (w.isDestroyed()) continue;
+    const b = w.getBounds();
+    const to = opts.to && opts.to.x < b.x + b.width && opts.to.x + opts.to.w > b.x && opts.to.y < b.y + b.height && opts.to.y + opts.to.h > b.y
+      ? { x: opts.to.x - b.x, y: opts.to.y - b.y, w: opts.to.w, h: opts.to.h } : null;
+    w.webContents.send('pick:leave', { to });
+    setTimeout(() => { if (!w.isDestroyed()) w.destroy(); }, opts.to ? 720 : 280);
+  }
+  buildMenu();
+  ensureBadgeLoop();
+}
+function pickerClick(button) {
+  const pk = picker;
+  if (!pk) return;
+  if (button !== 1) { endPicker(); return; } // a right-click puts it away
+  const h = pk.hit;
+  if (!h) { endPicker(); return; } // so does a click on nothing
+  const had = plug.has(h.app);
+  const p = had || plug.add({ bundle: h.app.bundle || null, name: h.app.name, path: h.app.path || null });
+  // The ring draws itself into the window's bottom-right corner, where the badge lands.
+  const r = h.rect;
+  const to = h.kind === 'window' ? { x: r.x + r.w - 150, y: r.y + r.h - 46, w: 138, h: 34 } : { x: r.x, y: r.y, w: r.w, h: r.h };
+  endPicker({ to });
+  const b = badges.get(p.id);
+  if (b) b.first = !had;
+  // Already plugged in, or picked from the tray (its window may not be on screen to carry a badge): open the menu.
+  if (had || h.kind === 'tray') setTimeout(() => openPluginMenu(p.id, h.kind === 'tray' ? { x: r.x + r.w / 2, y: r.y } : null), had ? 260 : 420);
+}
+ipcMain.handle('pick:init', (e) => {
+  const w = picker && [...picker.wins.values()].find((x) => !x.isDestroyed() && x.webContents === e.sender);
+  if (!w) return { apps: [] };
+  // The page is listening now: show it what's under the pointer (it may have been worked out before it loaded).
+  const pk = picker;
+  setTimeout(() => { if (picker === pk) { pk.key = ''; if (pk.hit) sendPickerHit(); else pickerTick(); } }, 60);
+  return { apps: w.primary ? picker.apps.map(({ pid, name, icon, plugged }) => ({ pid, name, icon, plugged })) : [] };
+});
+ipcMain.on('pick:tray', (e, tiles) => {
+  if (!picker || !Array.isArray(tiles)) return;
+  const w = [...picker.wins.values()].find((x) => !x.isDestroyed() && x.webContents === e.sender);
+  if (!w) return;
+  const b = w.getBounds();
+  picker.trays.set(w.displayId, tiles.filter((t) => [t.pid, t.x, t.y, t.w, t.h].every(Number.isFinite)).map((t) => ({ pid: t.pid, x: t.x + b.x, y: t.y + b.y, w: t.w, h: t.h })));
+  picker.key = '';
+});
+
+// ---------- badges ----------
+// Each plugged-in app that's open gets a badge on its front window's bottom-right corner, while that corner
+// is showing (not under another window) and the window is on the Space you're on. The windows are read a
+// few times a second, so the badge follows the window as it moves.
+let badgeTimer = null, badgeBusy = false;
+function ensureBadgeLoop() {
+  const need = !!plug && settings.plugin.enabled && plug.lastList.some((v) => v.running);
+  if (need && !badgeTimer) badgeTimer = setInterval(badgeTick, 150);
+  if (!need && badgeTimer) { clearInterval(badgeTimer); badgeTimer = null; }
+  if (!need) for (const id of badges.keys()) hideBadge(id);
+  for (const id of [...badges.keys()]) if (!plug?.plugins.has(id)) dropBadge(id, false);
+}
+async function badgeTick() {
+  if (badgeBusy || !plug) return;
+  badgeBusy = true;
+  try {
+    const res = await plug.eyes.ask('w');
+    const wins = res?.w;
+    if (wins) { lastWins = wins; for (const v of plug.lastList) placeBadge(v, wins); }
+  } catch {}
+  badgeBusy = false;
+}
+function placeBadge(v, wins) {
+  if (!v.running || picker || !settings.plugin.enabled || (settings.plugin.badge === 'front' && !v.front)) { hideBadge(v.id); return; }
+  // Its front window that's a real window: some apps float thin strips of their own (Chrome's toolbar in full
+  // screen is one), which the pod shouldn't sit on. Any window will do if that's all there is.
+  const whole = wins.find((w) => w.pid === v.pid && w.w >= 160 && w.h >= 200) || wins.find((w) => w.pid === v.pid && w.w >= 160 && w.h >= 100);
+  if (!whole) { hideBadge(v.id); return; }
+  // The part of it you can see: a window that runs behind the Dock (or the menu bar) has its corner hidden
+  // there, so the pod takes the corner of what's left. In full screen that's the window's own corner.
+  const wa = screen.getDisplayNearestPoint({ x: Math.round(whole.x + whole.w / 2), y: Math.round(whole.y + whole.h / 2) }).workArea;
+  const vx = Math.max(whole.x, wa.x), vy = Math.max(whole.y, wa.y);
+  const vr = Math.min(whole.x + whole.w, wa.x + wa.width), vb = Math.min(whole.y + whole.h, wa.y + wa.height);
+  const own = vr - vx >= 120 && vb - vy >= 60 ? { ...whole, x: vx, y: vy, w: vr - vx, h: vb - vy } : whole;
+  const b0 = badges.get(v.id);
+  if (b0?.dragging) return; // you're moving it: it goes where you put it
+  // The pill's spot: the corner you dragged it near (bottom-right, 3pt in, to start), and how far in from it.
+  // Its window is the pill, 1pt above it and its 3pt lip below: nothing else.
+  const sp = settings.plugin.spots?.[v.id] || { c: 'br', dx: 3, dy: 3 };
+  const pw = b0?.size.w || 100, ph = (b0?.size.h || 28) - 4;
+  const dx = Math.min(sp.dx, Math.max(0, own.w - pw)), dy = Math.min(sp.dy, Math.max(0, own.h - ph));
+  const px = sp.c.endsWith('r') ? own.x + own.w - dx - pw : own.x + dx;
+  const py = sp.c.startsWith('b') ? own.y + own.h - dy - ph : own.y + dy;
+  const cx = Math.round(px + pw / 2), cy = Math.round(py + ph / 2);
+  const top = wins.find((w) => inside({ x: cx, y: cy }, w));
+  if (!top || top.pid !== v.pid) { hideBadge(v.id); return; }
+  // Mid-swipe between Spaces (or in Mission Control) windows report frames off every screen. macOS would pull
+  // the pod back onto a screen somewhere else, so it waits until the window's corner is really on one.
+  if (!screen.getAllDisplays().some((d) => inside({ x: cx, y: cy }, { x: d.bounds.x, y: d.bounds.y, w: d.bounds.width, h: d.bounds.height }))) { hideBadge(v.id); return; }
+  const b = badgeFor(v);
+  b.own = own;
+  const x = Math.round(px), y = Math.round(py - 1);
+  if (!b.at || b.at.x !== x || b.at.y !== y || b.at.w !== b.size.w || b.at.h !== b.size.h) {
+    b.at = { x, y, w: b.size.w, h: b.size.h };
+    b.win.setBounds({ x, y, width: b.size.w, height: b.size.h });
+  }
+  if (!b.shown && b.ready) {
+    b.shown = true;
+    clearTimeout(b.hideTimer);
+    b.win.showInactive();
+    joinSpaces(b.win);
+    b.win.webContents.send('badge:show', { first: b.first });
+    b.first = false;
+  }
+}
+function badgeFor(v) {
+  let b = badges.get(v.id);
+  if (b && !b.win.isDestroyed()) return b;
+  // enableLargerThanScreen: macOS would otherwise keep it clear of screen edges, off the corner.
+  const win = jotPanel({ width: 100, height: 28, focusable: false, enableLargerThanScreen: true });
+  win.setAlwaysOnTop(true, 'floating'); // on the app's window, under menus and other apps' pop-ups
+  b = { win, size: { w: 100, h: 28 }, shown: false, first: !viewOf(v.id)?.seen, ready: false, at: null, hideTimer: null };
+  badges.set(v.id, b);
+  win.loadFile(path.join(__dirname, 'plugin-badge.html'));
+  win.webContents.on('did-finish-load', () => { const cur = viewOf(v.id); if (cur) win.webContents.send('badge:data', cur); });
+  win.webContents.ipc.on('badge:fit', (_e, s) => {
+    if (!s || !(s.w > 20 && s.w < 400 && s.h > 12 && s.h < 120)) return;
+    b.size = { w: Math.ceil(s.w), h: Math.ceil(s.h) };
+    b.ready = true;
+  });
+  // Dragged: the window follows the pointer, and where it's dropped is remembered against its app's window.
+  win.webContents.ipc.on('badge:drag', (_e, phase, p) => {
+    if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return;
+    if (phase === 'start') { const wb = win.getBounds(); b.dragging = { x: wb.x, y: wb.y, px: p.x, py: p.y }; if (pmenu?.id === v.id) closePluginMenu(); return; }
+    const g = b.dragging;
+    if (!g) return;
+    if (phase === 'move') { win.setPosition(Math.round(g.x + p.x - g.px), Math.round(g.y + p.y - g.py)); return; }
+    b.dragging = null;
+    const own = b.own;
+    if (!own) return;
+    const wb = win.getBounds();
+    const pill = { x: wb.x, y: wb.y + 1, w: wb.width, h: wb.height - 4 };
+    const mx = pill.x + pill.w / 2, my = pill.y + pill.h / 2;
+    const c = `${my > own.y + own.h / 2 ? 'b' : 't'}${mx > own.x + own.w / 2 ? 'r' : 'l'}`;
+    const dx = c.endsWith('r') ? own.x + own.w - (pill.x + pill.w) : pill.x - own.x;
+    const dy = c.startsWith('b') ? own.y + own.h - (pill.y + pill.h) : pill.y - own.y;
+    settings = { ...settings, plugin: cleanPlugin({ ...settings.plugin, spots: { ...settings.plugin.spots, [v.id]: { c, dx, dy } } }) };
+    writeJSON('settings.json', settings);
+    b.at = null; // placed again on the next look, snapped inside the window
+  });
+  // The pod toggles its menu: open, or closed if it's already open.
+  win.webContents.ipc.on('badge:click', () => { if (pmenu?.id === v.id) closePluginMenu(); else openPluginMenu(v.id); });
+  return b;
+}
+function hideBadge(id) {
+  const b = badges.get(id);
+  if (!b || !b.shown || b.win.isDestroyed()) return;
+  b.shown = false;
+  b.win.webContents.send('badge:hide');
+  clearTimeout(b.hideTimer);
+  b.hideTimer = setTimeout(() => { if (!b.shown && !b.win.isDestroyed()) b.win.hide(); }, 240);
+}
+// Unplugged: the badge yanks out of its corner and drops away.
+function dropBadge(id, yank) {
+  const b = badges.get(id);
+  badges.delete(id);
+  if (!b || b.win.isDestroyed()) return;
+  if (!yank || !b.at) { b.win.destroy(); return; }
+  b.win.showInactive();
+  b.win.webContents.send('badge:unplug');
+  setTimeout(() => { if (!b.win.isDestroyed()) b.win.destroy(); }, 600);
+}
+
+// ---------- the menu ----------
+const PMENU_W = 352;
+async function openPluginMenu(id, near = null) {
+  if (!plug?.plugins.has(id)) return;
+  if (pmenu?.id === id) { if (!pmenu.win.isDestroyed()) pmenu.win.showInactive(); return; }
+  if (pmenu) closePluginMenu();
+  // It grows up out of the pod, just above it, lined up with its right edge, so the pod stays in view and a
+  // second click on it closes the menu. With no pod showing, it opens by the pointer (or the spot it was asked from).
+  // The anchor is the menu window's bottom-right (its top-right when it opens below); the window is just the card.
+  const b = badges.get(id);
+  let anchor;
+  let below = false;
+  if (b?.shown && b.at) {
+    anchor = { x: b.at.x + b.at.w, y: b.at.y + 1 - 10 }; // right edges lined up, 10pt clear of the pod
+    // A pod dragged up near the top: the menu opens below it instead. Then the anchor is the window's top.
+    const waTop = screen.getDisplayNearestPoint({ x: b.at.x, y: b.at.y }).workArea.y;
+    if (b.at.y - waTop < 360) { below = true; anchor = { x: anchor.x, y: b.at.y + b.at.h + 10 }; }
+  }
+  else {
+    const p = near || screen.getCursorScreenPoint();
+    anchor = { x: Math.round(p.x + PMENU_W / 2), y: Math.round(p.y - 12) };
+  }
+  const wa = screen.getDisplayNearestPoint({ x: anchor.x - 60, y: anchor.y - 60 }).workArea;
+  anchor.x = Math.min(Math.max(anchor.x, wa.x + PMENU_W), wa.x + wa.width);
+  if (!below) anchor.y = Math.min(Math.max(anchor.y, wa.y + 260), wa.y + wa.height);
+  const H = Math.min(760, wa.height - 8);
+  const m = { id, win: null, anchor, below, shown: false, closing: false, wa, netTimer: null };
+  pmenu = m;
+  plug.watch(id, true);
+  if (!plug.plugins.get(id).seen) plug.update(id, { seen: true });
+  const w = jotPanel({ x: anchor.x - PMENU_W, y: below ? anchor.y : Math.max(wa.y, anchor.y - H), width: PMENU_W, height: below ? Math.min(H, wa.y + wa.height - anchor.y) : H, focusable: true });
+  m.win = w;
+  w.loadFile(path.join(__dirname, 'plugin-menu.html'));
+  w.once('ready-to-show', () => setTimeout(() => showPluginMenu(m), 900)); // in case its first fit never comes
+  w.on('closed', () => { if (pmenu === m) { pmenu = null; plug?.watch(id, false); clearInterval(m.netTimer); } });
+  m.netTimer = setInterval(async () => {
+    if (pmenu !== m || w.isDestroyed()) return;
+    w.webContents.send('pmenu:networks', await PluginEngine.networks().catch(() => []));
+  }, 5000);
+  buildMenu();
+}
+function showPluginMenu(m) {
+  if (m.shown || pmenu !== m || !m.win || m.win.isDestroyed()) return;
+  m.shown = true;
+  m.win.showInactive();
+  joinSpaces(m.win);
+  m.win.webContents.send('pmenu:shown');
+}
+function closePluginMenu() {
+  const m = pmenu;
+  if (!m || m.closing) return;
+  m.closing = true;
+  pmenu = null;
+  clearInterval(m.netTimer);
+  plug?.watch(m.id, false);
+  buildMenu();
+  const w = m.win;
+  if (!w || w.isDestroyed()) return;
+  const bye = () => { if (!w.isDestroyed()) w.destroy(); };
+  if (!m.shown || quitting) { bye(); return; }
+  w.setIgnoreMouseEvents(true);
+  w.webContents.ipc.once('pmenu:gone', bye);
+  w.webContents.send('pmenu:leave');
+  setTimeout(bye, 450);
+}
+// A click anywhere but the menu (or its badge) puts it away, like any pop-up.
+function pluginMenuClickAway() {
+  const m = pmenu;
+  if (!m?.shown || m.win.isDestroyed()) return;
+  const p = screen.getCursorScreenPoint();
+  const b = m.win.getBounds();
+  if (inside(p, { x: b.x, y: b.y, w: b.width, h: b.height })) return;
+  // A click on its own pod: the pod toggles the menu itself (badge:click), so leave it to that.
+  const pod = badges.get(m.id);
+  if (pod?.shown && pod.at && inside(p, pod.at)) return;
+  closePluginMenu();
+}
+const fromPMenu = (e) => pmenu?.win && !pmenu.win.isDestroyed() && e.sender === pmenu.win.webContents;
+ipcMain.handle('pmenu:init', async (e) => {
+  if (!fromPMenu(e)) return null;
+  const v = viewOf(pmenu.id);
+  return {
+    plugin: v, caps: plug.caps(), networks: await PluginEngine.networks().catch(() => []),
+    icon: await appIconFor(v?.path), below: !!pmenu.below, maxHeight: Math.min(740, (pmenu.below ? pmenu.wa.y + pmenu.wa.height - pmenu.anchor.y : pmenu.anchor.y - pmenu.wa.y) - 40), // never taller than the room above the pod
+  };
+});
+ipcMain.on('pmenu:fit', (e, size) => {
+  if (!fromPMenu(e) || !size || !(size.w > 100 && size.w < 900 && size.h > 60 && size.h < 1600)) return;
+  const m = pmenu, wa = m.wa;
+  const room = m.below ? wa.y + wa.height - m.anchor.y : m.anchor.y - wa.y;
+  const width = Math.ceil(size.w), height = Math.min(Math.ceil(size.h), room);
+  const x = Math.round(Math.max(wa.x, Math.min(m.anchor.x - width, wa.x + wa.width - width)));
+  const y = Math.round(m.below ? m.anchor.y : Math.max(wa.y, m.anchor.y - height));
+  m.win.setBounds({ x, y, width, height });
+  if (!m.shown && size.ready) setTimeout(() => showPluginMenu(m), 30);
+});
+// Only the settings a menu has: levels, on/off, memory's action, the route and Focus.
+function pluginPatch(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const a of PluginEngine.ASPECTS) if (Number.isInteger(raw[a])) out[a] = raw[a];
+  if (typeof raw.on === 'boolean') out.on = raw.on;
+  if (raw.arm === true) out.arm = true;
+  if (['warn', 'hide'].includes(raw.ramAct)) out.ramAct = raw.ramAct;
+  if (raw.route && typeof raw.route === 'object') {
+    out.route = {};
+    if (raw.route.device === null || (typeof raw.route.device === 'string' && /^[\w.]+$/.test(raw.route.device))) out.route.device = raw.route.device;
+    if (typeof raw.route.fallback === 'boolean') out.route.fallback = raw.route.fallback;
+  }
+  if (raw.focus && typeof raw.focus === 'object') {
+    out.focus = {};
+    for (const k of ['on', 'blur', 'quiet', 'awake', 'music']) if (typeof raw.focus[k] === 'boolean') out.focus[k] = raw.focus[k];
+  }
+  return out;
+}
+ipcMain.handle('pmenu:set', async (e, patch) => {
+  if (!fromPMenu(e)) return { ok: false };
+  return plug.update(pmenu.id, pluginPatch(patch));
+});
+ipcMain.handle('pmenu:reopen', async (e, routed) => {
+  if (!fromPMenu(e)) return { ok: false };
+  return plug.reopen(pmenu.id, !!routed);
+});
+// Wi-Fi: look for networks, and join one (Pane's helper, with CoreWLAN). The password goes to the helper on
+// its stdin, never on a command line where other programs could read it.
+function wifiHelper(args, input) {
+  return new Promise((resolve) => {
+    let out = '';
+    let child;
+    try { child = spawn(helperPath(), ['wifi', ...args], { stdio: ['pipe', 'pipe', 'ignore'] }); } catch { resolve(null); return; }
+    const timer = setTimeout(() => { try { child.kill(); } catch {} }, 40000);
+    child.stdout.on('data', (d) => { out += d; });
+    child.on('error', () => { clearTimeout(timer); resolve(null); });
+    child.on('close', () => { clearTimeout(timer); try { resolve(JSON.parse(out.trim().split('\n').pop())); } catch { resolve(null); } });
+    child.stdin.on('error', () => {});
+    if (input) child.stdin.write(`${JSON.stringify(input)}\n`);
+    child.stdin.end();
+  });
+}
+ipcMain.handle('pmenu:wifiScan', async (e) => {
+  if (!fromPMenu(e)) return null;
+  const r = await wifiHelper(['scan']);
+  return r || { error: 'Couldn’t look for networks.' };
+});
+ipcMain.handle('pmenu:wifiJoin', async (e, j) => {
+  if (!fromPMenu(e) || !j || typeof j.ssid !== 'string' || !j.ssid || j.ssid.length > 64) return { ok: false, message: 'Pick a network first.' };
+  const r = await wifiHelper(['join'], { ssid: j.ssid, device: typeof j.device === 'string' && /^\w+$/.test(j.device) ? j.device : null, password: typeof j.password === 'string' ? j.password.slice(0, 128) : '' });
+  if (r?.ok) {
+    setTimeout(async () => { if (pmenu?.win && !pmenu.win.isDestroyed()) pmenu.win.webContents.send('pmenu:networks', await PluginEngine.networks().catch(() => [])); }, 2500);
+    return { ok: true, message: `Joined ${j.ssid}.` };
+  }
+  return { ok: false, message: r?.error || `Couldn’t join ${j.ssid}.` };
+});
+async function unplug(id) {
+  const v = viewOf(id);
+  if (!v) return { ok: true };
+  // Routed through Pane: put it back on your usual network first, or it'd be cut off when the route closes.
+  if (v.routed && v.running) {
+    const r = await plug.reopen(id, false);
+    if (!r.ok) return r;
+  }
+  if (pmenu?.id === id) closePluginMenu();
+  await plug.remove(id);
+  setTimeout(() => dropBadge(id, true), 120);
+  return { ok: true };
+}
+ipcMain.handle('pmenu:remove', async (e) => (fromPMenu(e) ? unplug(pmenu.id) : { ok: false }));
+ipcMain.on('pmenu:close', (e) => { if (fromPMenu(e)) closePluginMenu(); });
+ipcMain.on('pmenu:key', (e) => { if (fromPMenu(e)) { pmenu.win.focus(); app.focus({ steal: true }); } });
+ipcMain.on('pmenu:perm', (e, kind) => { if (fromPMenu(e) && kind === 'location') shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices'); });
+ipcMain.on('pmenu:debug', (e) => {
+  if (!fromPMenu(e) || !settings.debug.enabled) return;
+  const v = viewOf(pmenu.id);
+  const b = pmenu.win.getBounds();
+  closePluginMenu();
+  if (v) openDebug({ x: Math.round(b.x + b.width / 2), y: Math.round(b.y + 20) }, { pid: v.pid, bundle: v.bundle, name: v.name, path: v.path });
+});
+// From Debug: open an app's plugin, or plug it in.
+ipcMain.handle('debug:plugin', (e, kind, a) => {
+  if (!fromDebug(e) || !plug || !settings.plugin.enabled || !a || typeof a.name !== 'string') return { ok: false };
+  const app0 = { bundle: typeof a.bundle === 'string' && /^[\w.-]+$/.test(a.bundle) ? a.bundle : null, name: a.name, path: typeof a.path === 'string' ? a.path : null };
+  const p = plug.has(app0) || (kind === 'add' ? plug.add(app0) : null);
+  if (!p) return { ok: false };
+  const b = dbg?.win?.getBounds();
+  openPluginMenu(p.id, b ? { x: b.x - 20, y: b.y + 80 } : null);
+  return { ok: true };
+});
+// From the settings page.
+ipcMain.handle('plugin:list', () => ({ list: plug?.lastList || [], caps: plug?.caps() || null }));
+ipcMain.handle('plugin:set', (_e, id, patch) => (plug?.plugins.has(id) ? plug.update(id, pluginPatch(patch)) : { ok: false }));
+ipcMain.handle('plugin:remove', (_e, id) => (plug?.plugins.has(id) ? unplug(id) : { ok: true }));
+ipcMain.handle('plugin:icon', (_e, p) => (typeof p === 'string' && p.endsWith('.app') ? appIconFor(p) : null));
+ipcMain.on('plugin:open', (_e, id) => {
+  if (!plug?.plugins.has(id)) return;
+  const b = settingsWin?.getBounds();
+  openPluginMenu(id, b ? { x: Math.round(b.x + b.width / 2), y: Math.round(b.y + 120) } : null);
+});
+ipcMain.on('plugin:try', () => { if (settings.plugin.enabled) { settingsWin?.hide(); setTimeout(() => { if (!picker && !pluginBlocked()) startPicker(); }, 250); } });
+ipcMain.on('plugin:perm', (_e, kind) => {
+  const panes = {
+    screen: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
+    automation: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Automation',
+    notifications: 'x-apple.systempreferences:com.apple.Notifications-Settings.extension',
+    location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
+  };
+  if (panes[kind]) shell.openExternal(panes[kind]);
+});
+function setPluginEnabled(on) {
+  settings = { ...settings, plugin: { ...settings.plugin, enabled: !!on } };
+  pluginEnabledChanged();
+  writeJSON('settings.json', settings);
+  registerShortcuts();
+  buildMenu();
+  settingsWin?.webContents.send('settings:changed', settings);
+}
+function pluginEnabledChanged() {
+  if (!plug) return;
+  if (!settings.plugin.enabled) { endPicker(); closePluginMenu(); plug.suspend(true); }
+  else if (plug.suspended) { plug.suspend(false); if (!plug.timer) plug.start(); }
+  ensureBadgeLoop();
+}
 
 // ---------- settings window ----------
 function createSettings() {
@@ -2406,6 +3033,14 @@ ipcMain.handle('settings:set', (_e, patch) => {
     buildMenu();
     debugSettingsChanged();
   }
+  if ('plugin' in patch) {
+    settings.plugin = cleanPlugin(settings.plugin);
+    const line = settleShortcut('plugin');
+    if (line) moved.push(['pluginCaption', line]);
+    pluginEnabledChanged();
+    registerShortcuts();
+    buildMenu();
+  }
   writeJSON('settings.json', settings);
   broadcast();
   // Told a moment later, after the page has redrawn its captions for the new way.
@@ -2489,7 +3124,7 @@ ipcMain.on('update:later', () => Updater.later());
 ipcMain.on('update:skip', () => Updater.skip());
 ipcMain.on('update:install', () => Updater.install());
 ipcMain.on('update:check', () => Updater.check({ manual: true }));
-ipcMain.handle('perm:check', () => ({ trusted: trusted(), listening: hookOn, awayKey: shortcutOn.away, jotKey: shortcutOn.jot, tweakKey: shortcutOn.tweak, debugKey: shortcutOn.debug }));
+ipcMain.handle('perm:check', () => ({ trusted: trusted(), listening: hookOn, awayKey: shortcutOn.away, jotKey: shortcutOn.jot, tweakKey: shortcutOn.tweak, debugKey: shortcutOn.debug, pluginKey: shortcutOn.plugin, screen: systemPreferences.getMediaAccessStatus('screen') }));
 ipcMain.on('perm:open', () => {
   systemPreferences.isTrustedAccessibilityClient(true);
   shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
@@ -2532,6 +3167,7 @@ app.whenReady().then(() => {
   settings.jot = cleanJot({ ...DEFAULTS.jot, ...settings.jot });
   settings.tweak = cleanTweak(settings.tweak);
   settings.debug = cleanDebug(settings.debug);
+  settings.plugin = cleanPlugin(settings.plugin);
   // Spin's key can't be exactly one of Scrawl's (sharing some keys is fine): take a free right-hand modifier.
   if (sameCombo(settings.spin.key, settings.hotkey) || sameCombo(settings.spin.key, settings.drawKey)) {
     const free = [UiohookKey.MetaRight, UiohookKey.AltRight, UiohookKey.CtrlRight, UiohookKey.ShiftRight]
@@ -2556,6 +3192,7 @@ app.whenReady().then(() => {
 
   createOverlays();
   createSettings();
+  startPlug();
   InstallCount.countOnce({ dir: app.getPath('userData'), fresh, packaged: app.isPackaged }).catch(() => {});
   for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) {
     screen.on(ev, refreshOverlays);
@@ -2653,6 +3290,8 @@ function buildMenu() {
         { label: 'Tweak a File…', accelerator: 'Cmd+O', click: () => chooseAndEdit(BrowserWindow.getFocusedWindow()) },
         { label: settings.debug.enabled ? 'Turn Debug Off' : 'Turn Debug On', click: () => setDebugEnabled(!settings.debug.enabled) },
         { label: dbg ? 'Close Debug' : 'Open Debug', enabled: settings.debug.enabled, click: () => (dbg ? closeDebug() : openDebug()) },
+        { label: settings.plugin.enabled ? 'Turn Plugin Off' : 'Turn Plugin On', click: () => setPluginEnabled(!settings.plugin.enabled) },
+        { label: 'Plug Into an App…', enabled: settings.plugin.enabled && !picker, ...(settings.plugin.enabled ? { accelerator: settings.plugin.keys.accelerator, registerAccelerator: false } : {}), click: () => setTimeout(() => { if (!pluginBlocked()) startPicker(); }, 200) },
         away
           ? { label: 'Come Back', click: hideAway }
           : { label: 'Step Away', ...(settings.away.mode === 'shortcut' ? { accelerator: settings.away.keys.accelerator, registerAccelerator: false } : {}), click: () => showAway(false) },
@@ -2692,9 +3331,13 @@ app.on('before-quit', () => {
   if (notes) saveNotes();
   endTarget();
   closeDebug();
+  endPicker();
+  closePluginMenu();
+  for (const b of focusBlurs.values()) if (!b.win.isDestroyed()) b.win.destroy();
+  plug?.releaseAll(); // nothing stays paused, quieted or turned down after Pane quits
 });
 
 // Test hook: only present when SCRAWL_TEST is set (used by automated checks, never in normal runs).
 if (process.env.SCRAWL_TEST) {
-  global.__scrawlTest = { startBind: (w) => { binding = w; bindKeys = []; }, settings: () => settings, spin, openSpin, closeSpin, spinHover, spinView, Music, applyTool, step, setEnabled, overlays, menu, showAway, hideAway, awayWins: () => away?.wins ?? [], jot: { open: openComposer, composer: () => composer, notes: () => notes, toasts, check: checkNotes, tap: jotTapper.feed, blocked: jotBlocked }, tweak: { start: startTarget, end: endTarget, target: () => target, open: openEditor, editors, tap: tweakTap, files: TweakFiles }, debug: { open: openDebug, close: closeDebug, state: () => dbg, tap: debugTap.feed, hold: debugHold.feed, stats: DebugStats }, settingsWin: () => settingsWin, peek: () => ({ away: !!away, awayKey: awayKeyOn, activeTool, visible, menuOpen: menu.open, pencilColor: settings.pencilColor, enabled: settings.enabled, drawings, undo: history.undo.length, redo: history.redo.length }) };
+  global.__scrawlTest = { startBind: (w) => { binding = w; bindKeys = []; }, settings: () => settings, spin, openSpin, closeSpin, spinHover, spinView, Music, applyTool, step, setEnabled, overlays, menu, showAway, hideAway, awayWins: () => away?.wins ?? [], jot: { open: openComposer, composer: () => composer, notes: () => notes, toasts, check: checkNotes, tap: jotTapper.feed, blocked: jotBlocked }, tweak: { start: startTarget, end: endTarget, target: () => target, open: openEditor, editors, tap: tweakTap, files: TweakFiles }, debug: { open: openDebug, close: closeDebug, state: () => dbg, tap: debugTap.feed, hold: debugHold.feed, stats: DebugStats }, plugin: { engine: () => plug, hit: (h) => { if (picker) { picker.hit = h; sendPickerHit(); } }, start: startPicker, end: endPicker, picker: () => picker, click: pickerClick, menu: () => pmenu, open: openPluginMenu, close: closePluginMenu, badges }, settingsWin: () => settingsWin, peek: () => ({ away: !!away, awayKey: awayKeyOn, activeTool, visible, menuOpen: menu.open, pencilColor: settings.pencilColor, enabled: settings.enabled, drawings, undo: history.undo.length, redo: history.redo.length }) };
 }

@@ -114,6 +114,26 @@
   --warn-lip: #D18E14;
 }
 
+/* Plugin's theme: a mauve-grey faceplate, aubergine ink, a turquoise current, raspberry for boost and overdrive. */
+[data-theme="plugin"] {
+  --paper: #E9E4EA;
+  --paper-deep: #DCD4DF;
+  --card: #FCFAFD;
+  --card-lip: #E2DAE5;
+  --well: #F2EEF4;
+  --edge: #D2C8D6;
+  --ink: #241F2E;
+  --ink-2: #6A6275;
+  --accent: #3FCDBF;
+  --accent-lip: #1FA295;
+  --accent-soft: #D2F4F0;
+  --accent-ink: #0E7A70;
+  --peach: #F2668B;     /* raspberry: boost and overdrive */
+  --peach-lip: #CC4069;
+  --warn: #F5B53F;
+  --warn-lip: #D18E14;
+}
+
 /* ---------- the wheel ---------- */
 .wheel { overflow: visible; display: block; }
 .wheel .slice, .wheel .wheel-body { transform-box: view-box; transform-origin: var(--cx) var(--cy); }

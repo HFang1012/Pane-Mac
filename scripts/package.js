@@ -118,7 +118,12 @@ function sign(app) {
     icon: path.join(root, 'assets', 'icon.icns'),
     appBundleId: 'com.pane.app',
     // Spin drives Spotify and Music with Apple Events; macOS shows this when it asks you to allow that.
-    extendInfo: { NSAppleEventsUsageDescription: 'Spin plays, skips and sets the volume in your music app.' },
+    extendInfo: {
+      NSAppleEventsUsageDescription: 'Spin plays, skips and sets the volume in your music app.',
+      // macOS only shows Wi-Fi network names to apps with Location access (Plugin's "join a network").
+      NSLocationUsageDescription: 'Plugin shows the names of Wi-Fi networks nearby so you can join one. Pane never reads where you are.',
+      NSLocationWhenInUseUsageDescription: 'Plugin shows the names of Wi-Fi networks nearby so you can join one. Pane never reads where you are.',
+    },
     appVersion: version, // Finder's "Version" and the About window (CFBundleShortVersionString)
     buildVersion: version, // CFBundleVersion
     ignore: [/^\/(build|assets|scripts|docs|\.claude|\.github)(\/|$)/, /\/prebuilds\/(linux|win32)\//, /^\/native\/.*\.swift$/],

@@ -788,7 +788,7 @@ async function fix(kind, app, { shell, selfPid }) {
 }
 
 module.exports = {
-  sample, frontApp, fix, isBrowser, startTicker, tickCpu, warm, TRAIL_MS,
+  sample, frontApp, fix, isBrowser, startTicker, tickCpu, warm, TRAIL_MS, footprints, CHROMIUM, PROTECTED,
   setIconLoader: (fn) => { iconLoader = fn; },
   setHelper: (fn) => { helperFor = fn; },
   _test: { topProcesses, parseApps, parsePs, cpuSeconds, parseTop, categorize, counters, heatNow, parseNettop, parseIo, parseGpuClients },

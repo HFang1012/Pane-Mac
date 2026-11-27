@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en" data-theme="plugin">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'">
+<title>Plugin</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  body {
+    font-family: var(--font); color: var(--ink); font-size: 13px; line-height: 1.35; -webkit-font-smoothing: antialiased; user-select: none; cursor: default;
+    --glide: cubic-bezier(0.22, 1, 0.36, 1);
+    --free: #DCD3E0; --free-lip: #C5B9CB; /* a share left alone: filled, but in the faceplate's own color */
+  }
+  button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; }
+  button:focus { outline: none; }
+  button:focus-visible, .rail:focus-visible { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 5px var(--accent); }
+  [hidden] { display: none !important; }
+  svg.i { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* The window is a little bigger than the card, for its shadow. The card grows out of the badge's corner. */
+  /* The window is exactly the card plus its lip: no see-through margin around it to catch clicks. */
+  #wrap { display: inline-block; padding: 0 0 6px; }
+  .card {
+    position: relative; width: 352px; border-radius: 26px; background: var(--card); overflow: hidden; display: flex; flex-direction: column;
+    box-shadow: 0 6px 0 var(--card-lip), inset 0 0 0 1px rgba(36, 31, 46, 0.08);
+    transform-origin: 100% 100%; opacity: 0; max-height: var(--max, 720px);
+  }
+  body.shown .card { opacity: 1; animation: grow 520ms var(--glide) both; }
+  body.below .card { transform-origin: 100% 0; }
+  body.below.shown .card { animation-name: growdown; }
+  @keyframes growdown { from { opacity: 0; transform: scale(0.18) translate(40px, -30px); border-radius: 40px; } 60% { opacity: 1; } }
+  @keyframes grow { from { opacity: 0; transform: scale(0.18) translate(40px, 30px); border-radius: 40px; } 60% { opacity: 1; } }
+  body.leaving .card { animation: shrink 240ms cubic-bezier(0.4, 0, 1, 1) both !important; pointer-events: none; }
+  @keyframes shrink { to { opacity: 0; transform: scale(0.3) translate(30px, 20px); } }
+  .rise { opacity: 0; }
+  body.shown .rise { opacity: 1; animation: rise 520ms var(--glide) both; animation-delay: calc(110ms + var(--i, 0) * 55ms); }
+  @keyframes rise { from { opacity: 0; transform: translateY(12px); } }
+  /* Off: everything greys out and can't be clicked, but the list still scrolls (only its parts ignore the pointer). */
+  body.off .body > * { filter: saturate(0.15); opacity: 0.6; pointer-events: none; transition: filter 300ms ease, opacity 300ms ease; }
+
+  /* ---------- top: the app, its light, on/off ---------- */
+  .top { display: flex; align-items: center; gap: 10px; padding: 14px 12px 10px 14px; }
+  .appic { width: 36px; height: 36px; border-radius: 10px; flex: none; display: grid; place-items: center; position: relative; }
+  .appic img { width: 36px; height: 36px; object-fit: contain; }
+  .appic .avatar { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--ink-2); color: var(--card); font-weight: 800; font-size: 16px; }
+  /* A tiny plug seated on the icon's corner: this app is plugged in. */
+  .appic .plug { position: absolute; right: -7px; bottom: -5px; width: 22px; height: 17px; border-radius: 7px; background: var(--card); display: grid; place-items: center; box-shadow: 0 2px 0 var(--card-lip); }
+  .appic .plug svg { height: 12px; width: auto; }
+  .who { flex: 1; min-width: 0; }
+  .who b { display: block; font-size: 15px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .who small { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; color: var(--ink-2); margin-top: 1px; }
+  .led { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); flex: none; transition: background 240ms ease, box-shadow 240ms ease; }
+  [data-tone="warn"] .led { background: var(--warn); box-shadow: 0 0 0 3px #FCEBC6; }
+  [data-tone="bad"] .led, [data-tone="boost"] .led, [data-tone="hot"] .led { background: var(--peach); box-shadow: 0 0 0 3px #FCD9E2; }
+  [data-tone="hot"] .led { animation: hot 900ms ease-in-out infinite; }
+  @keyframes hot { 50% { box-shadow: 0 0 0 6px rgba(242, 102, 139, 0.18); } }
+  [data-tone="off"] .led, [data-tone="idle"] .led { background: transparent; box-shadow: inset 0 0 0 2px var(--edge); }
+  .swap { transition: opacity 150ms ease; }
+  .swap.out { opacity: 0; }
+
+  /* On/off: a rocker, like a power strip's. */
+  .rocker { position: relative; width: 50px; height: 30px; border-radius: 15px; background: var(--edge); box-shadow: inset 0 2px 0 rgba(36, 31, 46, 0.12); transition: background 220ms ease; flex: none; }
+  .rocker .knob { position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 12px; background: var(--card); box-shadow: 0 2px 0 var(--card-lip); transition: transform 380ms var(--bouncy); display: grid; place-items: center; }
+  .rocker .knob::after { content: ""; width: 2.5px; height: 10px; border-radius: 2px; background: var(--edge); transition: background 220ms ease; }
+  .rocker[aria-checked="true"] { background: var(--accent); }
+  .rocker[aria-checked="true"] .knob { transform: translateX(20px); }
+  .rocker[aria-checked="true"] .knob::after { background: var(--accent-lip); }
+  .rocker:active .knob { width: 28px; }
+  .ib { width: 28px; height: 28px; border-radius: 14px; display: grid; place-items: center; color: var(--ink-2); background: var(--well); transition: transform 260ms var(--bouncy), background 140ms ease, color 140ms ease; flex: none; }
+  .ib:hover { background: var(--accent-soft); color: var(--accent-ink); }
+  .ib.x:hover { transform: rotate(90deg); }
+  .ib:active { transform: scale(0.86); }
+
+  .body { overflow-y: auto; overscroll-behavior: contain; padding: 0 14px 14px; scrollbar-width: none; flex: 1; min-height: 0; }
+  .body::-webkit-scrollbar { display: none; }
+  .body.more-below { -webkit-mask-image: linear-gradient(#000 calc(100% - 30px), transparent); }
+
+  section { margin-top: 10px; }
+  .lead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 4px 2px 8px; }
+  .lead h3 { margin: 0; font-size: 13px; font-weight: 800; }
+  .lead p { margin: 0; font-size: 11px; font-weight: 700; color: var(--ink-2); text-align: right; white-space: nowrap; }
+  #guard:not(:empty) { margin-bottom: 6px; }
+
+  /* ---------- shares: the rail ---------- */
+  .share { padding: 9px 10px 10px; border-radius: 18px; background: var(--well); margin-bottom: 6px; transition: background 200ms ease; }
+  .share.dragging { background: var(--paper); }
+  .share-head { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 1px 0 7px; }
+  .share-head .sic { width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; background: var(--card); color: var(--ink); box-shadow: 0 2px 0 var(--card-lip); transition: background 220ms ease, color 220ms ease, box-shadow 220ms ease; }
+  .share[data-band="lim"] .sic { background: var(--accent); box-shadow: 0 2px 0 var(--accent-lip); }
+  .share[data-band="boost"] .sic, .share[data-band="od"] .sic { background: var(--peach); color: #FFF; box-shadow: 0 2px 0 var(--peach-lip); }
+  .share-head b { font-size: 12.5px; font-weight: 800; flex: none; }
+  .share-head .val { margin-left: auto; }
+  .share-head .val { font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+  .share[data-band="lim"] .val { color: var(--accent-ink); }
+  .share[data-band="boost"] .val, .share[data-band="od"] .val { color: var(--peach-lip); }
+  /* Under the rail: what it uses now (dark fill) and normally (the tick), lined up with the ten cells. */
+  .meter { position: relative; height: 4px; margin-top: 7px; border-radius: 2px; background: var(--edge); }
+  .meter .cur { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 2px; background: var(--ink); opacity: 0.75; transition: width 1000ms var(--glide), background 300ms ease; }
+  .meter.over .cur { background: var(--warn-lip); opacity: 1; }
+  .meter .norm { position: absolute; top: -3px; width: 2px; height: 10px; margin-left: -1px; border-radius: 1px; background: var(--accent-lip); transition: left 1200ms var(--glide); }
+  /* Now and usually, in the share's header, on one line however tight: it shortens with … rather than wrapping. */
+  .use { flex: 1; min-width: 0; display: block; text-align: right; margin-right: 4px; font-size: 10.5px; font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .use span + span { margin-left: 8px; }
+  .use .tick, .use .dot { display: inline-block; vertical-align: 1px; margin-right: 4px; }
+  .use .tick { vertical-align: -1px; }
+  .use b { color: var(--ink); font-weight: 800; }
+  .use .dot { width: 8px; height: 4px; border-radius: 2px; background: var(--ink); opacity: 0.75; }
+  .use .tick { width: 2px; height: 9px; border-radius: 1px; background: var(--accent-lip); }
+  .share-head .nowv { font-size: 10.5px; font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; padding: 2px 7px; border-radius: 8px; background: var(--card); }
+  .share-head .nowv:empty { display: none; }
+  .share-head .chev { color: var(--ink-2); transition: transform 320ms var(--bouncy); width: 12px; height: 12px; }
+  .share.open .chev { transform: rotate(180deg); }
+
+  .rail { position: relative; display: flex; gap: 3px; height: 30px; padding-top: 6px; touch-action: none; cursor: ew-resize; border-radius: 10px; outline: none; }
+  .cell {
+    position: relative; flex: 1; height: 22px; border-radius: 7px; background: var(--card); box-shadow: inset 0 0 0 1.5px var(--edge);
+    transition: background 200ms ease, box-shadow 200ms ease, transform 320ms var(--bouncy);
+  }
+  .cell.free { background: var(--free); box-shadow: 0 3px 0 var(--free-lip); transform: translateY(-2px); }
+  .cell.lim { background: var(--accent); box-shadow: 0 3px 0 var(--accent-lip); transform: translateY(-2px); }
+  /* The two cells past ten: boost and overdrive, set apart, with a bolt in each. */
+  .cell.b { margin-left: 4px; flex: 1.1; display: grid; place-items: center; color: var(--edge); }
+  .cell.b + .cell.b { margin-left: 0; }
+  .cell.b:first-of-type { margin-left: 0; }
+  .cell.b svg { width: 11px; height: 11px; fill: currentColor; transition: transform 320ms var(--bouncy), color 200ms ease; }
+  .cell.b.boost { background: var(--peach); box-shadow: 0 3px 0 var(--peach-lip); color: #FFF; transform: translateY(-2px); }
+  .cell.b.boost svg { transform: scale(1.15); }
+  /* Overdrive crackles: a bright band runs across its cell, now and then. */
+  .cell.b.od { overflow: hidden; }
+  .cell.b.od::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.65) 48%, transparent 66%); background-size: 260% 100%; animation: crackle 1.5s linear infinite; }
+  @keyframes crackle { from { background-position: 130% 0; } to { background-position: -130% 0; } }
+  .cell.b.wait svg { animation: blink 800ms steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0.2; } }
+  .rail .gap { width: 6px; flex: none; position: relative; }
+  .rail .gap::after { content: ""; position: absolute; left: 2px; top: 3px; bottom: 3px; width: 2px; border-radius: 1px; background: var(--edge); }
+  /* A cell that just changed pops into place; they ripple out from where you let go. */
+  .cell.pop { animation: pop 380ms var(--bouncy) both; animation-delay: calc(var(--dk, 0) * 18ms); }
+  @keyframes pop { from { transform: translateY(1px) scaleY(0.6); } }
+  /* Opening: the rails charge up, cell by cell. */
+  body:not(.filled) .cell { background: var(--card) !important; box-shadow: inset 0 0 0 1.5px var(--edge) !important; transform: none !important; color: var(--edge) !important; }
+  body.filled .cell.charge { transition-delay: calc(var(--k) * 26ms + var(--i, 0) * 40ms); }
+  body:not(.filled) .cell.b.od::after { display: none; }
+
+  /* What it's using right now, as a little marker gliding over the rail. */
+  .now { position: absolute; top: 0; bottom: 0; left: 0; width: 0; pointer-events: none; transition: transform 1000ms var(--glide), opacity 300ms ease; opacity: 0; }
+  .now.on { opacity: 1; }
+  .now::before { content: ""; position: absolute; left: -4px; top: -1px; border: 4px solid transparent; border-top: 5px solid var(--ink); }
+  .now::after { content: ""; position: absolute; left: -1px; top: 6px; bottom: 2px; width: 2px; border-radius: 1px; background: var(--ink); opacity: 0.55; }
+  .now.over::before { border-top-color: var(--warn-lip); }
+  .now.over::after { background: var(--warn-lip); opacity: 0.9; }
+
+  .what { margin: 8px 2px 0; font-size: 11.5px; font-weight: 700; color: var(--ink-2); min-height: 15px; }
+  .what b { color: var(--ink); }
+  .what .live { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .warns { display: grid; gap: 4px; margin-top: 6px; }
+  .warn { display: flex; gap: 7px; align-items: flex-start; padding: 6px 9px; border-radius: 11px; font-size: 11.5px; font-weight: 700; animation: wpop 360ms var(--bouncy) both; }
+  @keyframes wpop { from { opacity: 0; transform: scale(0.94) translateY(-3px); } }
+  .warn svg { width: 13px; height: 13px; flex: none; margin-top: 1px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .warn.careful { background: #FCEBC6; color: #8A5A00; }
+  .warn.danger { background: #FCD9E2; color: #A12C50; }
+  .warn.good { background: var(--accent-soft); color: var(--accent-ink); }
+  /* How it works: plain words on what Pane really does, folded away until asked. */
+  .how { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 360ms var(--glide); }
+  .how > div { overflow: hidden; }
+  .share.open .how { grid-template-rows: 1fr; }
+  .how p { margin: 7px 2px 1px; font-size: 10.5px; font-weight: 600; line-height: 1.4; color: var(--ink-2); }
+  .how p b { color: var(--ink); font-weight: 800; }
+  .picks { display: flex; gap: 4px; margin-top: 7px; flex-wrap: wrap; align-items: center; }
+  .picks small { font-size: 11px; font-weight: 700; color: var(--ink-2); margin-right: 2px; }
+  .pick { height: 26px; padding: 0 11px; border-radius: 13px; background: var(--card); font-size: 11.5px; font-weight: 800; box-shadow: 0 2px 0 var(--card-lip); transition: transform 220ms var(--bouncy), background 160ms ease, box-shadow 160ms ease; }
+  .pick:hover { transform: translateY(-1px); }
+  .pick[aria-checked="true"] { background: var(--ink); color: var(--card); box-shadow: 0 2px 0 var(--inkLip, #110E17); }
+
+  /* ---------- own network ---------- */
+  .box { padding: 11px 10px 10px; border-radius: 18px; background: var(--well); }
+  .nets { display: grid; grid-template-columns: repeat(auto-fill, minmax(98px, 1fr)); gap: 6px; }
+  .net {
+    display: grid; grid-template-columns: 22px 1fr; grid-template-rows: auto auto; column-gap: 7px; align-items: center; text-align: left; padding: 7px 9px 7px 7px;
+    border-radius: 14px; background: var(--card); box-shadow: 0 3px 0 var(--card-lip); transition: transform 260ms var(--bouncy), box-shadow 200ms ease, background 200ms ease; min-width: 0;
+    animation: wpop 400ms var(--bouncy) both; animation-delay: calc(var(--k) * 40ms);
+  }
+  .net:hover { transform: translateY(-1px); }
+  .net:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-lip); }
+  .net .nic { grid-row: span 2; width: 22px; height: 22px; border-radius: 7px; background: var(--well); display: grid; place-items: center; }
+  .net .nic svg { width: 13px; height: 13px; }
+  .net b { font-size: 12px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .net small { font-size: 10px; font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .net[aria-checked="true"] { background: var(--ink); color: var(--card); box-shadow: 0 3px 0 #110E17; }
+  .net[aria-checked="true"] .nic { background: var(--accent); color: var(--ink); }
+  .net[aria-checked="true"] small { color: #BDB4C6; }
+  .net[disabled] { opacity: 0.45; pointer-events: none; }
+  .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .go, .alt { height: 30px; padding: 0 13px; border-radius: 15px; font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; gap: 6px; transition: transform 220ms var(--bouncy), background 140ms ease, box-shadow 140ms ease; }
+  .go { background: var(--accent); color: var(--ink); box-shadow: 0 3px 0 var(--accent-lip); }
+  .go:hover { transform: translateY(-1px); }
+  .go:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--accent-lip); }
+  .go.sure { background: var(--ink); color: var(--card); box-shadow: 0 3px 0 #110E17; animation: nudge 360ms var(--bouncy); }
+  @keyframes nudge { 30% { transform: translateX(-3px); } 60% { transform: translateX(3px); } }
+  .go.busy, .alt.busy { pointer-events: none; opacity: 0.8; }
+  .go.busy::after, .alt.busy::after { content: ""; width: 11px; height: 11px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin 700ms linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .alt { background: var(--card); color: var(--ink); box-shadow: 0 2px 0 var(--card-lip); }
+  .alt:hover { background: var(--accent-soft); color: var(--accent-ink); }
+  .tog { display: flex; align-items: center; gap: 8px; margin-top: 9px; font-size: 11.5px; font-weight: 700; color: var(--ink-2); cursor: pointer; }
+  .sw { position: relative; width: 34px; height: 20px; border-radius: 10px; background: var(--edge); flex: none; transition: background 200ms ease; }
+  .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 8px; background: var(--card); box-shadow: 0 1px 0 var(--card-lip); transition: transform 320ms var(--bouncy); }
+  .sw[aria-checked="true"] { background: var(--accent); }
+  .sw[aria-checked="true"]::after { transform: translateX(14px); }
+
+  /* ---------- Focus mode ---------- */
+  .focus-tile { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 10px; border-radius: 18px; background: var(--well); transition: background 260ms ease, color 260ms ease, transform 260ms var(--bouncy); }
+  .focus-tile:hover { transform: translateY(-1px); }
+  .focus-tile .fic { width: 40px; height: 40px; border-radius: 14px; background: var(--card); box-shadow: 0 3px 0 var(--card-lip); display: grid; place-items: center; transition: background 260ms ease, box-shadow 260ms ease; }
+  .focus-tile .fic svg { width: 22px; height: 22px; }
+  .focus-tile .fic .r2, .focus-tile .fic .r3 { transform-origin: 12px 12px; transition: transform 500ms var(--bouncy), opacity 300ms ease; }
+  .focus-tile b { display: block; font-size: 13px; font-weight: 800; }
+  .focus-tile small { display: block; font-size: 11.5px; font-weight: 700; color: var(--ink-2); margin-top: 1px; }
+  .focus-tile[aria-pressed="true"] { background: var(--ink); color: var(--card); }
+  .focus-tile[aria-pressed="true"] small { color: #BDB4C6; }
+  .focus-tile[aria-pressed="true"] .fic { background: var(--accent); box-shadow: 0 3px 0 var(--accent-lip); color: var(--ink); }
+  /* On: the outer rings pull in to the middle, like everything else stepping back. */
+  .focus-tile[aria-pressed="true"] .fic .r3 { transform: scale(0.6); opacity: 0; }
+  .focus-tile[aria-pressed="true"] .fic .r2 { transform: scale(0.85); }
+  .focus-tile .sw { background: rgba(255, 255, 255, 0.15); }
+  .focus-tile:not([aria-pressed="true"]) .sw { background: var(--edge); }
+  .focus-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 6px; }
+  .fo { display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 10px 0 8px; border-radius: 12px; background: var(--well); font-size: 11.5px; font-weight: 800; color: var(--ink-2); text-align: left; transition: background 160ms ease, color 160ms ease, transform 220ms var(--bouncy); animation: wpop 360ms var(--bouncy) both; animation-delay: calc(var(--k) * 35ms); }
+  .fo:active { transform: scale(0.95); }
+  .fo .tick { width: 16px; height: 16px; border-radius: 5px; background: var(--card); box-shadow: inset 0 0 0 1.5px var(--edge); display: grid; place-items: center; flex: none; transition: background 160ms ease, box-shadow 160ms ease; }
+  .fo .tick svg { width: 10px; height: 10px; opacity: 0; transform: scale(0.4); transition: opacity 120ms ease, transform 300ms var(--bouncy); }
+  .fo[aria-checked="true"] { color: var(--ink); background: var(--card); box-shadow: 0 2px 0 var(--card-lip); }
+  .fo[aria-checked="true"] .tick { background: var(--accent); box-shadow: 0 2px 0 var(--accent-lip); }
+  .fo[aria-checked="true"] .tick svg { opacity: 1; transform: none; }
+
+  /* ---------- bottom ---------- */
+  .foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; padding: 0 2px; }
+  .link { height: 28px; padding: 0 10px; border-radius: 14px; font-size: 11.5px; font-weight: 800; color: var(--ink-2); display: inline-flex; align-items: center; gap: 6px; transition: background 140ms ease, color 140ms ease; }
+  .link:hover { background: var(--well); color: var(--ink); }
+  .unplug { color: var(--peach-lip); }
+  .unplug:hover { background: #FCD9E2; color: #A12C50; }
+  .unplug.sure { background: var(--peach); color: #FFF; box-shadow: 0 3px 0 var(--peach-lip); animation: nudge 360ms var(--bouncy); }
+  .unplug .prongs { transition: transform 300ms var(--bouncy); }
+  .unplug:hover .prongs { transform: translateX(2px); }
+  .note { font-size: 11px; font-weight: 700; color: var(--ink-2); margin: 6px 2px 0; animation: wpop 300ms var(--bouncy) both; }
+
+  .toast {
+    position: absolute; left: 50%; bottom: 14px; translate: -50% 0; max-width: 310px; padding: 9px 14px; border-radius: 14px; background: var(--ink); color: var(--card);
+    font-size: 12px; font-weight: 700; box-shadow: 0 8px 20px -6px rgba(17, 14, 23, 0.5); opacity: 0; transform: translateY(10px) scale(0.92);
+    transition: opacity 180ms ease, transform 360ms var(--bouncy); pointer-events: none; text-align: center; z-index: 5;
+  }
+  .toast.show { opacity: 1; transform: none; }
+  .toast.err { background: #A12C50; }
+
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; } }
+
+  /* ---------- additions: resets, the off slot, the top bar's unplug, Wi-Fi ---------- */
+  .share-head { cursor: pointer; }
+  .howb { width: 20px; height: 20px; border-radius: 10px; display: grid; place-items: center; }
+  .howb:hover { background: var(--card); }
+  .reset { width: 22px; height: 22px; border-radius: 11px; display: inline-grid; place-items: center; color: var(--ink-2); opacity: 0; transform: scale(0.5) rotate(90deg); pointer-events: none; transition: opacity 160ms ease, transform 360ms var(--bouncy), background 140ms ease, color 140ms ease; }
+  .reset svg { width: 13px; height: 13px; }
+  .reset.show { opacity: 1; transform: none; pointer-events: auto; }
+  .reset:hover { background: var(--card); color: var(--accent-ink); }
+  .reset:active svg { transform: rotate(-200deg); transition: transform 320ms var(--bouncy); }
+  .lead p { display: inline-flex; align-items: center; gap: 4px; }
+  /* The off slot, before the first cell: a power mark. Dragged onto (or past) it, the share is off. */
+  .cell.offslot { flex: 0 0 22px; margin-right: 4px; display: grid; place-items: center; color: var(--edge); background: transparent; box-shadow: inset 0 0 0 1.5px var(--edge); border-radius: 11px; }
+  .cell.offslot svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; }
+  .cell.offslot.isoff { background: var(--ink); color: var(--card); box-shadow: 0 3px 0 #110E17; transform: translateY(-2px); }
+  .share[data-band="off"] .val { color: var(--ink-2); }
+  .unplugb { width: auto; min-width: 28px; padding: 0 7px; gap: 5px; display: inline-flex; align-items: center; font-size: 11.5px; font-weight: 800; transition: background 160ms ease, color 160ms ease, transform 260ms var(--bouncy); }
+  .unplugb:hover { background: #FCD9E2; color: #A12C50; }
+  .unplugb .prongs { transition: transform 300ms var(--bouncy); }
+  .unplugb:hover .prongs { transform: translateX(2px); }
+  .unplugb.sure { background: var(--peach); color: #FFF; box-shadow: 0 2px 0 var(--peach-lip); animation: nudge 360ms var(--bouncy); }
+  .top > .note, #unplugNote { margin: -4px 16px 6px; }
+  .net.join { background: transparent; box-shadow: inset 0 0 0 1.5px var(--edge); }
+  .net.join .nic { background: var(--accent-soft); color: var(--accent-ink); }
+  .net.join:hover { background: var(--card); }
+  .wifi { margin-top: 9px; padding: 9px; border-radius: 14px; background: var(--card); box-shadow: 0 2px 0 var(--card-lip); animation: wpop 360ms var(--bouncy) both; }
+  .wifi-head { display: flex; align-items: center; gap: 6px; }
+  .wifi-head b { flex: 1; font-size: 12px; font-weight: 800; }
+  .wifi-head .alt { height: 24px; padding: 0 10px; font-size: 11px; }
+  .wifi-head .ib { width: 24px; height: 24px; }
+  .wifi-list { display: grid; gap: 2px; margin-top: 6px; max-height: 190px; overflow-y: auto; scrollbar-width: none; }
+  .wnet { display: grid; grid-template-columns: 18px 1fr auto auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 10px; text-align: left; font-size: 12px; font-weight: 800; transition: background 140ms ease; animation: wpop 320ms var(--bouncy) both; animation-delay: calc(var(--k) * 25ms); }
+  .wnet:hover, .wnet[aria-selected="true"] { background: var(--well); }
+  .wnet small { font-size: 10.5px; font-weight: 700; color: var(--accent-ink); }
+  .wnet .bars { display: flex; align-items: flex-end; gap: 1.5px; height: 12px; }
+  .wnet .bars i { width: 3px; border-radius: 1px; background: var(--edge); }
+  .wnet .bars i.on { background: var(--ink); }
+  .wnet svg { width: 12px; height: 12px; color: var(--ink-2); }
+  .wifi-scan { display: flex; align-items: center; gap: 8px; padding: 10px 8px; font-size: 11.5px; font-weight: 700; color: var(--ink-2); }
+  .wifi-scan::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--accent); border-right-color: transparent; animation: spin 700ms linear infinite; }
+  .wifi-join { display: grid; grid-template-columns: 1fr 1fr auto; gap: 5px; margin-top: 7px; }
+  .wifi-join input { min-width: 0; height: 30px; padding: 0 10px; border: 0; border-radius: 10px; background: var(--well); font: inherit; font-size: 12px; font-weight: 700; color: var(--ink); outline: none; user-select: text; box-shadow: inset 0 0 0 1.5px transparent; transition: box-shadow 160ms ease; }
+  .wifi-join input:focus { box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .wifi-join input[readonly] { color: var(--ink-2); }
+  .warn .alt { height: 24px; padding: 0 9px; font-size: 11px; margin-top: 5px; }
+</style>
+</head>
+<body data-tone="ok">
+<div id="wrap">
+  <div class="card" id="card" role="dialog" aria-labelledby="appName">
+    <div class="top rise" style="--i:0">
+      <span class="appic" id="appIc"></span>
+      <div class="who"><b id="appName">Plugin</b><small><i class="led"></i><span class="swap" id="statusText">Starting…</span></small></div>
+      <button class="ib" id="debugLink" aria-label="Watch in Debug" title="Watch in Debug"><svg class="i" viewBox="0 0 24 24"><path d="M4 16l4-5 4 3 4-6 4 4"/></svg></button>
+      <button class="ib unplugb" id="unplug" aria-label="Unplug" title="Unplug"><svg class="i" viewBox="0 0 24 24"><path d="M3 12h4"/><rect x="7" y="7" width="7" height="10" rx="2.5"/><g class="prongs"><path d="M14 10h3M14 14h3"/></g></svg><span id="unplugText"></span></button>
+      <button class="rocker" id="power" role="switch" aria-checked="true" aria-label="Plugin on"><span class="knob"></span></button>
+      <button class="ib x" id="close" aria-label="Close" title="Close (Esc)"><svg class="i" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg></button>
+    </div>
+    <p class="note" id="unplugNote" hidden></p>
+    <div class="body" id="body">
+      <section class="rise" style="--i:1">
+        <div class="lead"><h3>Shares</h3><p>Drag a rail. All the way left is off.</p></div>
+        <div class="warns" id="guard"></div>
+        <div id="shares"></div>
+      </section>
+      <section class="rise" style="--i:7" id="routeBox">
+        <div class="lead"><h3>Own network</h3><p><span id="routeLead">Send it out one network</span><button class="reset" id="routeReset" title="Reset: your usual network" aria-label="Reset own network"><svg class="i" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg></button></p></div>
+        <div class="box">
+          <div class="nets" id="nets" role="radiogroup" aria-label="Network"></div>
+          <p class="what" id="routeWhat"></p>
+          <div class="warns" id="routeWarn"></div>
+          <div class="acts" id="routeActs"></div>
+          <div class="wifi" id="wifiPanel" hidden>
+            <div class="wifi-head"><b>Wi-Fi networks nearby</b><button class="alt" id="wifiScan">Look again</button><button class="ib x" id="wifiClose" aria-label="Close Wi-Fi list"><svg class="i" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg></button></div>
+            <div class="warns" id="wifiNote"></div>
+            <div class="wifi-list" id="wifiList" role="listbox" aria-label="Wi-Fi networks"></div>
+            <form class="wifi-join" id="wifiJoin" hidden autocomplete="off">
+              <input id="wifiName" placeholder="Network name" aria-label="Network name" spellcheck="false">
+              <input id="wifiPass" type="password" placeholder="Password" aria-label="Wi-Fi password">
+              <button class="go" id="wifiGo" type="submit">Join</button>
+            </form>
+          </div>
+          <div class="tog" id="fallbackRow"><button class="sw" id="fallback" role="switch" aria-checked="true" aria-labelledby="fallbackLabel"></button><span id="fallbackLabel">If it drops, use your usual network</span></div>
+        </div>
+      </section>
+      <section class="rise" style="--i:8">
+        <div class="lead"><h3>Focus mode</h3><p>Let it have your Mac<button class="reset" id="focusReset" title="Reset Focus mode" aria-label="Reset Focus mode"><svg class="i" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg></button></p></div>
+        <button class="focus-tile" id="focusTile" aria-pressed="false">
+          <span class="fic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><circle class="r3" cx="12" cy="12" r="9.5"/><circle class="r2" cx="12" cy="12" r="5.8"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/></svg></span>
+          <span><b id="focusTitle">Focus mode</b><small id="focusSub"></small></span>
+          <span class="sw" id="focusSw" aria-hidden="true"></span>
+        </button>
+        <div class="focus-opts" id="focusOpts"></div>
+        <p class="what" id="focusWhat"></p>
+      </section>
+    </div>
+    <div class="toast" id="toast" role="status"></div>
+  </div>
+</div>
+<script src="tools.js"></script>
+<script src="plugin-menu.js"></script>
+</body>
+</html>

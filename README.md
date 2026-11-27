@@ -13,7 +13,7 @@
 
 ---
 
-Pane is a menu-bar app with six tools. Each one opens from a key or a shortcut, right where you're working, then gets out of the way.
+Pane is a menu-bar app with seven tools. Each one opens from a key or a shortcut, right where you're working, then gets out of the way.
 
 | Tool | What it does | Opens with (by default) |
 | --- | --- | --- |
@@ -23,6 +23,7 @@ Pane is a menu-bar app with six tools. Each one opens from a key or a shortcut, 
 | **Jot** | Write a quick note, pick a timer, and it comes back when it's time. Snooze it or mark it done. | Double-tap left `⌃` |
 | **Tweak** | Point at a file and edit it: crop, turn and resize pictures, trim videos and songs, find and replace in text, rename or convert. | Double-tap right `⌥` |
 | **Debug** | A small panel that scores how your Mac is holding up and offers one-click fixes. | `⌃⌘B` |
+| **Plugin** | Click any app to plug into it, then give it more of your Mac or less: processor, memory, network, sound and microphone shares, boosts, a network of its own, and Focus mode. | `⌃⌘P` |
 
 Every key and shortcut can be changed in Pane's settings, and each tool can be turned off on its own.
 
@@ -70,6 +71,7 @@ npm start
 | `jot*` | Jot's notes and reminders |
 | `edit.*`, `target.*`, `tweak-*` | Tweak's file picker and editor |
 | `debug*` | Debug's panel and the stats behind it |
+| `plugin-*` | Plugin's picker, badges and menu; `plugin-engine.js` applies each plugin's shares, `plugin-proxy.js` gives an app its own network |
 | `settings.*`, `switcher.js` | The settings window and the tool switcher |
 | `updater.js`, `update.js`, `app-patch.js` | Self-updates and small binary patches |
 | `native/pane-files.swift` | Tweak's native helper (finding files under the pointer, media edits) |
@@ -79,7 +81,7 @@ npm start
 ### Native pieces
 
 - **Key hook.** `scripts/uiohook.js` patches [`uiohook-napi`](https://github.com/SnosMe/uiohook-napi) so macOS never wakes Pane for mouse movement or scrolling, only keys and clicks. It runs after every install.
-- **Tweak's helper.** `scripts/native.js` builds `native/pane-files` from Swift. It uses Accessibility to find the file under the pointer and AVFoundation to edit video and audio.
+- **Tweak's helper.** `scripts/native.js` builds `native/pane-files` from Swift. It uses Accessibility to find the file under the pointer and AVFoundation to edit video and audio. Plugin uses it too (`pane-files windows`), to see where every window is and to hide apps for Focus mode.
 
 ### Building
 

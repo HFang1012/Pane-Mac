@@ -492,6 +492,118 @@
   [data-theme="debug"]:hover .tool-head svg .legs { animation: scuttle 360ms ease-in-out 2; }
   @keyframes scuttle { 25% { transform: translateY(-1.5px) scaleY(0.9); } 75% { transform: translateY(1.5px) scaleY(1.06); } }
 
+
+  /* Plugin's theme: a mauve-grey faceplate, aubergine ink, a turquoise current, raspberry for boosts. */
+  [data-theme="plugin"] {
+    --paper: #E9E4EA; --paper-deep: #DCD4DF; --card: #FCFAFD; --card-lip: #E2DAE5; --well: #F2EEF4; --edge: #D2C8D6;
+    --ink: #241F2E; --ink-2: #6A6275;
+    --accent: #3FCDBF; --accent-lip: #1FA295; --accent-soft: #D2F4F0; --accent-ink: #0E7A70; --rasp: #F2668B; --rasp-lip: #CC4069; --warn: #F5B53F;
+    --stage-bg: linear-gradient(135deg, #D9D0DE, #E9E4EA 50%, #D3E3E1); --win: #FFFFFF; --bar: #EEE9EF; --line: #DCD4DF; --dark: #241F2E;
+  }
+  .tool[data-theme="plugin"] { border-radius: 28px; }
+  [data-theme="plugin"] .tool-head svg .prongs { transition: transform 420ms var(--bouncy); }
+  [data-theme="plugin"]:hover .tool-head svg .prongs { transform: translateX(3px); }
+
+  /* ---------- Plugin's demo: pick a window, a pod lands on its corner, its menu shares out the Mac ---------- */
+  .pldemo { margin-top: 18px; background: var(--card); border-radius: 26px; box-shadow: 0 7px 0 var(--card-lip); padding: 16px 16px 18px; }
+  .plstage { position: relative; min-height: 500px; border-radius: 20px; overflow: hidden; isolation: isolate; box-shadow: 0 5px 0 var(--card-lip); background: var(--stage-bg); cursor: pointer; user-select: none; }
+  .plstage .win { position: absolute; border-radius: 12px; background: var(--win); box-shadow: 0 8px 18px rgba(20, 18, 28, 0.12); overflow: hidden; text-align: left; }
+  .plstage .win .tb { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; background: var(--bar); font-size: 11.5px; font-weight: 800; color: var(--ink-2); }
+  .plstage .win .tb i { width: 8px; height: 8px; border-radius: 50%; background: var(--edge); }
+  .plstage .win .tb b { margin-left: 4px; color: var(--ink); }
+  .plstage .win .tb .grow { flex: 1; }
+  .plstage .wc { left: 4%; top: 7%; width: 50%; height: 56%; }
+  .plstage .wt { left: 47%; top: 30%; width: 44%; height: 50%; }
+  .plstage .wm { left: 8%; top: 68%; width: 30%; height: 24%; }
+  /* Cutroom, exporting a video: its progress and its fan follow the processor share. */
+  .plstage .film { position: absolute; left: 7%; right: 7%; top: 38px; bottom: 54px; border-radius: 8px; background: linear-gradient(120deg, #3B2F45, #6A4D5E); }
+  .plstage .film::before { content: ""; position: absolute; left: 50%; top: 50%; margin: -12px 0 0 -8px; border: 12px solid transparent; border-left: 18px solid rgba(255, 255, 255, 0.75); }
+  .plstage .exp { position: absolute; left: 7%; right: 7%; bottom: 16px; display: grid; gap: 5px; font-size: 11px; font-weight: 800; color: var(--ink-2); }
+  .plstage .exp .bar { height: 8px; border-radius: 4px; background: var(--well); overflow: hidden; }
+  .plstage .exp .bar i { display: block; height: 100%; width: 0; border-radius: 4px; background: var(--accent); }
+  .plstage .fan { width: 15px; height: 15px; color: var(--ink-2); }
+  /* Tabs, a browser full of tabs: its memory. */
+  .plstage .tabs { display: flex; gap: 4px; padding: 8px 10px 0; }
+  .plstage .tabs span { flex: 1; height: 14px; border-radius: 5px 5px 0 0; background: var(--well); }
+  .plstage .page { position: absolute; left: 10px; right: 10px; top: 54px; bottom: 12px; border-radius: 6px; background: var(--well); }
+  .plstage .page i { position: absolute; left: 10px; height: 8px; border-radius: 4px; background: var(--line); }
+  /* Tunes, a little player: its volume. */
+  .plstage .tune { position: absolute; left: 12px; right: 12px; top: 40px; display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; font-size: 11.5px; font-weight: 800; }
+  .plstage .tune .rec { width: 34px; height: 34px; border-radius: 50%; background: radial-gradient(circle, #FFC94D 0 6px, #1E2B27 7px); animation: record 3s linear infinite; }
+  .plstage .tune .vol { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--well); overflow: hidden; }
+  .plstage .tune .vol i { display: block; height: 100%; width: 60%; border-radius: 3px; background: var(--rasp); transition: width 500ms var(--bouncy); }
+  .plstage .hint { position: absolute; left: 4%; bottom: 12px; font-size: 13px; font-weight: 800; color: var(--ink-2); z-index: 1; }
+  .plstage kbd { font: inherit; background: var(--card); border-radius: 6px; padding: 0 6px; box-shadow: 0 2px 0 var(--card-lip); color: var(--ink); }
+  /* The picker: a veil with a hole over the window you point at, and a turquoise ring just inside its edge. */
+  .plstage .veil { position: absolute; z-index: 2; border-radius: 12px; box-shadow: 0 0 0 999px rgba(36, 31, 46, 0.42); opacity: 0; pointer-events: none; transition: left 280ms cubic-bezier(.22,1,.36,1), top 280ms cubic-bezier(.22,1,.36,1), width 280ms cubic-bezier(.22,1,.36,1), height 280ms cubic-bezier(.22,1,.36,1), opacity 200ms ease; }
+  .plstage .ring { position: absolute; z-index: 3; box-sizing: border-box; border: 4px solid var(--accent); border-radius: 12px; opacity: 0; pointer-events: none; transition: left 280ms cubic-bezier(.22,1,.36,1), top 280ms cubic-bezier(.22,1,.36,1), width 280ms cubic-bezier(.22,1,.36,1), height 280ms cubic-bezier(.22,1,.36,1), opacity 160ms ease; }
+  .plstage.picking .veil { opacity: 1; }
+  .plstage.picking .ring.on { opacity: 1; }
+  .plstage .tag { position: absolute; z-index: 4; display: flex; align-items: center; gap: 7px; padding: 5px 11px 5px 6px; border-radius: 12px; background: var(--card); box-shadow: 0 3px 0 var(--card-lip); font-size: 12px; font-weight: 800; white-space: nowrap; opacity: 0; transform: translateY(-4px) scale(0.92); transition: opacity 160ms ease, transform 340ms var(--bouncy), left 280ms cubic-bezier(.22,1,.36,1), top 280ms cubic-bezier(.22,1,.36,1); pointer-events: none; }
+  .plstage .tag small { font-weight: 700; color: var(--ink-2); }
+  .plstage .tag.on { opacity: 1; transform: none; }
+  .plstage.picking .hint { opacity: 0; }
+  #plreplay { white-space: nowrap; flex: none; }
+  .plstage .pickhint { position: absolute; z-index: 4; left: 50%; bottom: 12px; translate: -50% 0; padding: 7px 13px; border-radius: 14px; background: var(--card); box-shadow: 0 4px 0 var(--card-lip); font-size: 13px; font-weight: 800; opacity: 0; transform: translateY(10px); transition: opacity 200ms ease, transform 420ms var(--bouncy); pointer-events: none; white-space: nowrap; }
+  .plstage.picking .pickhint { opacity: 1; transform: none; }
+  /* The pod: a small dark pill on the window's corner. Its light says the plugin is active. */
+  .plstage .pod { position: absolute; z-index: 5; display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 7px 0 6px; border-radius: 11px; background: var(--dark); color: #F3EEF6; box-shadow: 0 3px 0 #110E17; font-size: 10px; font-weight: 800; cursor: pointer; transform-origin: 100% 100%; animation: plugin 620ms var(--bouncy) both; transition: transform 200ms var(--bouncy); }
+  .plstage .pod:hover { transform: translateY(-1px); }
+  .plstage .pod:active { transform: translateY(2px); }
+  @keyframes plugin { 0% { opacity: 0; transform: translateX(18px) scale(0.6); } 55% { opacity: 1; transform: translateX(-3px) scale(1.05); } 100% { transform: none; } }
+  .plstage .pod .led { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .plstage .pod.off .led { background: transparent; box-shadow: inset 0 0 0 1.5px #8D8497; }
+  .plstage .pod .pips { display: flex; align-items: flex-end; gap: 1.5px; height: 10px; }
+  .plstage .pod .pips u { width: 2.5px; border-radius: 1px; background: #5D5568; transition: height 400ms var(--bouncy), background 200ms ease; }
+  .plstage .pod .pips u.l { background: var(--accent); } .plstage .pod .pips u.b { background: var(--rasp); }
+  /* The menu: it grows up out of the pod. */
+  .plmenu { position: absolute; z-index: 6; width: 268px; padding: 10px; border-radius: 20px; background: var(--card); box-shadow: 0 5px 0 var(--card-lip), inset 0 0 0 1px rgba(36, 31, 46, 0.06); text-align: left; transform-origin: 100% 100%; animation: mgrow 460ms cubic-bezier(.22,1,.36,1) both; cursor: default; }
+  .plmenu.below { transform-origin: 100% 0; }
+  .plmenu.leaving { animation: mshrink 220ms cubic-bezier(.4,0,1,1) both; }
+  @keyframes mgrow { from { opacity: 0; transform: scale(0.2); } }
+  @keyframes mshrink { to { opacity: 0; transform: scale(0.3); } }
+  .plmenu .mt { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .plmenu .mt b { font-size: 13.5px; font-weight: 800; }
+  .plmenu .mt small { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: var(--ink-2); }
+  .plmenu .mt small i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .plmenu .mt .grow { flex: 1; }
+  .plmenu .rock { position: relative; width: 38px; height: 22px; border-radius: 11px; background: var(--accent); transition: background 200ms ease; cursor: pointer; }
+  .plmenu .rock::after { content: ""; position: absolute; top: 3px; left: 19px; width: 16px; height: 16px; border-radius: 8px; background: var(--card); box-shadow: 0 1.5px 0 var(--card-lip); transition: left 320ms var(--bouncy); }
+  .plmenu .rock.off { background: var(--edge); } .plmenu .rock.off::after { left: 3px; }
+  .plmenu.off .sh { opacity: 0.5; filter: saturate(0.2); pointer-events: none; }
+  .plmenu .sh { padding: 7px 8px 8px; border-radius: 14px; background: var(--well); margin-top: 5px; transition: opacity 200ms ease; }
+  .plmenu .sh .hd { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 800; margin-bottom: 5px; }
+  .plmenu .sh .hd .use { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .plmenu .sh .hd .v { min-width: 52px; text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .plmenu .sh[data-band="lim"] .hd .v { color: var(--accent-ink); } .plmenu .sh[data-band="boost"] .hd .v { color: var(--rasp-lip); }
+  .plmenu .rail { display: flex; gap: 2px; height: 20px; padding-top: 3px; touch-action: none; cursor: ew-resize; }
+  .plmenu .rail i { flex: 1; height: 15px; border-radius: 4px; background: var(--card); box-shadow: inset 0 0 0 1.2px var(--edge); transition: background 160ms ease, box-shadow 160ms ease, transform 260ms var(--bouncy); }
+  .plmenu .rail i.o { flex: 0 0 15px; margin-right: 3px; border-radius: 8px; }
+  .plmenu .rail i.b { flex: 1.15; margin-left: 2px; } .plmenu .rail i.b + i.b { margin-left: 0; }
+  .plmenu .rail i.lim { background: var(--accent); box-shadow: 0 2px 0 var(--accent-lip); transform: translateY(-1px); }
+  .plmenu .rail i.bo { background: var(--rasp); box-shadow: 0 2px 0 var(--rasp-lip); transform: translateY(-1px); }
+  .plmenu .rail i.oo { background: var(--ink); box-shadow: 0 2px 0 #110E17; }
+  .plmenu .meter { position: relative; height: 3px; margin: 5px 0 0 18px; border-radius: 2px; background: var(--edge); width: calc((100% - 18px) * 10 / 12.3); }
+  .plmenu .meter b { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; background: var(--ink); opacity: 0.75; transition: width 800ms cubic-bezier(.22,1,.36,1); }
+  .plmenu .meter u { position: absolute; top: -3px; width: 2px; height: 9px; margin-left: -1px; border-radius: 1px; background: var(--accent-lip); }
+  .plmenu .what { margin: 6px 0 0; font-size: 10.5px; font-weight: 700; color: var(--ink-2); min-height: 14px; }
+  @media (max-width: 600px) {
+    .plstage { min-height: 560px; }
+    .plstage .wc { left: 4%; top: 6%; width: 92%; height: 30%; } .plstage .wt { left: 4%; top: 39%; width: 92%; height: 24%; } .plstage .wm { left: 4%; top: 66%; width: 60%; height: 18%; }
+    .plmenu { width: calc(100% - 24px); }
+  }
+
+  /* The toy: a plug on a cord, and a socket. Drag the plug in. */
+  .plug-toy { position: relative; width: 180px; height: 130px; touch-action: none; }
+  .plug-toy svg { display: block; width: 180px; height: 130px; overflow: visible; }
+  .plug-toy .plug { cursor: grab; }
+  .plug-toy.held .plug { cursor: grabbing; }
+  .plug-toy .led { fill: var(--edge); transition: fill 200ms ease; }
+  .plug-toy.in .led { fill: var(--accent); filter: drop-shadow(0 0 4px var(--accent)); }
+  .plug-toy .spark { opacity: 0; transform-box: fill-box; transform-origin: center; }
+  .plug-toy .spark.go { animation: spark 520ms var(--bouncy); }
+  @keyframes spark { 0% { opacity: 1; transform: scale(0.3); } 100% { opacity: 0; transform: scale(1.6); } }
+
   /* ---------- Debug's demo: a pretend Mac with a busy app and a full disk. Fix it, watch the score climb. ---------- */
   .ddemo { margin-top: 18px; background: var(--card); border-radius: 26px; box-shadow: 0 7px 0 var(--card-lip); padding: 16px 16px 18px; }
   .dstage { position: relative; min-height: 530px; border-radius: 20px; overflow: hidden; isolation: isolate; box-shadow: 0 5px 0 var(--card-lip); background: var(--stage-bg); }
@@ -1076,7 +1188,7 @@
         <span class="spark" style="--a:0deg"></span><span class="spark" style="--a:60deg"></span><span class="spark" style="--a:120deg"></span><span class="spark" style="--a:180deg"></span><span class="spark" style="--a:240deg"></span><span class="spark" style="--a:300deg"></span>
       </button>
     </span></span></p>
-    <p class="lede rise" style="--d:200ms">Six small tools for your Mac, each a shortcut away. Change any shortcut to keys you like.</p>
+    <p class="lede rise" style="--d:200ms">Seven small tools for your Mac, each a shortcut away. Change any shortcut to keys you like.</p>
 
     <div class="quick pop" style="--d:300ms">
       <p class="label">Install with one command <span class="badge">Recommended</span></p>
@@ -1331,6 +1443,44 @@
         <p class="toy-cap" aria-live="polite"><span>Catch the bug</span></p>
       </div>
       <p class="switch-note" style="margin-top:16px">A small panel opens over whatever you’re doing and scores how your Mac is holding up. See how hard the processor, memory, battery and storage are working, and which apps are behind it. Click a fix to quit an app, close duplicate tabs, empty the Trash, or restart Finder or the Dock. Fold it into a little pill that keeps watching.</p>
+    </article>
+    <article class="tool" data-theme="plugin">
+      <div class="tool-head">
+        <svg viewBox="0 0 60 44" aria-hidden="true"><path d="M19 29 Q5 29 7 37.5 Q9 44 19 41.5" fill="none" stroke="#CC4069" stroke-width="4.6" stroke-linecap="round"/><path d="M19 27 Q5 27 7 35.5 Q9 42 19 39.5" fill="none" stroke="#F2668B" stroke-width="4.6" stroke-linecap="round"/><g class="prongs"><rect x="41" y="15.6" width="13" height="4.6" rx="2.3" fill="#110E17"/><rect x="41" y="27" width="13" height="4.6" rx="2.3" fill="#110E17"/><rect x="41" y="14" width="13" height="4.6" rx="2.3" fill="#241F2E"/><rect x="41" y="25.4" width="13" height="4.6" rx="2.3" fill="#241F2E"/></g><rect x="36" y="13.5" width="6.5" height="21" rx="2.6" fill="#110E17"/><rect x="36" y="11.5" width="6.5" height="21" rx="2.6" fill="#241F2E"/><rect x="16" y="10" width="23" height="30" rx="9" fill="#1FA295"/><rect x="16" y="7" width="23" height="30" rx="9" fill="#3FCDBF"/><circle cx="24" cy="15" r="2.8" fill="#FFFFFF" fill-opacity="0.85"/></svg>
+        <h3>Plugin</h3>
+        <p>Give an app more of your Mac, or less.</p>
+      </div>
+      <div class="pldemo">
+        <div class="plstage" id="plstage" role="application" aria-label="Plugin, a pretend Mac">
+          <div class="win wc" data-app="Cutroom" data-share="cpu"><div class="tb"><i></i><i></i><i></i><b>Cutroom</b><span class="grow"></span><svg class="fan" id="plfan" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c0-5 2-8 5-8s3 4-1 6zM12 12c5 0 8 2 8 5s-4 3-6-1zM12 12c0 5-2 8-5 8s-3-4 1-6zM12 12c-5 0-8-2-8-5s4-3 6 1z"/></svg></div><div class="film"></div><div class="exp"><span id="plexp">Exporting video… 0%</span><span class="bar"><i id="plbar"></i></span></div></div>
+          <div class="win wt" data-app="Tabs" data-share="ram"><div class="tb"><i></i><i></i><i></i><b>Tabs</b></div><div class="tabs"><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="page"><i style="top:14px;width:70%"></i><i style="top:30px;width:52%"></i><i style="top:46px;width:62%"></i><i style="top:62px;width:40%"></i></div></div>
+          <div class="win wm" data-app="Tunes" data-share="out"><div class="tb"><i></i><i></i><i></i><b>Tunes</b></div><div class="tune"><span class="rec"></span><span>Pocket Weather</span><span class="vol"><i id="plvol"></i></span></div></div>
+          <div class="veil" id="plveil"></div><div class="ring" id="plring"></div><div class="tag" id="pltag"></div>
+          <div class="pickhint">Pick an app to plug in <kbd>esc</kbd></div>
+          <div class="hint">Press <kbd>⌃</kbd> <kbd>⌘</kbd> <kbd>P</kbd>, or click here</div>
+        </div>
+        <div class="demo-foot"><p class="step" id="plstep"><span>Press ⌃⌘P or click the desk, then pick an app.</span></p><button class="replay" type="button" id="plreplay"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v4.5h4.5"/></svg>Start over</button></div>
+      </div>
+      <div class="toy l toy-plug" style="top: 120px">
+        <button class="plug-toy" type="button" aria-label="Plug it in">
+          <svg viewBox="0 0 180 130" aria-hidden="true">
+            <rect x="122" y="28" width="52" height="74" rx="14" fill="#E2DAE5"/><rect x="122" y="24" width="52" height="74" rx="14" fill="#FCFAFD"/>
+            <rect x="133" y="44" width="5" height="16" rx="2.5" fill="#241F2E"/><rect x="133" y="64" width="5" height="16" rx="2.5" fill="#241F2E"/>
+            <circle class="led" cx="160" cy="86" r="4"/>
+            <circle class="spark" cx="128" cy="62" r="16" fill="none" stroke="#3FCDBF" stroke-width="3"/>
+            <path class="cord" d="" fill="none" stroke="#CC4069" stroke-width="6" stroke-linecap="round" transform="translate(0 2)"/>
+            <path class="cord" d="" fill="none" stroke="#F2668B" stroke-width="6" stroke-linecap="round"/>
+            <g class="plug">
+              <rect x="-30" y="-18" width="30" height="36" rx="10" fill="#1FA295" transform="translate(0 3)"/><rect x="-30" y="-18" width="30" height="36" rx="10" fill="#3FCDBF"/>
+              <rect x="-2" y="-12" width="6" height="24" rx="2.5" fill="#241F2E"/>
+              <rect x="4" y="-9" width="13" height="5" rx="2.5" fill="#241F2E"/><rect x="4" y="5" width="13" height="5" rx="2.5" fill="#241F2E"/>
+              <circle cx="-20" cy="-8" r="3" fill="#FFFFFF" fill-opacity="0.85"/>
+            </g>
+          </svg>
+        </button>
+        <p class="toy-cap" aria-live="polite"><span>Drag the plug into the socket</span></p>
+      </div>
+      <p class="switch-note" style="margin-top:16px">Press the keys and click any app. A small pod lands on its corner; click it to share out your processor, memory, network, sound and microphone, ten cells at a time. Fewer is a limit, the raspberry cells are boosts, and all the way left is off. Give a Chrome-based app its own network, or let one app take over in Focus mode while your other screens blur. Unplug it and everything goes back.</p>
     </article>
     <p class="switch-note">Every shortcut can be changed, in Pane and right here: click a key under any demo and hold new ones. Switch tools from the button in the corner of Pane’s window.</p>
   </section>
@@ -3539,6 +3689,272 @@
     place();
     if (reduce) { bug.classList.remove('walk'); return; }
     new IntersectionObserver(([e]) => { cancelAnimationFrame(raf); if (e.isIntersecting) raf = requestAnimationFrame(step); }).observe(leaf);
+  })();
+
+  // ---------- Plugin's pretend Mac: pick a window, a pod lands on its corner, its menu shares out the Mac ----------
+  // Three apps, each doing something you can feel: Cutroom exports a video (processor), Tabs holds a lot of
+  // memory, Tunes plays music (sound). Plug into one, open its pod, drag its rails, and watch it change.
+  (function () {
+    const stage = document.getElementById('plstage'); if (!stage) return;
+    const step = document.getElementById('plstep');
+    const say = (t) => { step.innerHTML = '<span></span>'; step.firstChild.textContent = t; };
+    const veil = document.getElementById('plveil'), ring = document.getElementById('plring'), tag = document.getElementById('pltag');
+    const wins = [...stage.querySelectorAll('.win')];
+    const SHARES = [{ a: 'cpu', n: 'Processor' }, { a: 'ram', n: 'Memory' }, { a: 'out', n: 'Sound' }];
+    const MEM = 16; // GB, the pretend Mac's
+    // What each app uses on its own, in tenths of the Mac (processor) and GB (memory).
+    const USE = { Cutroom: { cpu: 4.6, ram: 1.8 }, Tabs: { cpu: 0.7, ram: 3.4 }, Tunes: { cpu: 0.2, ram: 0.3 } };
+    const plugs = new Map(); // app -> { levels, on, pod, avg }
+    let picking = false, hover = null, menu = null, progress = 0, fanA = 0, timer = 0;
+    const rel = (el) => { const r = el.getBoundingClientRect(), b = stage.getBoundingClientRect(); return { x: r.left - b.left, y: r.top - b.top, w: r.width, h: r.height }; };
+    const box = (el, r) => Object.assign(el.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
+    const lim = (L) => L >= 1 && L < 10;
+    const band = (L) => (L >= 11 ? 'boost' : L >= 1 ? 'lim' : 'off');
+
+    // ---------- the picker ----------
+    function startPick() {
+      closeMenu();
+      picking = true; stage.classList.add('picking');
+      box(veil, { x: stage.offsetWidth / 2, y: stage.offsetHeight / 2, w: 0, h: 0 });
+      say('Point at an app and click it.');
+    }
+    function endPick() { picking = false; hover = null; stage.classList.remove('picking'); ring.classList.remove('on'); tag.classList.remove('on'); }
+    function winAt(e) {
+      const b = stage.getBoundingClientRect();
+      for (const w of [...wins].reverse()) { const r = rel(w); if (e.clientX - b.left >= r.x && e.clientX - b.left <= r.x + r.w && e.clientY - b.top >= r.y && e.clientY - b.top <= r.y + r.h) return w; }
+      return null;
+    }
+    function point(w) {
+      if (w === hover) return;
+      hover = w;
+      if (!w) { ring.classList.remove('on'); tag.classList.remove('on'); const r = rel(veil); box(veil, { x: r.x + r.w / 2, y: r.y + r.h / 2, w: 0, h: 0 }); return; }
+      const r = rel(w);
+      box(veil, r); box(ring, r); ring.classList.add('on');
+      const app = w.dataset.app;
+      tag.innerHTML = `<b></b><small></small>`; tag.firstChild.textContent = app; tag.lastChild.textContent = plugs.has(app) ? 'Plugged in. Click to open.' : 'Click to plug in';
+      tag.style.left = `${r.x + 10}px`; tag.style.top = `${r.y + 32}px`; tag.classList.add('on');
+    }
+    stage.addEventListener('pointermove', (e) => { if (picking) point(winAt(e)); });
+    stage.addEventListener('click', (e) => {
+      if (e.target.closest('.plmenu')) return;
+      if (e.target.closest('.pod')) return;
+      if (menu) { closeMenu(); return; }
+      if (!picking) { startPick(); point(winAt(e)); return; }
+      const w = winAt(e);
+      endPick();
+      if (!w) { say('Press ⌃⌘P or click the desk, then pick an app.'); return; }
+      const app = w.dataset.app;
+      if (plugs.has(app)) { openMenu(app); return; }
+      plugIn(app, w);
+    });
+
+    // ---------- pods ----------
+    function plugIn(app, w) {
+      const pod = document.createElement('button');
+      pod.type = 'button'; pod.className = 'pod';
+      pod.setAttribute('aria-label', `${app}'s plugin`);
+      stage.appendChild(pod);
+      const p = { levels: { cpu: 0, ram: 0, out: 0 }, on: true, pod, win: w, avg: { ...USE[app] } };
+      plugs.set(app, p);
+      paintPod(app); placePod(app);
+      pod.addEventListener('click', (e) => { e.stopPropagation(); if (menu?.app === app) closeMenu(); else openMenu(app); });
+      say(`Plugged into ${app}. Click the pod on its corner.`);
+    }
+    function placePod(app) {
+      const p = plugs.get(app), w = p.win, r = { x: w.offsetLeft, y: w.offsetTop, w: w.offsetWidth, h: w.offsetHeight };
+      p.pod.style.left = `${r.x + r.w - p.pod.offsetWidth - 4}px`; p.pod.style.top = `${r.y + r.h - p.pod.offsetHeight - 4}px`;
+    }
+    function paintPod(app) {
+      const p = plugs.get(app);
+      const pips = ['cpu', 'ram', 'out'].map((a) => { const L = p.levels[a]; return `<u class="${L >= 11 ? 'b' : lim(L) ? 'l' : ''}" style="height:${lim(L) ? 2 + L * 0.8 : L >= 11 ? 10 : 4}px"></u>`; }).join('');
+      p.pod.className = `pod${p.on ? '' : ' off'}`;
+      p.pod.innerHTML = `<i class="led"></i>${p.on ? 'Active' : 'Inactive'}<span class="pips">${pips}</span>`;
+    }
+
+    // ---------- the menu ----------
+    const valueText = (a, L) => (L === 0 ? 'Off' : L === 10 ? 'All of it' : L === 11 ? 'Boost' : L === 12 ? 'Overdrive' : a === 'out' ? `${L * 10}%` : `${L} of 10`);
+    function whatText(app, a, L) {
+      if (L === 0) return 'Off: Pane leaves it alone.';
+      if (a === 'cpu') return L < 10 ? `Up to ${L} tenths of the processor.` : L === 10 ? 'All of it: no limit.' : L === 11 ? 'Boost: busy apps wait for it.' : 'Overdrive: every other app waits.';
+      if (a === 'ram') return L < 10 ? `A line at ${(MEM * L / 10).toFixed(1)} GB.` : L === 10 ? 'All of it: no line.' : 'Boost: big apps hide when you come to it.';
+      return L < 10 ? `Volume at ${L * 10}% while you’re in it.` : L === 10 ? 'Volume at 100% while you’re in it.' : 'Boost: other players turn down.';
+    }
+    function openMenu(app) {
+      closeMenu(true);
+      const p = plugs.get(app);
+      const m = document.createElement('div');
+      m.className = 'plmenu'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', `${app}'s plugin`);
+      m.innerHTML = `<div class="mt"><div><b></b><small><i></i><span class="st"></span></small></div><span class="grow"></span><span class="rock" role="switch" tabindex="0" aria-label="Active"></span></div>` +
+        SHARES.map((s) => `<div class="sh" data-a="${s.a}"><div class="hd">${s.n}<span class="use"></span><span class="v"></span></div><div class="rail" role="slider" tabindex="0" aria-label="${s.n} share" aria-valuemin="0" aria-valuemax="12">${'<i></i>'.repeat(13)}</div>${s.a === 'out' ? '' : '<div class="meter"><b></b><u></u></div>'}<p class="what"></p></div>`).join('');
+      m.querySelector('.mt b').textContent = app;
+      stage.appendChild(m);
+      menu = { app, el: m };
+      m.querySelectorAll('.rail').forEach((rail) => wireRail(app, rail));
+      m.querySelector('.rock').addEventListener('click', () => { p.on = !p.on; paintPod(app); paintMenu(); });
+      paintMenu();
+      placeMenu();
+      const tips = { Cutroom: 'Hold Cutroom’s processor to 2, then boost it. Watch the export.', Tabs: 'Draw Tabs a memory line under what it’s using.', Tunes: 'Drag Tunes’ sound to set its volume.' };
+      say(tips[app]);
+    }
+    // Above the pod, right edges lined up; below it if there isn't room; beside it if neither fits. Never over
+    // it, so a second click on the pod closes the menu. Placed again every tick, so it follows the pod.
+    function placeMenu() {
+      if (!menu) return;
+      const m = menu.el, p = plugs.get(menu.app);
+      const pr = { x: p.pod.offsetLeft, y: p.pod.offsetTop, w: p.pod.offsetWidth, h: p.pod.offsetHeight };
+      const mh = m.offsetHeight, mw = m.offsetWidth, H = stage.offsetHeight, W = stage.offsetWidth;
+      let x = Math.max(6, Math.min(pr.x + pr.w - mw, W - mw - 6)), y, origin = '100% 100%';
+      if (pr.y - mh - 10 >= 6) y = pr.y - mh - 10;
+      else if (pr.y + pr.h + 10 + mh <= H - 6) { y = pr.y + pr.h + 10; origin = '100% 0'; }
+      else {
+        y = Math.max(6, Math.min(pr.y + pr.h - mh, H - mh - 6));
+        x = pr.x - mw - 10 >= 6 ? pr.x - mw - 10 : Math.min(pr.x + pr.w + 10, W - mw - 6);
+        origin = x < pr.x ? '100% 100%' : '0 100%';
+      }
+      m.style.transformOrigin = origin;
+      m.style.left = `${x}px`; m.style.top = `${y}px`;
+    }
+    function closeMenu(now) {
+      if (!menu) return;
+      const el = menu.el; menu = null;
+      if (now) { el.remove(); return; }
+      el.classList.add('leaving'); setTimeout(() => el.remove(), 220);
+    }
+    function paintMenu() {
+      if (!menu) return;
+      const app = menu.app, p = plugs.get(app), m = menu.el, u = USE[app];
+      m.classList.toggle('off', !p.on);
+      m.querySelector('.rock').classList.toggle('off', !p.on);
+      const over = p.levels.ram >= 1 && p.levels.ram < 10 && u.ram > MEM * p.levels.ram / 10;
+      m.querySelector('.st').textContent = !p.on ? 'Inactive' : over ? 'Active, over its memory line' : 'Active';
+      for (const s of SHARES) {
+        const sh = m.querySelector(`.sh[data-a="${s.a}"]`), L = p.levels[s.a];
+        sh.dataset.band = band(L);
+        sh.querySelector('.v').textContent = valueText(s.a, L);
+        sh.querySelector('.rail').setAttribute('aria-valuenow', L);
+        [...sh.querySelectorAll('.rail i')].forEach((c, k) => {
+          c.className = k === 0 ? `o${L === 0 ? ' oo' : ''}` : k > 10 ? `b${k <= L ? ' bo' : ''}` : (k <= L && L >= 1 ? 'lim' : '');
+        });
+        sh.querySelector('.what').textContent = whatText(app, s.a, L);
+        if (s.a !== 'out') {
+          const now = s.a === 'cpu' ? cpuNow(app) : u.ram, usual = s.a === 'cpu' ? p.avg.cpu : p.avg.ram;
+          const sharesNow = s.a === 'cpu' ? now : now / MEM * 10, sharesUsual = s.a === 'cpu' ? usual : usual / MEM * 10;
+          sh.querySelector('.use').textContent = s.a === 'cpu' ? `${Math.round(now * 10)}% now, usually ${Math.round(usual * 10)}%` : `${now.toFixed(1)} GB now`;
+          sh.querySelector('.meter b').style.width = `${Math.min(100, sharesNow * 10)}%`;
+          sh.querySelector('.meter u').style.left = `${Math.min(100, sharesUsual * 10)}%`;
+        }
+      }
+      paintPod(app);
+    }
+    function wireRail(app, rail) {
+      const a = rail.closest('.sh').dataset.a, p = plugs.get(app);
+      const at = (x) => { const cells = [...rail.children]; for (let k = 0; k < cells.length; k++) if (x < cells[k].getBoundingClientRect().right + 1) return k; return 12; };
+      const set = (L) => { L = Math.max(0, Math.min(12, L)); if (p.levels[a] !== L) { p.levels[a] = L; paintMenu(); } };
+      let held = false;
+      rail.addEventListener('pointerdown', (e) => { held = true; try { rail.setPointerCapture(e.pointerId); } catch {} set(at(e.clientX)); });
+      rail.addEventListener('pointermove', (e) => { if (held) set(at(e.clientX)); });
+      rail.addEventListener('pointerup', () => { held = false; });
+      rail.addEventListener('keydown', (e) => {
+        const d = { ArrowLeft: -1, ArrowRight: 1, ArrowDown: -1, ArrowUp: 1 }[e.key];
+        if (d) { e.preventDefault(); set(p.levels[a] + d); } else if (e.key === 'Home') set(0); else if (e.key === 'End') set(12);
+      });
+    }
+
+    // ---------- the apps, doing their thing ----------
+    // How fast Cutroom can go: its share caps it (it needs about 4.6 tenths), boosts lift it.
+    function speedOf(app) {
+      const p = plugs.get(app);
+      if (!p || !p.on) return 1;
+      const L = p.levels.cpu;
+      return L === 0 || L === 10 ? 1 : L === 11 ? 1.35 : L === 12 ? 1.7 : Math.min(1, L / USE[app].cpu);
+    }
+    const cpuNow = (app) => Math.min(USE[app].cpu * (app === 'Cutroom' ? speedOf(app) : 1), 10) * (0.94 + Math.random() * 0.12);
+    function tick() {
+      const sp = speedOf('Cutroom');
+      progress = (progress + 0.6 * sp) % 100;
+      document.getElementById('plexp').textContent = `Exporting video… ${Math.floor(progress)}%${sp < 0.98 ? ' (held back)' : sp > 1.02 ? ' (boosted)' : ''}`;
+      document.getElementById('plbar').style.width = `${progress}%`;
+      fanA = (fanA + 40 * sp) % 360;
+      document.getElementById('plfan').style.transform = `rotate(${fanA}deg)`;
+      const t = plugs.get('Tunes'), L = t && t.on ? t.levels.out : 0;
+      document.getElementById('plvol').style.width = `${L === 0 ? 60 : L >= 10 ? 100 : L * 10}%`;
+      for (const [app, p] of plugs) { p.avg.cpu += (cpuNow(app) - p.avg.cpu) * 0.02; placePod(app); }
+      placeMenu();
+      if (menu && Math.random() < 0.3) paintMenu();
+    }
+    document.addEventListener('keydown', (e) => {
+      const r = stage.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > innerHeight) return;
+      if (e.ctrlKey && e.metaKey && e.key.toLowerCase() === 'p') { e.preventDefault(); picking ? endPick() : startPick(); }
+      else if (e.key === 'Escape') { if (picking) endPick(); closeMenu(); }
+    });
+    document.getElementById('plreplay').addEventListener('click', () => {
+      endPick(); closeMenu(true);
+      for (const p of plugs.values()) p.pod.remove();
+      plugs.clear(); progress = 0;
+      say('Press ⌃⌘P or click the desk, then pick an app.');
+    });
+    addEventListener('resize', () => { for (const app of plugs.keys()) placePod(app); });
+    new IntersectionObserver(([e]) => { clearInterval(timer); if (e.isIntersecting) timer = setInterval(tick, 100); }).observe(stage);
+  })();
+
+  // Plug it in. Drag the plug to the socket: it seats with a spark and the socket's light comes on.
+  // Click it while it's in to pull it out again.
+  (function () {
+    const toy = document.querySelector('.toy-plug'); if (!toy) return;
+    const btn = toy.querySelector('.plug-toy'), cap = toy.querySelector('.toy-cap');
+    const plug = btn.querySelector('.plug'), cords = btn.querySelectorAll('.cord'), spark = btn.querySelector('.spark');
+    const REST = { x: 44, y: 66 }, IN = { x: 118, y: 63 };
+    let at = { ...REST }, held = null, plugged = false, anim = 0, times = 0;
+    const draw = () => {
+      plug.setAttribute('transform', `translate(${at.x.toFixed(1)} ${at.y.toFixed(1)})`);
+      const d = `M${(at.x - 30).toFixed(1)} ${at.y.toFixed(1)} C${(at.x - 62).toFixed(1)} ${at.y.toFixed(1)} 26 122 -4 126`;
+      cords.forEach((c) => c.setAttribute('d', d));
+    };
+    const glide = (to, ms, done) => {
+      cancelAnimationFrame(anim);
+      const from = { ...at }, t0 = performance.now();
+      const f = (t) => { const k = Math.min(1, (t - t0) / ms), e = 1 - (1 - k) ** 3; at = { x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e }; draw(); if (k < 1) anim = requestAnimationFrame(f); else done?.(); };
+      anim = requestAnimationFrame(f);
+    };
+    const pos = (e) => { const r = btn.getBoundingClientRect(); return { x: (e.clientX - r.left) * (180 / r.width), y: (e.clientY - r.top) * (130 / r.height) }; };
+    const seat = () => {
+      plugged = true; times++;
+      btn.classList.add('in');
+      spark.classList.remove('go'); void spark.getBoundingClientRect(); spark.classList.add('go');
+      sayTo(cap, times === 1 ? 'Plugged in. Click to pull it out' : `Plugged in ${times} times`);
+    };
+    const unplug = () => {
+      plugged = false; btn.classList.remove('in');
+      glide({ x: at.x - 18, y: at.y - 6 }, 140, () => glide(REST, 520));
+      sayTo(cap, 'Unplugged. Everything goes back');
+    };
+    btn.addEventListener('pointerdown', (e) => {
+      const p = pos(e);
+      if (plugged) { unplug(); return; }
+      if (Math.hypot(p.x - (at.x - 12), p.y - at.y) > 34) return;
+      cancelAnimationFrame(anim);
+      held = { dx: at.x - p.x, dy: at.y - p.y, moved: false };
+      try { btn.setPointerCapture(e.pointerId); } catch {}
+      btn.classList.add('held');
+    });
+    btn.addEventListener('pointermove', (e) => {
+      if (!held) return;
+      const p = pos(e);
+      at = { x: Math.max(20, Math.min(IN.x, p.x + held.dx)), y: Math.max(22, Math.min(112, p.y + held.dy)) };
+      held.moved = true; draw();
+      if (Math.hypot(at.x - IN.x, at.y - IN.y) < 14) { held = null; btn.classList.remove('held'); glide(IN, 120, seat); }
+    });
+    const drop = () => {
+      if (!held) return;
+      const near = Math.hypot(at.x - IN.x, at.y - IN.y) < 30;
+      held = null; btn.classList.remove('held');
+      if (near) glide(IN, 160, seat); else { glide(REST, 520); sayTo(cap, 'Closer to the socket'); }
+    };
+    btn.addEventListener('pointerup', drop);
+    btn.addEventListener('pointercancel', drop);
+    btn.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (plugged) unplug(); else glide(IN, 420, seat); } });
+    draw();
   })();
 
 </script>

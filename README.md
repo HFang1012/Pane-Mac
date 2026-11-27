@@ -23,7 +23,7 @@ Pane is a menu-bar app with seven tools. Each one opens from a key or a shortcut
 | **Jot** | Write a quick note, pick a timer, and it comes back when it's time. Snooze it or mark it done. | Double-tap left `⌃` |
 | **Tweak** | Point at a file and edit it: crop, turn and resize pictures, trim videos and songs, find and replace in text, rename or convert. | Double-tap right `⌥` |
 | **Debug** | A small panel that scores how your Mac is holding up and offers one-click fixes. | `⌃⌘B` |
-| **Plugin** | Click any app to plug into it, then give it more of your Mac or less: processor, memory, network, sound and microphone shares, boosts, a network of its own, and Focus mode. | `⌃⌘P` |
+| **Plugin** | Click any app to plug into it, then give it more of your Mac or less: processor, memory, network and sound shares (each app's own volume, up to 200%), boosts, a network of its own, and Focus mode. | `⌃⌘P` |
 
 Every key and shortcut can be changed in Pane's settings, and each tool can be turned off on its own.
 

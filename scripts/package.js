@@ -122,6 +122,8 @@ function sign(app) {
       NSAppleEventsUsageDescription: 'Spin plays, skips and sets the volume in your music app.',
       // macOS only shows Wi-Fi network names to apps with Location access (Plugin's "join a network").
       NSLocationUsageDescription: 'Plugin shows the names of Wi-Fi networks nearby so you can join one. Pane never reads where you are.',
+      // Plugin's per-app volume taps an app's sound to play it back louder or softer (Core Audio process taps).
+      NSAudioCaptureUsageDescription: 'Plugin plays an app’s sound back at the volume you set for it. Pane doesn’t record or keep any of it.',
       NSLocationWhenInUseUsageDescription: 'Plugin shows the names of Wi-Fi networks nearby so you can join one. Pane never reads where you are.',
     },
     appVersion: version, // Finder's "Version" and the About window (CFBundleShortVersionString)

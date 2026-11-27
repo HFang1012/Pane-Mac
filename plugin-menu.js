@@ -58,7 +58,8 @@ function valueText(a, L) {
   if (a === 'net' && L < FREE) return speed(caps.netSpeeds[L]);
   if ((a === 'out' || a === 'mic') && L < FREE) return `${L * 10}%`;
   if (L < FREE) return `${L} of 10`;
-  if (a === 'out' || a === 'mic') return L === FREE ? '100%' : L === 11 ? (a === 'mic' ? 'Full' : 'Boost') : 'Overdrive';
+  if (a === 'out') return L === FREE ? '100%' : L === 11 ? '150%' : '200%';
+  if (a === 'mic') return 'Full';
   if (a === 'mic' && L === 11) return 'Full';
   return L === 11 ? 'Boost' : 'Overdrive';
 }
@@ -90,14 +91,14 @@ function what(a, L) {
       if (L === FREE) return `All of it: no limit.${now}`;
       return `Boost: apps moving lots of data in the background wait behind it.${now}`;
     }
-    case 'out':
-      if (P?.player) return `${n}’s own volume at <b>${L < FREE ? L * 10 : 100}%</b>, in front or not.`;
-      if (L <= FREE) return `Your Mac’s volume goes to <b>${L * 10}%</b> while you’re in ${n}, and back when you leave.`;
-      if (L === 11) return `Boost: Spotify and Music turn down while you’re in ${n}.`;
-      return `Overdrive: full volume while you’re in ${n}, other players turned down.`;
+    case 'out': {
+      const pct = L <= FREE ? L * 10 : L === 11 ? 150 : 200;
+      const snd = P?.live?.sound;
+      const now = !run ? '' : !snd ? '' : snd.playing ? ' Playing now.' : ' Silent right now.';
+      return `${n}’s own volume at <b>${pct}%</b>. Your Mac’s volume stays where it is.${now}`;
+    }
     case 'mic':
-      if (L <= FREE) return `Microphone at <b>${L * 10}%</b> while you’re in ${n}.`;
-      return `Boost: microphone at full level while you’re in ${n}.`;
+      return '';
   }
   return '';
 }
@@ -124,10 +125,10 @@ function warnings(a, L) {
     if (lim(L) && !P?.routed) W('careful', 'Held roughly, by pausing it. Give it its own network below for an exact limit.');
     if (L === 11) W('good', 'Its downloads, streams and calls get through first.');
   }
-  if (a === 'out' && L === 12) W('danger', 'Full volume can hurt, especially in headphones.');
-  if (a === 'mic') {
-    if (L >= 1 && L <= 2) W('careful', 'People may struggle to hear you.');
-    if (L === 11) W('careful', 'Full level picks up more background noise.');
+  if (a === 'out') {
+    if (L === 11) W('careful', 'Louder than it plays on its own. The loudest moments are rounded off so they don’t crackle.');
+    if (L === 12) W('danger', 'Twice as loud can hurt, especially in headphones. Start with your Mac’s volume low.');
+    if (L > 0 && P?.live?.sound?.error) W('danger', 'macOS hasn’t let Pane hear this app yet. Allow Pane in System Settings › Privacy & Security › Screen & System Audio Recording.<br><button class="alt" data-perm="audio">Open the setting</button>');
   }
   return w;
 }
@@ -136,8 +137,8 @@ const HOW = {
   cpu: 'Over its share, Pane pauses it for a split second, many times a second. At 4 or less it also runs on the slower, cooler cores. Boost and Overdrive make other apps wait.',
   ram: 'Macs can’t cap an app’s memory, so this is a line. Past it, Pane tells you, or hides the app when you leave so it uses less. Boost hides big apps when you switch to it.',
   net: 'With its own network, the speed is exact. Without one, Pane pauses it briefly when it goes over. Boost makes busy downloads in other apps wait.',
-  out: 'Your Mac has one volume, so Pane sets it when you switch to the app and puts it back when you leave.',
-  mic: 'Pane sets your microphone level when you switch to the app and puts it back when you leave.',
+  out: 'Pane takes this app’s sound on its way to your speakers and plays it back at this volume, up to twice as loud. Other apps and your Mac’s volume aren’t touched. Off, its sound goes straight through.',
+  mic: 'macOS has no way to set the microphone for one app without a virtual microphone driver, which Pane doesn’t install. So Pane leaves your microphone alone.',
 };
 
 // ---------- the rails ----------
@@ -152,7 +153,7 @@ function buildShares() {
     return `<div class="share" data-a="${s.a}" style="--i:${i}">
       <div class="share-head" data-how="${s.a}"><span class="sic">${svg(ICONS[s.a])}</span><b>${s.name}</b><span class="use" id="nowv-${s.a}"></span><span class="val" id="val-${s.a}"></span><button class="reset" data-reset="${s.a}" title="Reset ${s.name} (off)" aria-label="Reset ${s.name}">${svg(ICONS.reset)}</button><button class="howb" aria-expanded="false" aria-controls="how-${s.a}" aria-label="How ${s.name} works">${svg(ICONS.chev, 'i chev')}</button></div>
       <div class="rail" id="rail-${s.a}" role="slider" tabindex="0" aria-label="${s.name} share" aria-valuemin="0" aria-valuemax="${max}">${cells}</div>
-      ${['cpu', 'ram', 'net'].includes(s.a) ? `<div class="meter" id="meter-${s.a}" aria-hidden="true"><i class="cur"></i><b class="norm"></b></div>` : ''}
+      ${['cpu', 'ram', 'net', 'out'].includes(s.a) ? `<div class="meter" id="meter-${s.a}" aria-hidden="true"><i class="cur"></i><b class="norm"></b></div>` : ''}
       <p class="what" id="what-${s.a}"></p>
       <div class="warns" id="warn-${s.a}"></div>
       ${s.a === 'ram' ? '<div class="picks" id="ramAct" hidden><small>Past the line:</small><button class="pick" role="radio" data-v="warn">Tell me</button><button class="pick" role="radio" data-v="hide">Hide it when I leave</button></div>' : ''}
@@ -195,9 +196,10 @@ function paintRail(a, pop = null) {
   const l = P?.live, nowv = $(`nowv-${a}`) || { innerHTML: '' };
   const nm = P?.normal;
   const fmt = (x, kind) => (kind === 'cpu' ? `${x > 0 && x < 1 ? '<1' : Math.round(x)}%` : kind === 'ram' ? gb(x) : speed(x));
-  const cur = a === 'cpu' ? l?.cpu : a === 'ram' ? l?.mem : a === 'net' ? (l?.down || 0) + (l?.up || 0) : null;
+  // Sound: how loud it's playing (only measured while its own volume is set, since that's when Pane hears it).
+  const cur = a === 'cpu' ? l?.cpu : a === 'ram' ? l?.mem : a === 'net' ? (l?.down || 0) + (l?.up || 0) : a === 'out' ? (l?.sound ? l.sound.peak : null) : null;
   const usual = a === 'cpu' ? nm?.cpu : a === 'ram' ? nm?.mem : a === 'net' ? nm?.net : null;
-  const nowText = !P?.running || cur == null ? '' : `<span title="Using now"><i class="dot"></i><b>${fmt(cur, a)}</b></span>${usual != null ? `<span title="Usually (the last few minutes)"><i class="tick"></i><b>${fmt(usual, a)}</b></span>` : ''}`;
+  const nowText = !P?.running || cur == null ? '' : a === 'out' ? `<span title="How loud it’s playing"><i class="dot"></i><b>${l.sound.playing ? `${Math.round(cur * 100)}%` : 'silent'}</b></span>` : `<span title="Using now"><i class="dot"></i><b>${fmt(cur, a)}</b></span>${usual != null ? `<span title="Usually (the last few minutes)"><i class="tick"></i><b>${fmt(usual, a)}</b></span>` : ''}`;
   if (nowv.innerHTML !== nowText) nowv.innerHTML = nowText;
   paintMeter(a, cur, usual);
   const val = $(`val-${a}`);
@@ -208,7 +210,9 @@ function paintRail(a, pop = null) {
   const wsHtml = ws.map((x) => `<div class="warn ${x.cls}">${svg(x.cls === 'good' ? ICONS.ok : ICONS.warn)}<span>${x.text}</span></div>`).join('');
   const box = $(`warn-${a}`);
   if (box.dataset.sig !== wsHtml) { box.dataset.sig = wsHtml; box.innerHTML = wsHtml; setTimeout(fit, 30); }
-  share.querySelector('.reset').classList.toggle('show', L !== 0);
+  share.querySelector('.reset').classList.toggle('show', L !== 0 && a !== 'mic');
+  share.classList.toggle('na', a === 'mic');
+  if (a === 'mic') { $(`what-${a}`).textContent = 'Not available. A microphone level for one app needs a driver Pane doesn’t install, so Pane leaves your microphone alone.'; $(`val-${a}`).textContent = ''; }
   if (a === 'ram') {
     $('ramAct').hidden = !lim(L);
     $('ramAct').querySelectorAll('.pick').forEach((b) => b.setAttribute('aria-checked', b.dataset.v === (P?.ramAct || 'warn')));
@@ -220,6 +224,7 @@ function toShares(a, x) {
   if (x == null) return null;
   if (a === 'cpu') return x / 10;
   if (a === 'ram') return (x / caps.mem) * 10;
+  if (a === 'out') return x * 10;
   return x <= 1024 ? 0 : Math.log2(x / caps.netSpeeds[1]) + 1;
 }
 function paintMeter(a, cur, usual) {
@@ -406,6 +411,7 @@ $('wifiList').addEventListener('click', (e) => {
   renderWifi();
   if (wifi.pick.secure) $('wifiPass').focus();
 });
+$('shares').addEventListener('click', (e) => { if (e.target.closest('[data-perm="audio"]')) scrawl.send('pmenu:perm', 'audio'); });
 $('wifiNote').addEventListener('click', (e) => { if (e.target.closest('[data-loc]')) scrawl.send('pmenu:perm', 'location'); });
 $('wifiScan').addEventListener('click', () => { wifi.pick = null; scanWifi(); });
 $('wifiClose').addEventListener('click', () => { $('wifiPanel').hidden = true; wifi.pick = null; fit(); });

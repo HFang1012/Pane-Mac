@@ -2868,7 +2868,11 @@ async function unplug(id) {
 ipcMain.handle('pmenu:remove', async (e) => (fromPMenu(e) ? unplug(pmenu.id) : { ok: false }));
 ipcMain.on('pmenu:close', (e) => { if (fromPMenu(e)) closePluginMenu(); });
 ipcMain.on('pmenu:key', (e) => { if (fromPMenu(e)) { pmenu.win.focus(); app.focus({ steal: true }); } });
-ipcMain.on('pmenu:perm', (e, kind) => { if (fromPMenu(e) && kind === 'location') shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices'); });
+ipcMain.on('pmenu:perm', (e, kind) => {
+  if (!fromPMenu(e)) return;
+  if (kind === 'location') shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices');
+  if (kind === 'audio') shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture');
+});
 ipcMain.on('pmenu:debug', (e) => {
   if (!fromPMenu(e) || !settings.debug.enabled) return;
   const v = viewOf(pmenu.id);
@@ -2903,6 +2907,7 @@ ipcMain.on('plugin:perm', (_e, kind) => {
     automation: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Automation',
     notifications: 'x-apple.systempreferences:com.apple.Notifications-Settings.extension',
     location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
+    audio: 'x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture',
   };
   if (panes[kind]) shell.openExternal(panes[kind]);
 });

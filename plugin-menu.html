@@ -257,6 +257,8 @@
 
   /* ---------- additions: resets, the off slot, the top bar's unplug, Wi-Fi ---------- */
   .share-head { cursor: pointer; }
+  /* The microphone: shown, but not something Pane can do per app. */
+  .share.na .rail { opacity: 0.35; pointer-events: none; filter: saturate(0); }
   .howb { width: 20px; height: 20px; border-radius: 10px; display: grid; place-items: center; }
   .howb:hover { background: var(--card); }
   .reset { width: 22px; height: 22px; border-radius: 11px; display: inline-grid; place-items: center; color: var(--ink-2); opacity: 0; transform: scale(0.5) rotate(90deg); pointer-events: none; transition: opacity 160ms ease, transform 360ms var(--bouncy), background 140ms ease, color 140ms ease; }

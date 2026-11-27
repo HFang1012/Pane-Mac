@@ -138,6 +138,9 @@ function clean(p) {
     focus: cleanFocus(p.focus),
   };
   for (const a of ASPECTS) { const v = Math.round(Number(p[a])); out[a] = clamp(Number.isFinite(v) ? v : 0, 0, MAX[a]); }
+  // A per-app microphone level needs a virtual microphone driver, which Pane doesn't install. Rather than
+  // change the Mac's input level for everything, the share stays off.
+  out.mic = 0;
   return out;
 }
 
@@ -212,7 +215,7 @@ class Engine {
     return {
       pid: app?.pid || 0, pids: new Set(), hot: new Set(), cpu: 0, mem: 0, down: 0, up: 0, f: 1, fNet: 1,
       bg: new Set(), front: false, wasFront: false, over: false, overAt: 0, warnedAt: 0, routed: false,
-      audio: null, appVol: null, focusLive: false, focusHid: [], focusHidDone: false, musicPaused: [],
+      tap: null, focusLive: false, focusHid: [], focusHidDone: false, musicPaused: [],
       awake: null, overdrive: false, overdriveWait: false, reniced: [], trail: [],
     };
   }
@@ -287,6 +290,7 @@ class Engine {
       const g = groups.get(app.pid) || { pids: [app.pid], cpu: 0, rss: 0, net: 0, hot: [] };
       // Parts macOS needs (Finder, the Dock…) are never paused or quieted, even when they're the plugged app.
       r.pids = new Set(g.pids.filter((pid) => pid !== this.d.selfPid && !PROTECTED.test(procs.get(pid)?.exe || '')));
+      r.allPids = new Set(g.pids.filter((pid) => pid !== this.d.selfPid));
       r.hot = new Set(g.hot);
       r.cpu = Math.min(100, g.cpu / this.cores);
       r.mem = feet ? g.pids.reduce((s, pid) => s + (feet.get(pid) ?? procs.get(pid)?.rss ?? 0), 0) : g.rss;
@@ -317,7 +321,7 @@ class Engine {
       this.limitNet(p, r);
       await this.quietSelf(p, r);
       await this.memory(p, r);
-      await this.sound(p, r);
+      await this.sound(p0, r);
       await this.focus(p, r);
       r.overdrive = p.cpu === 12 || p.ram === 12;
       if (p.cpu === 12 && r.awakeOD == null) r.awakeOD = this.d.power?.start('prevent-app-suspension') ?? null;
@@ -482,62 +486,43 @@ class Engine {
   }
 
   // ---------- sound ----------
-  // Macs have one output volume and one microphone level, not one per app. So a sound share takes effect
-  // while you're in the app: Pane sets the level as you come to it and puts yours back as you leave (unless
-  // you changed it in the meantime). A boost also turns other music players down. Spotify and Music have
-  // volumes of their own, so their plugins set those, in front or not.
-  async sound(p, r) {
-    const player = PLAYERS.includes(p.bundle);
-    if (player) {
-      const want = p.out === FREE ? null : p.out < FREE ? p.out * 10 : 100;
-      if (want !== r.appVol?.set) {
-        if (want == null) { if (r.appVol) await osa(`tell application id "${p.bundle}" to set sound volume to ${r.appVol.was}`); r.appVol = null; }
-        else {
-          const was = r.appVol?.was ?? Number((await osa(`tell application id "${p.bundle}" to get sound volume`)).out.trim());
-          await osa(`tell application id "${p.bundle}" to set sound volume to ${want}`);
-          r.appVol = { was: Number.isFinite(was) ? was : 100, set: want };
+  // Each app gets a volume of its own: Pane's helper taps the app's sound (Core Audio process taps), mutes what
+  // it was sending to your speakers and plays it back at the share's gain. 1–10 cells are 10–100%, boost 150%,
+  // overdrive 200%. Your Mac's own volume is never touched. Off: no tap, the app sounds exactly as it did.
+  // The tap belongs to the helper, so if it (or Pane) stops, macOS removes it and the app's sound is back.
+  async sound(p0, r) {
+    const L = p0.out;
+    const want = p0.on && r.pid && L > 0;
+    if (!want) { this.stopTap(r); return; }
+    const gain = L <= FREE ? L / 10 : L === 11 ? 1.5 : 2;
+    if (!r.tap) {
+      const path = this.d.helperPath?.();
+      if (!path) return;
+      let child;
+      try { child = require('child_process').spawn(path, ['tap'], { stdio: ['pipe', 'pipe', 'ignore'] }); } catch { return; }
+      const t = { child, pids: '', gain: null, peak: 0, tapped: 0, error: null, buf: '' };
+      child.stdout.on('data', (d) => {
+        t.buf += d;
+        let k;
+        while ((k = t.buf.indexOf('\n')) >= 0) {
+          const line = t.buf.slice(0, k); t.buf = t.buf.slice(k + 1);
+          try { const m = JSON.parse(line); t.peak = Number(m.peak) || 0; t.tapped = m.tapped || 0; t.error = m.error || null; } catch {}
         }
-      }
+      });
+      child.on('exit', () => { if (r.tap === t) r.tap = null; });
+      child.on('error', () => { if (r.tap === t) r.tap = null; });
+      child.stdin.on('error', () => {});
+      r.tap = t;
     }
-    const sig = `${player ? FREE : p.out}|${p.mic}`;
-    const wants = (!player && p.out !== FREE) || p.mic !== FREE;
-    if (r.audio && (!r.front || r.audio.sig !== sig || !wants)) await this.restoreSound(r);
-    if (!r.front || !wants || r.audio) return;
-    const st = await osa('get volume settings');
-    const outNow = Number(/output volume:(\d+)/.exec(st.out)?.[1]), micNow = Number(/input volume:(\d+)/.exec(st.out)?.[1]);
-    const a = { sig, out: null, mic: null, ducked: [] };
-    if (!player && p.out !== FREE && p.out !== 11 && Number.isFinite(outNow)) {
-      const to = p.out < FREE ? p.out * 10 : 100;
-      await osa(`set volume output volume ${to}`);
-      a.out = { was: outNow, set: to };
-    }
-    if (!player && p.out >= 11) {
-      for (const b of PLAYERS) {
-        if (b === p.bundle || !this.apps.some((x) => x.bundle === b)) continue;
-        const was = Number((await osa(`tell application id "${b}" to get sound volume`)).out.trim());
-        if (!Number.isFinite(was)) continue;
-        const to = Math.round(was * 0.35);
-        await osa(`tell application id "${b}" to set sound volume to ${to}`);
-        a.ducked.push({ bundle: b, was, set: to });
-      }
-    }
-    if (p.mic !== FREE && Number.isFinite(micNow)) {
-      const to = p.mic < FREE ? p.mic * 10 : 100;
-      await osa(`set volume input volume ${to}`);
-      a.mic = { was: micNow, set: to };
-    }
-    r.audio = a;
+    const t = r.tap;
+    const pids = [...r.allPids || r.pids].sort((a, b) => a - b).join(' ');
+    if (pids !== t.pids) { t.pids = pids; t.child.stdin.write(`pids ${pids}\n`); }
+    if (gain !== t.gain) { t.gain = gain; t.child.stdin.write(`gain ${gain}\n`); }
   }
-  async restoreSound(r) {
-    const a = r.audio;
-    r.audio = null;
-    if (!a) return;
-    const st = await osa('get volume settings');
-    const outNow = Number(/output volume:(\d+)/.exec(st.out)?.[1]), micNow = Number(/input volume:(\d+)/.exec(st.out)?.[1]);
-    // Only put a level back if it's still the one Pane set (within a step): if you moved it, yours stays.
-    if (a.out && Math.abs(outNow - a.out.set) <= 3) await osa(`set volume output volume ${a.out.was}`);
-    if (a.mic && Math.abs(micNow - a.mic.set) <= 3) await osa(`set volume input volume ${a.mic.was}`);
-    for (const d of a.ducked) await osa(`tell application id "${d.bundle}" to if (sound volume) is ${d.set} then set sound volume to ${d.was}`);
+  stopTap(r) {
+    const t = r.tap;
+    r.tap = null;
+    if (t) { try { t.child.stdin.end(); } catch {} setTimeout(() => { try { t.child.kill(); } catch {} }, 1500); }
   }
 
   // ---------- Focus mode ----------
@@ -608,14 +593,13 @@ class Engine {
     r.f = 1; r.fNet = 1;
     this.routes.get(p.id)?.setSpeed(Infinity);
     if (r.bg.size) { const back = [...r.bg]; r.bg.clear(); await this.policy('-B', back.filter((pid) => !this.yieldedBy.has(pid))); }
-    await this.restoreSound(r);
-    if (r.appVol) { await osa(`tell application id "${p.bundle}" to set sound volume to ${r.appVol.was}`); r.appVol = null; }
+    this.stopTap(r);
     if (r.focusHidDone || r.musicDone || r.awake != null) await this.endFocus(r);
     if (r.awakeOD != null) { try { this.d.power?.stop(r.awakeOD); } catch {} r.awakeOD = null; }
     r.overdrive = false;
   }
   async appGone(p, r) {
-    await this.restoreSound(r);
+    this.stopTap(r);
     if (r.focusHid.length) await this.eyes.ask(`unhide ${r.focusHid.join(' ')}`);
     if (r.awake != null) { try { this.d.power?.stop(r.awake); } catch {} }
     if (r.awakeOD != null) { try { this.d.power?.stop(r.awakeOD); } catch {} }
@@ -631,8 +615,7 @@ class Engine {
     for (const r of this.rt.values()) for (const pid of r.bg) back.add(pid);
     for (const pid of back) execFile('taskpolicy', ['-B', '-p', String(pid)], () => {});
     for (const r of this.rt.values()) {
-      if (r.audio?.out) execFile('osascript', ['-e', `set volume output volume ${r.audio.out.was}`], () => {});
-      if (r.audio?.mic) execFile('osascript', ['-e', `set volume input volume ${r.audio.mic.was}`], () => {});
+      this.stopTap(r);
       if (r.awake != null) { try { this.d.power?.stop(r.awake); } catch {} }
       if (r.awakeOD != null) { try { this.d.power?.stop(r.awakeOD); } catch {} }
     }
@@ -685,7 +668,7 @@ class Engine {
       id: p.id, name: p.name, bundle: p.bundle, path: p.path, on: p.on, seen: p.seen,
       levels: Object.fromEntries(ASPECTS.map((a) => [a, p[a]])), ramAct: p.ramAct, route: { ...p.route, up: !!route?.ip, error: route?.error || null }, focus: { ...p.focus },
       running: !!r.pid, pid: r.pid, front: r.front, guarded: /\/(Finder|Dock|SystemUIServer|ControlCenter|NotificationCenter)\.app$/.test(p.path || ''), chromium: isChromium(app || p), player: PLAYERS.includes(p.bundle),
-      live: { cpu: r.cpu, mem: r.mem, down: r.down, up: r.up, trail: [...r.trail] },
+      live: { cpu: r.cpu, mem: r.mem, down: r.down, up: r.up, trail: [...r.trail], sound: r.tap ? { peak: r.tap.peak, playing: r.tap.tapped > 0, error: r.tap.error } : null },
       normal: r.avg && r.avg.n >= 5 ? { cpu: r.avg.cpu, mem: r.avg.mem, net: r.avg.net } : null,
       throttle: Math.max(0, 1 - Math.min(r.f, r.fNet)), over: r.over, routed: r.routed, focusLive: r.focusLive,
       overdrive: r.overdrive, quieted: this.quietedFor(p.id), focusOn: !!r.focusLive && p.focus.blur,

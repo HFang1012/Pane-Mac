@@ -19,6 +19,11 @@
 //   pane-files wifi scan                     Plugin's Wi-Fi list: {"wifi":[{device,ssid,current}],"networks":[{ssid,rssi,secure,device}],"named":bool}.
 //                                            macOS hides network names from apps without Location access (named:false).
 //   pane-files wifi join                     Reads {"device","ssid","password"} from stdin and joins that network.
+//   pane-files tap                           Plugin's per-app volume. Reads lines on stdin: "pids <pid>…" (the app's
+//                                            processes) and "gain <0…2>". Taps those processes' sound (Core Audio
+//                                            process taps, macOS 14.2+), mutes the original and plays it back at that
+//                                            gain. Prints {"tapped":n,"peak":x} once a second. Quits when stdin closes,
+//                                            and macOS removes the tap with it, so the app's sound is back as it was.
 //   pane-files windows <panePid>             Plugin's eyes. Reads one command a line on stdin and answers each with
 //                                            one JSON line (see windowsServe): the windows on screen, front to back,
 //                                            the apps that are running, and hiding or showing apps for Focus mode.
@@ -31,6 +36,7 @@ import Cocoa
 import AVFoundation
 import UniformTypeIdentifiers
 import CoreWLAN
+import CoreAudio
 import CoreLocation
 
 setvbuf(stdout, nil, _IOLBF, 0)
@@ -729,6 +735,148 @@ func wifi(_ args: [String]) {
   emit(["wifi": ifs.map { ["device": $0.interfaceName ?? "", "ssid": $0.ssid() ?? "", "on": $0.powerOn()] }, "networks": list, "named": named])
 }
 
+// ---------- tap: one app's sound, at its own volume ----------
+// A process tap captures the app's audio and (mutedWhenTapped) silences what it was sending to your speakers.
+// A private aggregate device made of your current output plus the tap plays it back through an IOProc that
+// multiplies every sample by the gain. Nothing is installed: the tap and the device belong to this process and
+// vanish with it.
+func caGet<T>(_ obj: AudioObjectID, _ sel: AudioObjectPropertySelector, _ fallback: T) -> T {
+  var addr = AudioObjectPropertyAddress(mSelector: sel, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+  var v = fallback
+  var size = UInt32(MemoryLayout<T>.size)
+  return AudioObjectGetPropertyData(obj, &addr, 0, nil, &size, &v) == noErr ? v : fallback
+}
+func caList(_ obj: AudioObjectID, _ sel: AudioObjectPropertySelector) -> [AudioObjectID] {
+  var addr = AudioObjectPropertyAddress(mSelector: sel, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+  var size: UInt32 = 0
+  guard AudioObjectGetPropertyDataSize(obj, &addr, 0, nil, &size) == noErr, size > 0 else { return [] }
+  var ids = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+  guard AudioObjectGetPropertyData(obj, &addr, 0, nil, &size, &ids) == noErr else { return [] }
+  return ids
+}
+func caString(_ obj: AudioObjectID, _ sel: AudioObjectPropertySelector) -> String? {
+  var addr = AudioObjectPropertyAddress(mSelector: sel, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+  var v: Unmanaged<CFString>?
+  var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+  guard AudioObjectGetPropertyData(obj, &addr, 0, nil, &size, &v) == noErr, let s = v?.takeRetainedValue() else { return nil }
+  return s as String
+}
+let caSystem = AudioObjectID(kAudioObjectSystemObject)
+
+final class AppTap {
+  var gain: Float = 1
+  var peak: Float = 0
+  private var tapID = AudioObjectID(kAudioObjectUnknown)
+  private var aggID = AudioObjectID(kAudioObjectUnknown)
+  private var proc: AudioDeviceIOProcID?
+  private(set) var objects: [AudioObjectID] = []
+  private(set) var outputUID = ""
+  var error: String?
+
+  func stop() {
+    if let p = proc { AudioDeviceStop(aggID, p); AudioDeviceDestroyIOProcID(aggID, p) }
+    proc = nil
+    if aggID != kAudioObjectUnknown { AudioHardwareDestroyAggregateDevice(aggID) }
+    aggID = AudioObjectID(kAudioObjectUnknown)
+    if tapID != kAudioObjectUnknown { AudioHardwareDestroyProcessTap(tapID) }
+    tapID = AudioObjectID(kAudioObjectUnknown)
+    objects = []
+  }
+  func start(_ objs: [AudioObjectID], output: String) {
+    stop()
+    error = nil
+    guard !objs.isEmpty, !output.isEmpty else { return }
+    let desc = CATapDescription(stereoMixdownOfProcesses: objs)
+    desc.uuid = UUID()
+    desc.muteBehavior = .mutedWhenTapped
+    desc.isPrivate = true
+    desc.name = "Pane Plugin"
+    var tap = AudioObjectID(kAudioObjectUnknown)
+    var st = AudioHardwareCreateProcessTap(desc, &tap)
+    guard st == noErr else { error = "tap \(st)"; return }
+    tapID = tap
+    let agg: [String: Any] = [
+      kAudioAggregateDeviceNameKey: "Pane Plugin",
+      kAudioAggregateDeviceUIDKey: "pane.plugin.\(UUID().uuidString)",
+      kAudioAggregateDeviceMainSubDeviceKey: output,
+      kAudioAggregateDeviceIsPrivateKey: true,
+      kAudioAggregateDeviceIsStackedKey: false,
+      kAudioAggregateDeviceTapAutoStartKey: true,
+      kAudioAggregateDeviceSubDeviceListKey: [[kAudioSubDeviceUIDKey: output]],
+      kAudioAggregateDeviceTapListKey: [[kAudioSubTapDriftCompensationKey: true, kAudioSubTapUIDKey: desc.uuid.uuidString]],
+    ]
+    var dev = AudioObjectID(kAudioObjectUnknown)
+    st = AudioHardwareCreateAggregateDevice(agg as CFDictionary, &dev)
+    guard st == noErr else { error = "device \(st)"; stop(); return }
+    aggID = dev
+    var p: AudioDeviceIOProcID?
+    st = AudioDeviceCreateIOProcIDWithBlock(&p, dev, nil) { [unowned self] _, inData, _, outData, _ in
+      let ins = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: inData))
+      let outs = UnsafeMutableAudioBufferListPointer(outData)
+      let g = self.gain
+      var pk: Float = 0
+      for (i, out) in outs.enumerated() {
+        guard let o = out.mData?.assumingMemoryBound(to: Float.self) else { continue }
+        let n = Int(out.mDataByteSize) / MemoryLayout<Float>.size
+        // The tap's buffer for this output buffer (or its first, if the shapes differ).
+        let src = ins.count > i ? ins[i] : ins.first
+        guard let sb = src, let s = sb.mData?.assumingMemoryBound(to: Float.self) else { memset(o, 0, Int(out.mDataByteSize)); continue }
+        let m = min(n, Int(sb.mDataByteSize) / MemoryLayout<Float>.size)
+        for k in 0..<m {
+          // Exactly the gain below 80% of full scale; above it a soft knee rounds the peaks off instead of
+          // clipping them into crackle (only reachable past 100%).
+          var v = s[k] * g
+          let a = abs(v)
+          if a > 0.8 { v = (v < 0 ? -1 : 1) * (0.8 + 0.2 * tanhf((a - 0.8) / 0.2)) }
+          o[k] = v
+          pk = max(pk, abs(v))
+        }
+        if m < n { for k in m..<n { o[k] = 0 } }
+      }
+      self.peak = max(self.peak * 0.9, pk)
+    }
+    guard st == noErr, let pp = p else { error = "io \(st)"; stop(); return }
+    proc = pp
+    st = AudioDeviceStart(dev, pp)
+    guard st == noErr else { error = "start \(st)"; stop(); return }
+    objects = objs
+    outputUID = output
+  }
+}
+
+func tapServe() {
+  let t = AppTap()
+  var want = Set<pid_t>()
+  let lock = NSLock()
+  Thread.detachNewThread {
+    while let line = readLine() {
+      let parts = line.split(separator: " ").map(String.init)
+      lock.lock()
+      if parts.first == "pids" { want = Set(parts.dropFirst().compactMap { pid_t($0) }) }
+      if parts.first == "gain", parts.count > 1, let g = Float(parts[1]) { t.gain = max(0, min(2, g)) }
+      lock.unlock()
+    }
+    t.stop()
+    exit(0)
+  }
+  // Once a second: which of the app's processes are making sound now, and where sound goes. When either
+  // changes, the tap is made again for them (a new tab starts playing, you switch to headphones).
+  Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+    lock.lock(); let pids = want; lock.unlock()
+    let objs = caList(caSystem, kAudioHardwarePropertyProcessObjectList)
+      .filter { pids.contains(caGet($0, kAudioProcessPropertyPID, pid_t(-1))) }
+      .sorted()
+    let out = caGet(caSystem, kAudioHardwarePropertyDefaultOutputDevice, AudioDeviceID(0))
+    let uid = caString(out, kAudioDevicePropertyDeviceUID) ?? ""
+    if objs != t.objects || uid != t.outputUID { t.start(objs, output: uid) }
+    var o: [String: Any] = ["tapped": t.objects.count, "peak": Double(t.peak)]
+    if let e = t.error { o["error"] = e }
+    emit(o)
+    t.peak *= 0.5
+  }
+  RunLoop.main.run()
+}
+
 let args = CommandLine.arguments
 switch args.count > 1 ? args[1] : "" {
 case "hover": hover(panePid: args.count > 2 ? pid_t(args[2]) ?? 0 : 0)
@@ -738,6 +886,7 @@ case "io": io(Array(args.dropFirst(2)))
 case "frames": frames(args[2], args[3])
 case "assemble": assemble(args.count > 2 ? args[2] : "")
 case "probe": probe(args[2])
+case "tap": tapServe()
 case "wifi": wifi(Array(args.dropFirst(2)))
 case "windows": windowsServe(panePid: args.count > 2 ? pid_t(args[2]) ?? 0 : 0)
 default: fail("Usage: pane-files hover <pid> | media <json> | frame <in> <sec> <out> | io <pid>…")

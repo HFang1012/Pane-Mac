@@ -6,3 +6,5 @@ if (q.get('kind') === 'cover') {
   document.getElementById('t').textContent = `Focusing on ${q.get('name') || 'one app'}`;
   document.getElementById('chip').hidden = false;
 }
+// A click on the blur sends you back to the app you're focused on.
+addEventListener('pointerdown', () => scrawl.send('blur:click'));

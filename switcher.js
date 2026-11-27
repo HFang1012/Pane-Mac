@@ -5,7 +5,7 @@ const PAGES = { scrawl: document.getElementById('page'), away: document.getEleme
 let currentPage = null;
 
 // Each tool in the menu: its glyph on a tile, name, one line about it, and a tick on the open one.
-Tools.TOOLS.forEach((t, k) => {
+Tools.TOOLS.filter((t) => !t.wip).forEach((t, k) => {
   const b = document.createElement('button');
   b.className = 'tool-item';
   b.setAttribute('role', 'menuitemradio');

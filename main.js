@@ -1046,7 +1046,7 @@ function letSleep() {
 const SHORTCUT_NAME = { away: 'Away', jot: 'Jot', tweak: 'Tweak', debug: 'Debug', plugin: 'Plugin' };
 const shortcutOn = { away: false, jot: false, tweak: false, debug: false, plugin: false };
 const shortcutBinding = { away: false, jot: false, tweak: false, debug: false, plugin: false };
-const usesShortcut = (tool) => settings[tool].enabled && settings[tool].mode === 'shortcut';
+const usesShortcut = (tool) => settings[tool].enabled && settings[tool].mode === 'shortcut' && (tool !== 'plugin' || PLUGIN_READY);
 // A tool set to a shortcut holds its keys even while it's turned off, so turning it on never clashes.
 const shortcutClash = (tool, acc) => Object.keys(SHORTCUT_NAME).find((t) => t !== tool && settings[t].mode === 'shortcut' && settings[t].keys.accelerator === acc);
 // After a tool switches to a shortcut that another tool's shortcut already uses: move it to a free
@@ -2197,8 +2197,8 @@ async function debugTick() {
   d.busy = true;
   try {
     const snap = await DebugStats.sample({ selfPid: process.pid, thermal: thermalState(), display: debugDisplay(d.win) });
-    snap.plugins = plug && settings.plugin.enabled ? plug.lastList : []; // Debug shows what each plugin is doing
-    snap.pluginOn = !!plug && settings.plugin.enabled;
+    snap.plugins = PLUGIN_READY && plug && settings.plugin.enabled ? plug.lastList : []; // Debug shows what each plugin is doing
+    snap.pluginOn = PLUGIN_READY && !!plug && settings.plugin.enabled;
     if (dbg === d && d.win && !d.win.isDestroyed()) d.win.webContents.send('debug:data', snap);
   } catch (err) {
     console.warn('Debug sample failed:', err.message);
@@ -2312,6 +2312,10 @@ ipcMain.on('debug:try', () => {
 });
 
 // ---------- Plugin: give an app more of your Mac, or less ----------
+// Work in progress: hidden from Pane (no shortcut, settings page, menu items or Debug actions) until it's ready.
+// Flip PLUGIN_READY to bring it back; tools.js marks it `wip` for the settings window the same way. While it's
+// hidden, the engine still starts once, only to undo anything a plugin from 1.5.29–1.5.31 left in place.
+const PLUGIN_READY = false;
 // Press ⌃⌘P and the screen dims; point at any app's window (or pick it from the tray of open apps) and click.
 // A plugin lands on it: a badge on its window's bottom-right corner, which opens the plugin's menu. What a
 // plugin does lives in plugin-engine.js; this part is the picker, the badges and the menu.
@@ -2345,7 +2349,7 @@ function cleanPlugin(x) {
   return out;
 }
 function pluginBlocked() {
-  return !settings.plugin.enabled || !plug || !!activeTool || !!pen || menu.open || spin.open || !!spinTimer || !!away || !!target ||
+  return !PLUGIN_READY || !settings.plugin.enabled || !plug || !!activeTool || !!pen || menu.open || spin.open || !!spinTimer || !!away || !!target ||
     !!binding || awayBinding || jotBinding || tweakBinding || debugBinding || pluginBinding;
 }
 function startPlug() {
@@ -2357,7 +2361,7 @@ function startPlug() {
     footprints: DebugStats.footprints,
     onChange: pluginsChanged,
   });
-  if (settings.plugin.enabled) plug.start(); else { plug.recover(); plug.suspend(true); }
+  if (PLUGIN_READY && settings.plugin.enabled) plug.start(); else { plug.recover(); plug.suspend(true); }
 }
 // Once a second (and after every change): the badges, the open menu and the settings page hear about it.
 function pluginsChanged(list) {
@@ -2400,12 +2404,14 @@ function focusPieces(v) {
       left: { x: b.x, y: T, width: L - b.x, height: B - T },
       right: { x: R, y: T, width: b.x + b.width - R, height: B - T },
     };
-    for (const [k, r] of Object.entries(parts)) if (r.width > 0 && r.height > 0) out.set(`${d.id}:${k}`, { rect: r, kind: 'around', d });
+    // All four are always there (one with nothing to cover is just hidden), so none is torn down and rebuilt,
+    // which used to blink, as the window moves near a screen edge.
+    for (const [k, r] of Object.entries(parts)) out.set(`${d.id}:${k}`, { rect: r, kind: 'around', d, empty: !(r.width > 0 && r.height > 0) });
   }
   return out;
 }
 function syncFocusBlur(list = plug?.lastList || []) {
-  const v = settings.plugin.enabled ? list.find((x) => x.focusOn && x.running) : null;
+  const v = PLUGIN_READY && settings.plugin.enabled ? list.find((x) => x.focusOn && x.running) : null;
   const want = v ? focusPieces(v) : new Map();
   if (focusApp !== (v?.id || null)) focusApp = v?.id || null;
   for (const [key, b] of focusBlurs) {
@@ -2413,12 +2419,16 @@ function syncFocusBlur(list = plug?.lastList || []) {
     focusBlurs.delete(key);
     if (!b.win.isDestroyed()) fadeWindow(b.win, b.win.getOpacity(), 0, 240, () => { if (!b.win.isDestroyed()) b.win.destroy(); });
   }
-  for (const [key, { rect, kind }] of want) {
+  for (const [key, { rect: r0, kind, empty }] of want) {
+    const rect = empty ? { x: r0.x, y: r0.y, width: Math.max(1, r0.width), height: Math.max(1, r0.height) } : r0;
     const have = focusBlurs.get(key);
     if (have && !have.win.isDestroyed()) {
       const cur = have.win.getBounds();
       have.rect = rect;
       if (cur.x !== rect.x || cur.y !== rect.y || cur.width !== rect.width || cur.height !== rect.height) have.win.setBounds(rect);
+      if (empty && have.win.isVisible()) have.win.hide();
+      // macOS can order a panel out (a Space change, Pane going to the background): put it back.
+      if (!empty && !have.win.isVisible() && have.ready) { have.win.setOpacity(1); have.win.showInactive(); joinSpaces(have.win); }
       continue;
     }
     const w = new BrowserWindow({
@@ -2427,13 +2437,25 @@ function syncFocusBlur(list = plug?.lastList || []) {
       focusable: false, skipTaskbar: true, enableLargerThanScreen: true, type: 'panel', alwaysOnTop: true, show: false,
       webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false },
     });
-    w.setIgnoreMouseEvents(true);
+    // It takes clicks, so one on the blur can't wander off into a window hidden behind it: the focused app just
+    // comes back to the front. The menu bar and the Dock still switch apps.
     w.setHiddenInMissionControl(true);
     w.setAlwaysOnTop(true, 'floating', 0); // over other apps' windows, under the menu bar, the Dock and the pod
+    w.webContents.ipc.on('blur:click', () => {
+      const cur = plug?.lastList.find((x) => x.id === focusApp);
+      if (cur?.bundle && /^[\w.-]+$/.test(cur.bundle)) execFile('open', ['-b', cur.bundle], () => {});
+    });
     w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
     w.loadFile(path.join(__dirname, 'plugin-blur.html'), { query: { name: v.name, kind: kind === 'cover' ? 'cover' : 'around' } });
-    w.once('ready-to-show', () => { if (w.isDestroyed() || !focusBlurs.has(key)) return; w.setBounds(focusBlurs.get(key).rect || rect); w.setOpacity(0); w.showInactive(); fadeWindow(w, 0, 1, 380); });
-    focusBlurs.set(key, { win: w, kind, rect });
+    const entry = { win: w, kind, rect, ready: false };
+    w.once('ready-to-show', () => {
+      if (w.isDestroyed() || focusBlurs.get(key) !== entry) return;
+      entry.ready = true;
+      w.setBounds(entry.rect);
+      if (empty) return; // nothing to cover yet: it's shown once it has
+      w.setOpacity(0); w.showInactive(); fadeWindow(w, 0, 1, 380);
+    });
+    focusBlurs.set(key, entry);
   }
   // The focused app's pod stays on top of the blur.
   if (v) { const b = badges.get(v.id); if (b && !b.win.isDestroyed()) b.win.setAlwaysOnTop(true, 'status', 1); }
@@ -2609,7 +2631,7 @@ ipcMain.on('pick:tray', (e, tiles) => {
 // few times a second, so the badge follows the window as it moves.
 let badgeTimer = null, badgeBusy = false;
 function ensureBadgeLoop() {
-  const need = !!plug && settings.plugin.enabled && plug.lastList.some((v) => v.running);
+  const need = PLUGIN_READY && !!plug && settings.plugin.enabled && plug.lastList.some((v) => v.running);
   if (need && !badgeTimer) badgeTimer = setInterval(badgeTick, 150);
   if (!need && badgeTimer) { clearInterval(badgeTimer); badgeTimer = null; }
   if (!need) for (const id of badges.keys()) hideBadge(id);
@@ -2919,7 +2941,7 @@ ipcMain.on('pmenu:debug', (e) => {
 });
 // From Debug: open an app's plugin, or plug it in.
 ipcMain.handle('debug:plugin', (e, kind, a) => {
-  if (!fromDebug(e) || !plug || !settings.plugin.enabled || !a || typeof a.name !== 'string') return { ok: false };
+  if (!fromDebug(e) || !PLUGIN_READY || !plug || !settings.plugin.enabled || !a || typeof a.name !== 'string') return { ok: false };
   const app0 = { bundle: typeof a.bundle === 'string' && /^[\w.-]+$/.test(a.bundle) ? a.bundle : null, name: a.name, path: typeof a.path === 'string' ? a.path : null };
   const p = plug.has(app0) || (kind === 'add' ? plug.add(app0) : null);
   if (!p) return { ok: false };
@@ -2937,7 +2959,7 @@ ipcMain.on('plugin:open', (_e, id) => {
   const b = settingsWin?.getBounds();
   openPluginMenu(id, b ? { x: Math.round(b.x + b.width / 2), y: Math.round(b.y + 120) } : null);
 });
-ipcMain.on('plugin:try', () => { if (settings.plugin.enabled) { settingsWin?.hide(); setTimeout(() => { if (!picker && !pluginBlocked()) startPicker(); }, 250); } });
+ipcMain.on('plugin:try', () => { if (PLUGIN_READY && settings.plugin.enabled) { settingsWin?.hide(); setTimeout(() => { if (!picker && !pluginBlocked()) startPicker(); }, 250); } });
 ipcMain.on('plugin:perm', (_e, kind) => {
   const panes = {
     screen: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
@@ -3216,7 +3238,7 @@ app.whenReady().then(() => {
       .map((c) => combo([keyInfo(c)])).find((c) => !sameCombo(c, settings.hotkey) && !sameCombo(c, settings.drawKey));
     if (free) settings.spin.key = free;
   }
-  if (!Tools.TOOLS.some((t) => t.id === settings.page)) settings.page = DEFAULTS.page;
+  if (!Tools.TOOLS.some((t) => t.id === settings.page && !t.wip)) settings.page = DEFAULTS.page;
   if (!WHEEL_SIZES.includes(settings.wheelSize)) settings.wheelSize = DEFAULTS.wheelSize;
   if (!WHEEL_SIZES.includes(settings.spin.size)) settings.spin.size = DEFAULTS.spin.size;
   settings.spin.wheel = cleanSpinWheel(settings.spin.wheel);
@@ -3332,8 +3354,8 @@ function buildMenu() {
         { label: 'Tweak a File…', accelerator: 'Cmd+O', click: () => chooseAndEdit(BrowserWindow.getFocusedWindow()) },
         { label: settings.debug.enabled ? 'Turn Debug Off' : 'Turn Debug On', click: () => setDebugEnabled(!settings.debug.enabled) },
         { label: dbg ? 'Close Debug' : 'Open Debug', enabled: settings.debug.enabled, click: () => (dbg ? closeDebug() : openDebug()) },
-        { label: settings.plugin.enabled ? 'Turn Plugin Off' : 'Turn Plugin On', click: () => setPluginEnabled(!settings.plugin.enabled) },
-        { label: 'Plug Into an App…', enabled: settings.plugin.enabled && !picker, ...(settings.plugin.enabled ? { accelerator: settings.plugin.keys.accelerator, registerAccelerator: false } : {}), click: () => setTimeout(() => { if (!pluginBlocked()) startPicker(); }, 200) },
+        ...(PLUGIN_READY ? [{ label: settings.plugin.enabled ? 'Turn Plugin Off' : 'Turn Plugin On', click: () => setPluginEnabled(!settings.plugin.enabled) }] : []),
+        ...(PLUGIN_READY ? [{ label: 'Plug Into an App…', enabled: settings.plugin.enabled && !picker, ...(settings.plugin.enabled ? { accelerator: settings.plugin.keys.accelerator, registerAccelerator: false } : {}), click: () => setTimeout(() => { if (!pluginBlocked()) startPicker(); }, 200) }] : []),
         away
           ? { label: 'Come Back', click: hideAway }
           : { label: 'Step Away', ...(settings.away.mode === 'shortcut' ? { accelerator: settings.away.keys.accelerator, registerAccelerator: false } : {}), click: () => showAway(false) },
@@ -3381,5 +3403,5 @@ app.on('before-quit', () => {
 
 // Test hook: only present when SCRAWL_TEST is set (used by automated checks, never in normal runs).
 if (process.env.SCRAWL_TEST) {
-  global.__scrawlTest = { startBind: (w) => { binding = w; bindKeys = []; }, settings: () => settings, spin, openSpin, closeSpin, spinHover, spinView, Music, applyTool, step, setEnabled, overlays, menu, showAway, hideAway, awayWins: () => away?.wins ?? [], jot: { open: openComposer, composer: () => composer, notes: () => notes, toasts, check: checkNotes, tap: jotTapper.feed, blocked: jotBlocked }, tweak: { start: startTarget, end: endTarget, target: () => target, open: openEditor, editors, tap: tweakTap, files: TweakFiles }, debug: { open: openDebug, close: closeDebug, state: () => dbg, tap: debugTap.feed, hold: debugHold.feed, stats: DebugStats }, plugin: { engine: () => plug, hit: (h) => { if (picker) { picker.hit = h; sendPickerHit(); } }, start: startPicker, end: endPicker, picker: () => picker, click: pickerClick, menu: () => pmenu, open: openPluginMenu, close: closePluginMenu, badges }, settingsWin: () => settingsWin, peek: () => ({ away: !!away, awayKey: awayKeyOn, activeTool, visible, menuOpen: menu.open, pencilColor: settings.pencilColor, enabled: settings.enabled, drawings, undo: history.undo.length, redo: history.redo.length }) };
+  global.__scrawlTest = { startBind: (w) => { binding = w; bindKeys = []; }, settings: () => settings, spin, openSpin, closeSpin, spinHover, spinView, Music, applyTool, step, setEnabled, overlays, menu, showAway, hideAway, awayWins: () => away?.wins ?? [], jot: { open: openComposer, composer: () => composer, notes: () => notes, toasts, check: checkNotes, tap: jotTapper.feed, blocked: jotBlocked }, tweak: { start: startTarget, end: endTarget, target: () => target, open: openEditor, editors, tap: tweakTap, files: TweakFiles }, debug: { open: openDebug, close: closeDebug, state: () => dbg, tap: debugTap.feed, hold: debugHold.feed, stats: DebugStats }, plugin: { blurs: () => [...focusBlurs].map(([k, b]) => ({ k, vis: !b.win.isDestroyed() && b.win.isVisible(), op: b.win.isDestroyed() ? 0 : b.win.getOpacity() })), engine: () => plug, hit: (h) => { if (picker) { picker.hit = h; sendPickerHit(); } }, start: startPicker, end: endPicker, picker: () => picker, click: pickerClick, menu: () => pmenu, open: openPluginMenu, close: closePluginMenu, badges }, settingsWin: () => settingsWin, peek: () => ({ away: !!away, awayKey: awayKeyOn, activeTool, visible, menuOpen: menu.open, pencilColor: settings.pencilColor, enabled: settings.enabled, drawings, undo: history.undo.length, redo: history.redo.length }) };
 }

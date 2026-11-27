@@ -107,7 +107,8 @@
     { id: 'jot', name: 'Jot', blurb: 'Quick notes that remind you later.', theme: 'jot', bg: '#DFEDF0' },
     { id: 'tweak', name: 'Tweak', blurb: 'Point at a file and edit it.', theme: 'tweak', bg: '#E4E5F3' },
     { id: 'debug', name: 'Debug', blurb: 'See what’s slowing your Mac down.', theme: 'debug', bg: '#F1E6E3' },
-    { id: 'plugin', name: 'Plugin', blurb: 'Give an app more of your Mac, or less.', theme: 'plugin', bg: '#E9E4EA' },
+    // Work in progress: `wip` keeps it out of the settings window's tool list (main.js hides the rest, PLUGIN_READY).
+    { id: 'plugin', name: 'Plugin', blurb: 'Give an app more of your Mac, or less.', theme: 'plugin', bg: '#E9E4EA', wip: true },
   ];
 
   // Away's moods: three soft colors that drift behind the blur, and the two the icon is painted in

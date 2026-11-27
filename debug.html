@@ -243,6 +243,39 @@
   .pill .dot.bad { background: var(--accent); box-shadow: 0 2px 0 var(--accent-lip); animation: beatr 1.4s ease-out infinite; }
   @keyframes beatr { 0% { box-shadow: 0 0 0 0 rgba(242, 92, 84, 0.7); } 80%, 100% { box-shadow: 0 0 0 7px rgba(242, 92, 84, 0); } }
   .pill .ib { width: 24px; height: 24px; }
+
+  /* ---------- plugins (Plugin, the tool): what each one is doing ---------- */
+  .plugs { display: grid; gap: 5px; }
+  .plugrow {
+    display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 10px; align-items: center; width: 100%; padding: 9px 11px; border-radius: 16px; text-align: left;
+    background: var(--well); transition: background 140ms ease, transform 220ms var(--bouncy);
+  }
+  .plugrow.enter { animation: pop 420ms var(--bouncy) both; animation-delay: var(--d, 0ms); }
+  .plugrow:hover { transform: translateY(-1px); background: var(--paper-deep); }
+  .plugrow .appic, .plugrow .avatar { width: 26px; height: 26px; }
+  .plugrow .pt { min-width: 0; display: grid; gap: 1px; }
+  .plugrow .pt b { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 800; min-width: 0; }
+  .plugrow .pt b em { font-style: normal; font-size: 11px; font-weight: 800; color: #0E7A70; white-space: nowrap; }
+  .plugrow .pt small { font-size: 10.5px; font-weight: 700; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .plugrow .pt small.now { color: var(--ink); font-weight: 600; white-space: normal; }
+  .pled { width: 7px; height: 7px; border-radius: 50%; background: #3FCDBF; box-shadow: 0 0 0 2.5px #D2F4F0; flex: none; }
+  .plugrow.warn .pled { background: var(--warn); box-shadow: 0 0 0 2.5px #FCEBC6; }
+  .plugrow.warn .pt b em { color: var(--warn-lip); }
+  .plugrow.hot .pled, .plugrow.boost .pled, .plugrow.bad .pled { background: #F2668B; box-shadow: 0 0 0 2.5px #FCD9E2; }
+  .plugrow.hot .pt b em, .plugrow.boost .pt b em, .plugrow.bad .pt b em { color: #CC4069; }
+  .plugrow.hot .pled { animation: beatp 1.2s ease-out infinite; }
+  @keyframes beatp { 0% { box-shadow: 0 0 0 0 rgba(242, 102, 139, 0.7); } 80%, 100% { box-shadow: 0 0 0 7px rgba(242, 102, 139, 0); } }
+  .plugrow.off .pled, .plugrow.idle .pled { background: transparent; box-shadow: inset 0 0 0 2px var(--edge); }
+  .plugrow.off .pt b em, .plugrow.idle .pt b em { color: var(--ink-2); }
+  .ppips { display: flex; align-items: flex-end; gap: 2px; height: 14px; }
+  .ppips i { width: 3px; border-radius: 2px; background: var(--edge); transition: height 600ms var(--bouncy), background 300ms ease; }
+  .ppips i.l { background: #3FCDBF; }
+  .ppips i.b { background: #F2668B; }
+  /* An app in the list with a plugin on it: a small lit plug-light after its name. */
+  .rowb .pm { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-left: 6px; vertical-align: 2px; background: #3FCDBF; box-shadow: 0 0 0 2px #D2F4F0; }
+  .rowb .pm.warn { background: var(--warn); box-shadow: 0 0 0 2px #FCEBC6; }
+  .rowb .pm.hot, .rowb .pm.boost, .rowb .pm.bad { background: #F2668B; box-shadow: 0 0 0 2px #FCD9E2; }
+  .rowb .pm.off, .rowb .pm.idle { background: transparent; box-shadow: inset 0 0 0 1.5px var(--edge); }
 </style>
 </head>
 <body>
@@ -275,6 +308,7 @@
         </div>
         <div class="live" id="live" aria-label="Live stats for the whole Mac"></div>
         <div id="fixBox"><h4>Suggested fixes</h4><div class="fixes" id="fixes"></div></div>
+        <div id="plugBox" hidden><h4><span id="plugTitle">Plugins</span><em id="plugNote"></em></h4><div class="plugs" id="plugRows"></div></div>
         <div id="listBox"><h4><span id="listTitle">Busiest apps</span><em id="listNote"></em></h4><div class="rows" id="rows"></div></div>
         <div id="procBox" hidden><h4><span>Processor hogs</span><em id="procNote"></em></h4><div class="rows" id="procRows"></div></div>
         <div id="bgBox" hidden><h4><span>Background</span><em id="bgNote"></em></h4><div class="rows" id="bgRows"></div></div>

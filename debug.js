@@ -38,6 +38,9 @@ const avg = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0);
 const recent = (a, n = 3) => avg((a || []).slice(-n));
 const short = (name) => name.replace(/^Google /, '').replace(/^Microsoft /, '');
 const appByKey = (k) => snap?.apps.find((a) => a.key === k);
+// The plugin on an app, if it has one (Plugin, the tool: see plugin-engine.js).
+const plugFor = (a) => (a && !a.system ? (snap?.plugins || []).find((p) => (a.bundle ? p.bundle === a.bundle : p.name === a.name)) : null);
+const plugAct = (a) => (!snap?.pluginOn || a.self ? null : plugFor(a) ? { label: 'Open its plugin', kind: 'plugin', app: a, calm: true } : { label: 'Hold it to a share', kind: 'plug', app: a, calm: true });
 const ICON = {
   ok: '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   warn: '<svg viewBox="0 0 24 24"><path d="M12 6v7"/><path d="M12 17.5v.5"/></svg>',
@@ -330,7 +333,7 @@ function appSuggestions(s, a) {
       why: share >= 20 ? `It’s using ${share}% of your Mac’s power (${Math.round(recent(a.history) * s.cores)}% of one core)${onBattery ? ' and draining your battery' : ''}. Quitting it frees that up.`
         : stuckLike(a, s) ? 'It’s been running one core flat out, steadily. If it isn’t responding, force it to quit.'
           : `It’s using ${Math.round(recent(a.history) * s.cores)}% of one core${onBattery ? ', which drains your battery' : ''}. Fine for a video or an export; if it isn’t doing anything, quit it.`,
-      acts: [quitAct(a), ...(share < 20 && stuckLike(a, s) ? [{ label: 'Force quit', kind: 'force', app: a, confirm: 'Anything you haven’t saved is lost.' }] : [])],
+      acts: [quitAct(a), ...(share < 20 && stuckLike(a, s) ? [{ label: 'Force quit', kind: 'force', app: a, confirm: 'Anything you haven’t saved is lost.' }] : []), ...(plugAct(a) ? [plugAct(a)] : [])],
     });
   }
   // Memory. Browsers get a higher bar: every tab is its own little app, so lots of memory is normal for
@@ -621,7 +624,9 @@ function rowHTML(a, i, max) {
   const width = Math.max(share > 0.3 ? 4 : 0, Math.min(100, (share / max) * 100));
   const parts = `${a.procs} part${a.procs === 1 ? '' : 's'}`;
   const sub = a.system ? 'macOS and your apps’ helpers' : a.awake.length ? 'Keeping your Mac awake' : a.self ? 'That’s us' : a.kind === 'menubar' ? `Menu bar app · ${parts}` : parts;
-  return `<button class="rowb" data-key="${esc(a.key)}" data-rk="${esc(a.key)}" style="--d:${i * 30}ms">${appIcon(a)}<span class="nm">${esc(a.name)}<small>${esc(sub)}</small></span>
+  const pl = plugFor(a);
+  const mark = pl ? `<i class="pm ${pl.on ? esc(pl.status.tone) : 'off'}" title="Plugged in: ${esc(pl.status.detail || pl.status.text)}"></i>` : '';
+  return `<button class="rowb" data-key="${esc(a.key)}" data-rk="${esc(a.key)}" style="--d:${i * 30}ms">${appIcon(a)}<span class="nm">${esc(a.name)}${mark}<small>${esc(pl ? `Plugged in · ${pl.on ? pl.status.detail || 'Active' : 'Inactive'}` : sub)}</small></span>
     <span class="meter ${lv}"><i style="width:${width}%"></i></span><span class="num"><b>${share < 1 && share > 0 ? '<1' : Math.round(share)}%</b> · ${bytes(a.mem)}</span></button>`;
 }
 // A background category: what it is, and the busiest things in it. `link`: clicking it opens Background.
@@ -841,6 +846,8 @@ function renderFacts(a) {
 const HEAT_WORD = { nominal: 'Normal', fair: 'Warm', serious: 'Hot, slowing down', critical: 'Very hot, slowing down' };
 
 const CHIP_ICON = {
+  plug: '<path d="M3 12h5"/><rect x="8" y="7" width="8" height="10" rx="2.5"/><path d="M16 10h4M16 14h4"/>',
+  plugin: '<path d="M3 12h5"/><rect x="8" y="7" width="8" height="10" rx="2.5"/><path d="M16 10h4M16 14h4"/>',
   quit: '<path d="M12 3v8"/><path d="M6.6 6.8a7.5 7.5 0 1 0 10.8 0"/>',
   reopen: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>',
   force: '<path d="M13 3 6 13h5l-1 8 7-10h-5z"/>',
@@ -863,6 +870,7 @@ function renderChips(a) {
     { label: 'Restart Mac…', kind: 'restart' },
   ];
   const appActs = a && !a.system && !a.self ? [
+    ...(snap?.pluginOn ? [plugFor(a) ? { label: 'Open plugin', kind: 'plugin', app: a } : { label: 'Plug in', kind: 'plug', app: a }] : []),
     { label: 'Quit', kind: 'quit', app: a, confirm: cfg?.confirm ? 'It may ask to save.' : null },
     { label: 'Reopen', kind: 'reopen', app: a, confirm: cfg?.confirm ? 'Quits, then opens again.' : null },
     { label: 'Force quit', kind: 'force', app: a, confirm: 'Unsaved work is lost.' },
@@ -877,6 +885,76 @@ function renderChips(a) {
   const qq = quick.map((q, i) => chip(q, `quick|${i}`)).join('');
   if ($('appActs').innerHTML !== qa) $('appActs').innerHTML = qa;
   if ($('quick').innerHTML !== qq) $('quick').innerHTML = qq;
+}
+
+// ---------- plugins: what each one is doing to its app ----------
+const ASPECT_WORD = { cpu: 'Processor', ram: 'Memory', net: 'Network', out: 'Sound', mic: 'Microphone' };
+const gbs = (n) => (n >= 1073741824 ? `${(n / 1073741824).toFixed(1)} GB` : `${Math.round(n / 1048576)} MB`);
+function plugRules(p) {
+  const out = [];
+  for (const k of ['cpu', 'ram', 'net', 'out', 'mic']) {
+    const L = p.levels[k];
+    if (L === 10 || L === 0) continue;
+    out.push(`${ASPECT_WORD[k]} ${L < 10 ? `${L}/10` : L === 11 ? 'boosted' : 'in overdrive'}`);
+  }
+  if (p.route.device) out.push(`own network${p.route.name ? ` (${p.route.name})` : ''}`);
+  if (p.focus.on) out.push('Focus mode');
+  return out;
+}
+function plugNow(p) {
+  if (!p.on) return 'Off. Nothing is changed.';
+  if (!p.running) return 'Not open. It starts working when the app opens.';
+  const bits = [];
+  if (p.throttle > 0.05) bits.push(`pausing it ${Math.round(p.throttle * 100)}% of the time`);
+  if (p.quieted) bits.push(`${p.quieted} part${p.quieted === 1 ? '' : 's'} of other apps quieted`);
+  if (p.over) bits.push('over its memory line');
+  if (p.focusLive) bits.push('Focus on');
+  if (p.routed) bits.push(p.route.up ? `going out ${p.route.name || 'its own network'}` : 'its network is off');
+  const live = `${p.live.cpu < 0.5 ? 'almost no processor' : `${(Math.round(p.live.cpu) / 10).toFixed(1)} shares of processor`}, ${gbs(p.live.mem)}`;
+  return `${bits.length ? `${bits.join(', ')}. ` : ''}Using ${live}.`.replace(/^./, (c) => c.toUpperCase());
+}
+function plugRowHTML(p, i) {
+  const pips = ['cpu', 'ram', 'net', 'out', 'mic'].map((k) => {
+    const L = p.levels[k];
+    return `<i class="${L >= 11 ? 'b' : L >= 1 && L < 10 ? 'l' : ''}" style="height:${L >= 1 && L < 10 ? 3 + L : L >= 11 ? 14 : 5}px"></i>`;
+  }).join('');
+  const rules = plugRules(p);
+  const ic = appIcon(p);
+  return `<button class="plugrow ${p.on ? esc(p.status.tone) : 'off'}" data-plug="${esc(p.id)}" data-rk="plug:${esc(p.id)}" style="--d:${i * 30}ms">
+    ${ic}<span class="pt"><b>${esc(p.name)}<i class="pled"></i><em>${esc(p.on ? p.status.detail || p.status.text : 'Inactive')}</em></b><small>${esc(rules.length ? rules.join(', ') : 'No rules yet: everything free')}</small><small class="now">${esc(plugNow(p))}</small></span>
+    <span class="ppips">${pips}</span></button>`;
+}
+function renderPlugins(a) {
+  const all = snap.plugins || [];
+  // Icons come from the busiest-apps list, which already has them.
+  const withIcon = (p) => ({ ...p, icon: snap.apps.find((x) => (p.bundle ? x.bundle === p.bundle : x.name === p.name))?.icon || null });
+  const list = (a ? all.filter((p) => p === plugFor(a)) : all).map(withIcon);
+  $('plugBox').hidden = !list.length;
+  if (!list.length) return;
+  $('plugTitle').textContent = a ? 'Its plugin' : 'Plugins';
+  $('plugNote').textContent = a ? '' : `${all.filter((p) => p.on).length} on`;
+  syncPlugs(list.map(plugRowHTML).join(''));
+}
+function syncPlugs(html) {
+  const box = $('plugRows');
+  if (box.dataset.sig === html) return;
+  box.dataset.sig = html;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  const old = new Map([...box.children].map((el) => [el.dataset.rk, el]));
+  const out = [...tmp.children].map((el) => {
+    const was = old.get(el.dataset.rk);
+    if (!was) { el.classList.add('enter'); return el; }
+    old.delete(el.dataset.rk);
+    was.className = el.className;
+    const ic = el.firstElementChild, oic = was.firstElementChild;
+    if (ic.tagName !== oic.tagName || ic.getAttribute('src') !== oic.getAttribute('src')) oic.replaceWith(ic); // its icon arrived
+    was.querySelector('.pt').innerHTML = el.querySelector('.pt').innerHTML;
+    [...was.querySelectorAll('.ppips i')].forEach((pip, k) => { const n = el.querySelectorAll('.ppips i')[k]; pip.className = n.className; pip.style.height = n.style.height; });
+    return was;
+  });
+  for (const el of old.values()) el.remove();
+  out.forEach((el, i) => { if (box.children[i] !== el) box.insertBefore(el, box.children[i] || null); });
 }
 
 function renderTabs() {
@@ -911,6 +989,7 @@ function render() {
   renderLive();
   const RANK = { bad: 0, warn: 1, tip: 2, ok: 3 }; // reassurances (\u201cnormal for a browser\u201d) go last
   renderFixes(list.sort((x, y) => RANK[x.level] - RANK[y.level]));
+  renderPlugins(a);
   renderList(a);
   renderProcs(a);
   renderFacts(a);
@@ -953,6 +1032,7 @@ function findAct(id) {
 }
 async function runAct(btn, id, act) {
   if (act.kind === 'view') { choose(act.app.key); return; }
+  if (act.kind === 'plug' || act.kind === 'plugin') { openPlugin(act.app, act.kind === 'plug'); return; }
   // Ask first, right on the button: it turns dark and says what will happen.
   if (act.confirm && !btn.classList.contains('sure')) {
     document.querySelectorAll('.sure').forEach(unsure);
@@ -989,7 +1069,13 @@ function unsure(btn) {
   (btn.closest('.acts') || btn.parentElement).querySelector('.sure-note')?.remove();
   fit();
 }
+async function openPlugin(a, add) {
+  const r = await scrawl.invoke('debug:plugin', add ? 'add' : 'open', { bundle: a.bundle, name: a.name, path: a.path });
+  if (!r?.ok) toast('Turn Plugin on in Pane’s settings first.', true);
+}
 document.addEventListener('click', (e) => {
+  const pr = e.target.closest('[data-plug]');
+  if (pr) { const p = (snap?.plugins || []).find((x) => x.id === pr.dataset.plug); if (p) openPlugin(p, false); return; }
   const b = e.target.closest('[data-act]');
   if (b) { const act = findAct(b.dataset.act); if (act) runAct(b, b.dataset.act, act); return; }
   if (!e.target.closest('.sure')) document.querySelectorAll('.sure').forEach(unsure);
@@ -1113,3 +1199,5 @@ scrawl.on('debug:leave', () => {
   setTimeout(() => scrawl.send('debug:gone'), 260);
 });
 scrawl.on('debug:settings', (s) => { cfg = s; resetBoxes(); render(); fit(); });
+// "Watch in Debug" from a plugin's menu: show that app.
+scrawl.on('debug:focus', (key) => { if (appByKey(key)) choose(key); });

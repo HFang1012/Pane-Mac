@@ -8,6 +8,7 @@
 <style>
   /* Focus mode's blur. The window itself is the blur (vibrancy); this page only tints it a little and, on
      screens other than the app's, says what you're focused on. Clicks pass straight through. */
+  [hidden] { display: none !important; }
   html, body { margin: 0; height: 100%; background: rgba(36, 31, 46, 0.18); font-family: var(--font); -webkit-font-smoothing: antialiased; user-select: none; }
   body.desk { background: rgba(36, 31, 46, 0.1); }
   .chip {

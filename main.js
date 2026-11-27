@@ -2337,7 +2337,8 @@ function cleanPlugin(x) {
   // Where each pod was dragged to: which corner of its app's window it's nearest, and how far in from it.
   const spots = {};
   for (const [id, sp] of Object.entries(out.spots && typeof out.spots === 'object' ? out.spots : {})) {
-    if (['tl', 'tr', 'bl', 'br'].includes(sp?.c) && Number.isFinite(sp.dx) && Number.isFinite(sp.dy)) spots[id] = { c: sp.c, dx: Math.max(0, Math.round(sp.dx)), dy: Math.max(0, Math.round(sp.dy)) };
+    // Negative: past that edge of the window (down to the bottom of the screen, say).
+    if (['tl', 'tr', 'bl', 'br'].includes(sp?.c) && Number.isFinite(sp.dx) && Number.isFinite(sp.dy)) spots[id] = { c: sp.c, dx: Math.max(-4000, Math.round(sp.dx)), dy: Math.max(-4000, Math.round(sp.dy)) };
   }
   out.spots = spots;
   out.enabled = out.enabled !== false;
@@ -2375,41 +2376,67 @@ function pluginsChanged(list) {
 }
 
 // ---------- Focus mode's blur ----------
-// While a plugin's Focus mode is on and you're in its app, every other screen blurs over (like Away), and on
-// the app's own screen the desktop behind your windows blurs. Other apps stay open and in place: you can
-// still click through to them. The blur eases off the moment you leave the app.
-const focusBlurs = new Map(); // displayId -> { win, kind: 'cover' | 'desk' }
+// While a plugin's Focus mode is on and you're in its app, everything but that app blurs over: its screen is
+// covered by four blurred panels laid around its window (above, below, left and right of it), and every other
+// screen by one. The panels follow the window as it moves. They sit just above ordinary windows and under the
+// menu bar and Dock, and clicks pass straight through them: click another app and it comes forward, and since
+// you've left the focused app, the blur eases away.
+const focusBlurs = new Map(); // key ('<displayId>:<part>') -> { win, kind }
+let focusApp = null; // the plugin id Focus is blurring for
 let lastWins = []; // the windows on screen, from the badges' last look
-function syncFocusBlur(list) {
-  const v = settings.plugin.enabled ? list.find((x) => x.focusOn && x.running) : null;
-  const want = new Map();
-  if (v) {
-    const own = lastWins.find((w) => w.pid === v.pid && w.w >= 160 && w.h >= 100);
-    const home = screen.getDisplayNearestPoint(own ? { x: Math.round(own.x + own.w / 2), y: Math.round(own.y + own.h / 2) } : screen.getCursorScreenPoint());
-    for (const d of screen.getAllDisplays()) want.set(String(d.id), { d, kind: d.id === home.id ? 'desk' : 'cover' });
+function focusPieces(v) {
+  const out = new Map();
+  const own = lastWins.find((w) => w.pid === v.pid && w.w >= 160 && w.h >= 200) || lastWins.find((w) => w.pid === v.pid && w.w >= 160 && w.h >= 100);
+  const home = screen.getDisplayNearestPoint(own ? { x: Math.round(own.x + own.w / 2), y: Math.round(own.y + own.h / 2) } : screen.getCursorScreenPoint());
+  for (const d of screen.getAllDisplays()) {
+    const b = d.bounds;
+    if (d.id !== home.id || !own) { out.set(`${d.id}:all`, { rect: b, kind: 'cover', d }); continue; }
+    // Around the window, clipped to its screen. Pieces with nothing in them are left out.
+    const L = Math.max(b.x, Math.round(own.x)), T = Math.max(b.y, Math.round(own.y));
+    const R = Math.min(b.x + b.width, Math.round(own.x + own.w)), B = Math.min(b.y + b.height, Math.round(own.y + own.h));
+    const parts = {
+      top: { x: b.x, y: b.y, width: b.width, height: T - b.y },
+      bottom: { x: b.x, y: B, width: b.width, height: b.y + b.height - B },
+      left: { x: b.x, y: T, width: L - b.x, height: B - T },
+      right: { x: R, y: T, width: b.x + b.width - R, height: B - T },
+    };
+    for (const [k, r] of Object.entries(parts)) if (r.width > 0 && r.height > 0) out.set(`${d.id}:${k}`, { rect: r, kind: 'around', d });
   }
-  for (const [id, b] of focusBlurs) {
-    if (want.get(id)?.kind === b.kind && b.app === v?.id) continue;
-    focusBlurs.delete(id);
+  return out;
+}
+function syncFocusBlur(list = plug?.lastList || []) {
+  const v = settings.plugin.enabled ? list.find((x) => x.focusOn && x.running) : null;
+  const want = v ? focusPieces(v) : new Map();
+  if (focusApp !== (v?.id || null)) focusApp = v?.id || null;
+  for (const [key, b] of focusBlurs) {
+    if (want.has(key)) continue;
+    focusBlurs.delete(key);
     if (!b.win.isDestroyed()) fadeWindow(b.win, b.win.getOpacity(), 0, 240, () => { if (!b.win.isDestroyed()) b.win.destroy(); });
   }
-  for (const [id, { d, kind }] of want) {
-    if (focusBlurs.has(id)) continue;
+  for (const [key, { rect, kind }] of want) {
+    const have = focusBlurs.get(key);
+    if (have && !have.win.isDestroyed()) {
+      const cur = have.win.getBounds();
+      have.rect = rect;
+      if (cur.x !== rect.x || cur.y !== rect.y || cur.width !== rect.width || cur.height !== rect.height) have.win.setBounds(rect);
+      continue;
+    }
     const w = new BrowserWindow({
-      ...d.bounds, frame: false, transparent: true, backgroundColor: '#00000000', vibrancy: 'fullscreen-ui', visualEffectState: 'active',
+      ...rect, frame: false, transparent: true, backgroundColor: '#00000000', vibrancy: 'fullscreen-ui', visualEffectState: 'active',
       hasShadow: false, roundedCorners: false, resizable: false, movable: false, minimizable: false, maximizable: false, fullscreenable: false,
-      focusable: false, skipTaskbar: true, enableLargerThanScreen: true, show: false,
-      // The app's own screen: a window at desktop level, under every app's windows, so only the desktop blurs.
-      ...(kind === 'desk' ? { type: 'desktop' } : { type: 'panel', alwaysOnTop: true }),
+      focusable: false, skipTaskbar: true, enableLargerThanScreen: true, type: 'panel', alwaysOnTop: true, show: false,
       webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false },
     });
     w.setIgnoreMouseEvents(true);
     w.setHiddenInMissionControl(true);
-    if (kind === 'cover') { w.setAlwaysOnTop(true, 'floating', 1); w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true }); }
-    w.loadFile(path.join(__dirname, 'plugin-blur.html'), { query: { name: v.name, kind } });
-    w.once('ready-to-show', () => { if (w.isDestroyed()) return; w.setBounds(d.bounds); w.setOpacity(0); w.showInactive(); fadeWindow(w, 0, 1, 420); });
-    focusBlurs.set(id, { win: w, kind, app: v.id });
+    w.setAlwaysOnTop(true, 'floating', 0); // over other apps' windows, under the menu bar, the Dock and the pod
+    w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+    w.loadFile(path.join(__dirname, 'plugin-blur.html'), { query: { name: v.name, kind: kind === 'cover' ? 'cover' : 'around' } });
+    w.once('ready-to-show', () => { if (w.isDestroyed() || !focusBlurs.has(key)) return; w.setBounds(focusBlurs.get(key).rect || rect); w.setOpacity(0); w.showInactive(); fadeWindow(w, 0, 1, 380); });
+    focusBlurs.set(key, { win: w, kind, rect });
   }
+  // The focused app's pod stays on top of the blur.
+  if (v) { const b = badges.get(v.id); if (b && !b.win.isDestroyed()) b.win.setAlwaysOnTop(true, 'status', 1); }
 }
 const viewOf = (id) => plug?.lastList.find((v) => v.id === id) || (plug?.plugins.get(id) ? plug.view(plug.plugins.get(id)) : null);
 
@@ -2594,7 +2621,7 @@ async function badgeTick() {
   try {
     const res = await plug.eyes.ask('w');
     const wins = res?.w;
-    if (wins) { lastWins = wins; for (const v of plug.lastList) placeBadge(v, wins); }
+    if (wins) { lastWins = wins; for (const v of plug.lastList) placeBadge(v, wins); if (focusApp || focusBlurs.size) syncFocusBlur(); }
   } catch {}
   badgeBusy = false;
 }
@@ -2614,19 +2641,28 @@ function placeBadge(v, wins) {
   if (b0?.dragging) return; // you're moving it: it goes where you put it
   // The pill's spot: the corner you dragged it near (bottom-right, 3pt in, to start), and how far in from it.
   // Its window is the pill, 1pt above it and its 3pt lip below: nothing else.
-  const sp = settings.plugin.spots?.[v.id] || { c: 'br', dx: 3, dy: 3 };
+  const dragged = settings.plugin.spots?.[v.id];
+  const sp = dragged || { c: 'br', dx: 3, dy: 3 };
+  // Where you dragged it is measured on the whole window, so it can sit right down at the screen's bottom (behind
+  // where the Dock shows). Its own corner, before you've moved it, stays in the part of the window you can see.
+  const base = dragged ? whole : own;
   const pw = b0?.size.w || 100, ph = (b0?.size.h || 28) - 4;
-  const dx = Math.min(sp.dx, Math.max(0, own.w - pw)), dy = Math.min(sp.dy, Math.max(0, own.h - ph));
-  const px = sp.c.endsWith('r') ? own.x + own.w - dx - pw : own.x + dx;
-  const py = sp.c.startsWith('b') ? own.y + own.h - dy - ph : own.y + dy;
-  const cx = Math.round(px + pw / 2), cy = Math.round(py + ph / 2);
+  const dx = Math.min(sp.dx, Math.max(0, base.w - pw)), dy = Math.min(sp.dy, Math.max(0, base.h - ph));
+  // Anywhere on the window's screen, including past the window's own edges (you can drag it down to the
+  // screen's bottom), but never off the screen.
+  const scr = screen.getDisplayNearestPoint({ x: Math.round(whole.x + whole.w / 2), y: Math.round(whole.y + whole.h / 2) }).bounds;
+  const px = Math.min(Math.max(sp.c.endsWith('r') ? base.x + base.w - dx - pw : base.x + dx, scr.x), scr.x + scr.width - pw);
+  const py = Math.min(Math.max(sp.c.startsWith('b') ? base.y + base.h - dy - ph : base.y + dy, scr.y), scr.y + scr.height - ph);
+  // Whether its window is covered is checked at the point of the window nearest the pod (the pod may hang past it).
+  const cx = Math.round(Math.min(Math.max(px + pw / 2, whole.x + 2), whole.x + whole.w - 2));
+  const cy = Math.round(Math.min(Math.max(py + ph / 2, whole.y + 2), whole.y + whole.h - 2));
   const top = wins.find((w) => inside({ x: cx, y: cy }, w));
   if (!top || top.pid !== v.pid) { hideBadge(v.id); return; }
   // Mid-swipe between Spaces (or in Mission Control) windows report frames off every screen. macOS would pull
   // the pod back onto a screen somewhere else, so it waits until the window's corner is really on one.
   if (!screen.getAllDisplays().some((d) => inside({ x: cx, y: cy }, { x: d.bounds.x, y: d.bounds.y, w: d.bounds.width, h: d.bounds.height }))) { hideBadge(v.id); return; }
   const b = badgeFor(v);
-  b.own = own;
+  b.own = whole; // drags are measured against the whole window
   const x = Math.round(px), y = Math.round(py - 1);
   if (!b.at || b.at.x !== x || b.at.y !== y || b.at.w !== b.size.w || b.at.h !== b.size.h) {
     b.at = { x, y, w: b.size.w, h: b.size.h };
@@ -2646,7 +2682,8 @@ function badgeFor(v) {
   if (b && !b.win.isDestroyed()) return b;
   // enableLargerThanScreen: macOS would otherwise keep it clear of screen edges, off the corner.
   const win = jotPanel({ width: 100, height: 28, focusable: false, enableLargerThanScreen: true });
-  win.setAlwaysOnTop(true, 'floating'); // on the app's window, under menus and other apps' pop-ups
+  // Above the Dock (so it can sit at the very bottom of the screen), still under menus and pop-ups.
+  win.setAlwaysOnTop(true, 'status');
   b = { win, size: { w: 100, h: 28 }, shown: false, first: !viewOf(v.id)?.seen, ready: false, at: null, hideTimer: null };
   badges.set(v.id, b);
   win.loadFile(path.join(__dirname, 'plugin-badge.html'));

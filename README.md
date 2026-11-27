@@ -13,7 +13,7 @@
 
 ---
 
-Pane is a menu-bar app with six tools. Each one opens from a key or a shortcut, right where you're working, then gets out of the way.
+Pane is a menu-bar app with seven tools. Each one opens from a key or a shortcut, right where you're working, then gets out of the way.
 
 | Tool | What it does | Opens with (by default) |
 | --- | --- | --- |
@@ -23,6 +23,7 @@ Pane is a menu-bar app with six tools. Each one opens from a key or a shortcut, 
 | **Jot** | Write a quick note, pick a timer, and it comes back when it's time. Snooze it or mark it done. | Double-tap left `⌃` |
 | **Tweak** | Point at a file and edit it: crop, turn and resize pictures, trim videos and songs, find and replace in text, rename or convert. | Double-tap right `⌥` |
 | **Debug** | A small panel that scores how your Mac is holding up and offers one-click fixes. | `⌃⌘B` |
+| **Plugin** | Click any app to plug into it, then give it more of your Mac or less: processor, memory and network shares, its own volume up to 200%, boosts, a network of its own, and Focus mode. | `⌃⌘P` |
 
 Every key and shortcut can be changed in Pane's settings, and each tool can be turned off on its own.
 
@@ -38,7 +39,7 @@ curl -fsSL https://hfang1012.github.io/Pane-Mac/install.sh | sh
 
 **Or the regular download:** get `Pane.dmg` from the [latest release](https://github.com/HFang1012/Pane-Mac/releases/latest) and drag Pane to Applications.
 
-Then turn Pane on in **System Settings → Privacy & Security → Accessibility** when it asks. Scrawl, Spin, Jot and Tweak need it to hear your keys. Away works without any extra permissions.
+Then turn Pane on in **System Settings → Privacy & Security → Accessibility** when it asks. Scrawl, Spin, Debug and Plugin need it to hear their shortcuts, Jot and Tweak to notice a double-tap, and Plugin and Tweak to see what’s under your pointer. Away works without any extra permissions.
 
 Pane updates itself. An update usually downloads as a small patch (about a megabyte) instead of the whole disk image.
 
@@ -70,7 +71,7 @@ npm start
 | `jot*` | Jot's notes and reminders |
 | `edit.*`, `target.*`, `tweak-*` | Tweak's file picker and editor |
 | `debug*` | Debug's panel and the stats behind it |
-| `plugin-*` | Plugin (work in progress, hidden: `PLUGIN_READY` in `main.js`): its picker, pods and menu; `plugin-engine.js` applies each plugin's shares, `plugin-proxy.js` gives an app its own network |
+| `plugin-*` | Plugin's picker, pods and menu; `plugin-engine.js` applies each plugin's shares, `plugin-proxy.js` gives an app its own network |
 | `settings.*`, `switcher.js` | The settings window and the tool switcher |
 | `updater.js`, `update.js`, `app-patch.js` | Self-updates and small binary patches |
 | `native/pane-files.swift` | Tweak's native helper (finding files under the pointer, media edits) |

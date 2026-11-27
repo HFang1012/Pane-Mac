@@ -242,7 +242,10 @@ class Engine {
       now - this.net.at > netEvery ? this.sampleNet(now) : null,
     ]);
     if (appsRes?.a) this.apps = appsRes.a;
-    this.front = this.apps.find((a) => a.active) || null;
+    // No app in the list is active when Pane itself is in front (the helper leaves Pane out): you clicked a
+    // pod, a plugin's menu or Pane's settings. That isn't leaving the app you were in, so keep the last answer.
+    const active = this.apps.find((a) => a.active) || null;
+    if (active || !this.front) this.front = active;
     const procs = parsePs(ps.out);
     // Compared with the last look's numbers (kept aside before this look's replace them).
     const last = this.prev;

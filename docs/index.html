@@ -9,7 +9,7 @@
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="icon.png">
 <meta property="og:title" content="Pane">
-<meta property="og:description" content="Draw on your screen. Blur it while you're away. Spin your music from a wheel. Jot a note for later. Point at a file and edit it.">
+<meta property="og:description" content="Draw on your screen. Blur it while you're away. Spin your music from a wheel. Jot a note for later. Point at a file and edit it. See what's slowing your Mac down. Give an app more of your Mac, or less.">
 <meta property="og:image" content="icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -506,8 +506,9 @@
 
   /* ---------- Plugin's demo: pick a window, a pod lands on its corner, its menu shares out the Mac ---------- */
   .pldemo { margin-top: 18px; background: var(--card); border-radius: 26px; box-shadow: 0 7px 0 var(--card-lip); padding: 16px 16px 18px; }
-  .plstage { position: relative; min-height: 500px; border-radius: 20px; overflow: hidden; isolation: isolate; box-shadow: 0 5px 0 var(--card-lip); background: var(--stage-bg); cursor: pointer; user-select: none; }
-  .plstage .win { position: absolute; border-radius: 12px; background: var(--win); box-shadow: 0 8px 18px rgba(20, 18, 28, 0.12); overflow: hidden; text-align: left; }
+  .plstage { position: relative; min-height: 560px; border-radius: 20px; overflow: hidden; isolation: isolate; box-shadow: 0 5px 0 var(--card-lip); background: var(--stage-bg); cursor: pointer; user-select: none; }
+  .plstage .win { position: absolute; border-radius: 12px; background: var(--win); box-shadow: 0 8px 18px rgba(20, 18, 28, 0.12); overflow: hidden; text-align: left; transition: filter 280ms ease, opacity 280ms ease; }
+  .plstage .win.dim { filter: blur(1.6px); opacity: 0.38; }
   .plstage .win .tb { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; background: var(--bar); font-size: 11.5px; font-weight: 800; color: var(--ink-2); }
   .plstage .win .tb i { width: 8px; height: 8px; border-radius: 50%; background: var(--edge); }
   .plstage .win .tb b { margin-left: 4px; color: var(--ink); }
@@ -525,7 +526,10 @@
   /* Tabs, a browser full of tabs: its memory. */
   .plstage .tabs { display: flex; gap: 4px; padding: 8px 10px 0; }
   .plstage .tabs span { flex: 1; height: 14px; border-radius: 5px 5px 0 0; background: var(--well); }
-  .plstage .page { position: absolute; left: 10px; right: 10px; top: 54px; bottom: 12px; border-radius: 6px; background: var(--well); }
+  .plstage .page { position: absolute; left: 10px; right: 10px; top: 54px; bottom: 36px; border-radius: 6px; background: var(--well); }
+  .plstage .dl { position: absolute; left: 10px; right: 10px; bottom: 10px; display: grid; gap: 4px; font-size: 10px; font-weight: 800; color: var(--ink-2); }
+  .plstage .dl .bar { height: 6px; border-radius: 3px; background: var(--well); overflow: hidden; }
+  .plstage .dl .bar i { display: block; height: 100%; width: 0; border-radius: 3px; background: var(--accent); }
   .plstage .page i { position: absolute; left: 10px; height: 8px; border-radius: 4px; background: var(--line); }
   /* Tunes, a little player: its volume. */
   .plstage .tune { position: absolute; left: 12px; right: 12px; top: 40px; display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; font-size: 11.5px; font-weight: 800; }
@@ -557,7 +561,7 @@
   .plstage .pod .pips u { width: 2.5px; border-radius: 1px; background: #5D5568; transition: height 400ms var(--bouncy), background 200ms ease; }
   .plstage .pod .pips u.l { background: var(--accent); } .plstage .pod .pips u.b { background: var(--rasp); }
   /* The menu: it grows up out of the pod. */
-  .plmenu { position: absolute; z-index: 6; width: 268px; padding: 10px; border-radius: 20px; background: var(--card); box-shadow: 0 5px 0 var(--card-lip), inset 0 0 0 1px rgba(36, 31, 46, 0.06); text-align: left; transform-origin: 100% 100%; animation: mgrow 460ms cubic-bezier(.22,1,.36,1) both; cursor: default; }
+  .plmenu { position: absolute; z-index: 6; width: 248px; padding: 8px; border-radius: 18px; background: var(--card); box-shadow: 0 5px 0 var(--card-lip), inset 0 0 0 1px rgba(36, 31, 46, 0.06); text-align: left; transform-origin: 100% 100%; animation: mgrow 460ms cubic-bezier(.22,1,.36,1) both; cursor: default; }
   .plmenu.below { transform-origin: 100% 0; }
   .plmenu.leaving { animation: mshrink 220ms cubic-bezier(.4,0,1,1) both; }
   @keyframes mgrow { from { opacity: 0; transform: scale(0.2); } }
@@ -570,10 +574,10 @@
   .plmenu .rock { position: relative; width: 38px; height: 22px; border-radius: 11px; background: var(--accent); transition: background 200ms ease; cursor: pointer; }
   .plmenu .rock::after { content: ""; position: absolute; top: 3px; left: 19px; width: 16px; height: 16px; border-radius: 8px; background: var(--card); box-shadow: 0 1.5px 0 var(--card-lip); transition: left 320ms var(--bouncy); }
   .plmenu .rock.off { background: var(--edge); } .plmenu .rock.off::after { left: 3px; }
-  .plmenu.off .sh { opacity: 0.5; filter: saturate(0.2); pointer-events: none; }
-  .plmenu .sh { padding: 7px 8px 8px; border-radius: 14px; background: var(--well); margin-top: 5px; transition: opacity 200ms ease; }
-  .plmenu .sh .hd { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 800; margin-bottom: 5px; }
-  .plmenu .sh .hd .use { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .plmenu.off .sh, .plmenu.off .focus { opacity: 0.5; filter: saturate(0.2); pointer-events: none; }
+  .plmenu .sh { padding: 5px 6px 6px; border-radius: 12px; background: var(--well); margin-top: 4px; transition: opacity 200ms ease; }
+  .plmenu .sh .hd { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; margin-bottom: 3px; }
+  .plmenu .sh .hd .use { margin-left: auto; max-width: 42%; overflow: hidden; text-overflow: ellipsis; font-size: 10px; font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .plmenu .sh .hd .v { min-width: 52px; text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; }
   .plmenu .sh[data-band="lim"] .hd .v { color: var(--accent-ink); } .plmenu .sh[data-band="boost"] .hd .v { color: var(--rasp-lip); }
   .plmenu .rail { display: flex; gap: 2px; height: 20px; padding-top: 3px; touch-action: none; cursor: ew-resize; }
@@ -586,7 +590,14 @@
   .plmenu .meter { position: relative; height: 3px; margin: 5px 0 0 18px; border-radius: 2px; background: var(--edge); width: calc((100% - 18px) * 10 / 12.3); }
   .plmenu .meter b { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; background: var(--ink); opacity: 0.75; transition: width 800ms cubic-bezier(.22,1,.36,1); }
   .plmenu .meter u { position: absolute; top: -3px; width: 2px; height: 9px; margin-left: -1px; border-radius: 1px; background: var(--accent-lip); }
-  .plmenu .what { margin: 6px 0 0; font-size: 10.5px; font-weight: 700; color: var(--ink-2); min-height: 14px; }
+  .plmenu .what { margin: 4px 0 0; font-size: 10px; font-weight: 700; color: var(--ink-2); line-height: 1.25; }
+  .plmenu .foot { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  .plmenu .focus, .plmenu .unplug { height: 28px; padding: 0 10px; border-radius: 10px; background: var(--well); font: inherit; font-size: 11.5px; font-weight: 800; color: var(--ink); cursor: pointer; }
+  .plmenu .focus.on { background: var(--accent); color: #14332F; box-shadow: 0 2px 0 var(--accent-lip); }
+  .plmenu .unplug { margin-left: auto; color: var(--rasp-lip); }
+  .plmenu .fwhat { margin: 6px 0 0; font-size: 10.5px; font-weight: 700; color: var(--ink-2); }
+  .plstage .fchip { position: absolute; z-index: 4; left: 50%; bottom: 12px; translate: -50% 0; padding: 5px 10px; border-radius: 11px; background: var(--dark); color: #F3EEF6; font-size: 11px; font-weight: 800; opacity: 0; transform: translateY(6px); transition: opacity 200ms ease, transform 320ms var(--bouncy); pointer-events: none; white-space: nowrap; }
+  .plstage .fchip.on { opacity: 1; transform: none; }
   @media (max-width: 600px) {
     .plstage { min-height: 560px; }
     .plstage .wc { left: 4%; top: 6%; width: 92%; height: 30%; } .plstage .wt { left: 4%; top: 39%; width: 92%; height: 24%; } .plstage .wm { left: 4%; top: 66%; width: 60%; height: 18%; }
@@ -1188,7 +1199,7 @@
         <span class="spark" style="--a:0deg"></span><span class="spark" style="--a:60deg"></span><span class="spark" style="--a:120deg"></span><span class="spark" style="--a:180deg"></span><span class="spark" style="--a:240deg"></span><span class="spark" style="--a:300deg"></span>
       </button>
     </span></span></p>
-    <p class="lede rise" style="--d:200ms">Six small tools for your Mac, each a shortcut away. Change any shortcut to keys you like.</p>
+    <p class="lede rise" style="--d:200ms">Seven small tools for your Mac, each a shortcut away. Change any shortcut to keys you like.</p>
 
     <div class="quick pop" style="--d:300ms">
       <p class="label">Install with one command <span class="badge">Recommended</span></p>
@@ -1444,8 +1455,7 @@
       </div>
       <p class="switch-note" style="margin-top:16px">A small panel opens over whatever you’re doing and scores how your Mac is holding up. See how hard the processor, memory, battery and storage are working, and which apps are behind it. Click a fix to quit an app, close duplicate tabs, empty the Trash, or restart Finder or the Dock. Fold it into a little pill that keeps watching.</p>
     </article>
-    <!-- Plugin: work in progress, hidden until it ships in Pane. Remove `hidden` (and say "Seven" in the lede) to show it. -->
-    <article class="tool" data-theme="plugin" hidden>
+    <article class="tool" data-theme="plugin">
       <div class="tool-head">
         <svg viewBox="0 0 60 44" aria-hidden="true"><path d="M19 29 Q5 29 7 37.5 Q9 44 19 41.5" fill="none" stroke="#CC4069" stroke-width="4.6" stroke-linecap="round"/><path d="M19 27 Q5 27 7 35.5 Q9 42 19 39.5" fill="none" stroke="#F2668B" stroke-width="4.6" stroke-linecap="round"/><g class="prongs"><rect x="41" y="15.6" width="13" height="4.6" rx="2.3" fill="#110E17"/><rect x="41" y="27" width="13" height="4.6" rx="2.3" fill="#110E17"/><rect x="41" y="14" width="13" height="4.6" rx="2.3" fill="#241F2E"/><rect x="41" y="25.4" width="13" height="4.6" rx="2.3" fill="#241F2E"/></g><rect x="36" y="13.5" width="6.5" height="21" rx="2.6" fill="#110E17"/><rect x="36" y="11.5" width="6.5" height="21" rx="2.6" fill="#241F2E"/><rect x="16" y="10" width="23" height="30" rx="9" fill="#1FA295"/><rect x="16" y="7" width="23" height="30" rx="9" fill="#3FCDBF"/><circle cx="24" cy="15" r="2.8" fill="#FFFFFF" fill-opacity="0.85"/></svg>
         <h3>Plugin</h3>
@@ -1454,9 +1464,9 @@
       <div class="pldemo">
         <div class="plstage" id="plstage" role="application" aria-label="Plugin, a pretend Mac">
           <div class="win wc" data-app="Cutroom" data-share="cpu"><div class="tb"><i></i><i></i><i></i><b>Cutroom</b><span class="grow"></span><svg class="fan" id="plfan" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c0-5 2-8 5-8s3 4-1 6zM12 12c5 0 8 2 8 5s-4 3-6-1zM12 12c0 5-2 8-5 8s-3-4 1-6zM12 12c-5 0-8-2-8-5s4-3 6 1z"/></svg></div><div class="film"></div><div class="exp"><span id="plexp">Exporting video… 0%</span><span class="bar"><i id="plbar"></i></span></div></div>
-          <div class="win wt" data-app="Tabs" data-share="ram"><div class="tb"><i></i><i></i><i></i><b>Tabs</b></div><div class="tabs"><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="page"><i style="top:14px;width:70%"></i><i style="top:30px;width:52%"></i><i style="top:46px;width:62%"></i><i style="top:62px;width:40%"></i></div></div>
+          <div class="win wt" data-app="Tabs" data-share="ram"><div class="tb"><i></i><i></i><i></i><b>Tabs</b></div><div class="tabs"><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="page"><i style="top:14px;width:70%"></i><i style="top:30px;width:52%"></i><i style="top:46px;width:62%"></i><i style="top:62px;width:40%"></i></div><div class="dl"><span id="pldl">Loading page… 0%</span><span class="bar"><i id="pldlbar"></i></span></div></div>
           <div class="win wm" data-app="Tunes" data-share="out"><div class="tb"><i></i><i></i><i></i><b>Tunes</b></div><div class="tune"><span class="rec"></span><span>Pocket Weather</span><span class="vol"><i id="plvol"></i></span></div></div>
-          <div class="veil" id="plveil"></div><div class="ring" id="plring"></div><div class="tag" id="pltag"></div>
+          <div class="veil" id="plveil"></div><div class="ring" id="plring"></div><div class="tag" id="pltag"></div><div class="fchip" id="plfocus"></div>
           <div class="pickhint">Pick an app to plug in <kbd>esc</kbd></div>
           <div class="hint">Press <kbd>⌃</kbd> <kbd>⌘</kbd> <kbd>P</kbd>, or click here</div>
         </div>
@@ -1554,7 +1564,7 @@
 
     <div class="route">
       <h3>Then: allow Accessibility</h3>
-      <p>Scrawl and Spin need this to notice when you hold their keys, Jot and Tweak to notice a double-tap, and Tweak to see which file is under your pointer. Away works without it.</p>
+      <p>Scrawl, Spin, Debug and Plugin need this to notice their shortcuts, Jot and Tweak to notice a double-tap, Plugin to pick an app with a click, and Tweak to see which file is under your pointer. Away works without it.</p>
       <ol class="steps">
         <li><span>Go to <span class="path"><span>System Settings</span>›<span>Privacy &amp; Security</span>›<span>Accessibility</span></span> and turn on <em>Pane</em>.</span></li>
         <li><span>Already on but Scrawl doesn’t react? Remove Pane with the <em>–</em> button and add it again. macOS treats each new version as a new app.</span></li>
@@ -3701,12 +3711,13 @@
     const say = (t) => { step.innerHTML = '<span></span>'; step.firstChild.textContent = t; };
     const veil = document.getElementById('plveil'), ring = document.getElementById('plring'), tag = document.getElementById('pltag');
     const wins = [...stage.querySelectorAll('.win')];
-    const SHARES = [{ a: 'cpu', n: 'Processor' }, { a: 'ram', n: 'Memory' }, { a: 'out', n: 'Sound' }];
+    const SHARES = [{ a: 'cpu', n: 'Processor', max: 12 }, { a: 'ram', n: 'Memory', max: 12 }, { a: 'net', n: 'Network', max: 11 }, { a: 'out', n: 'Sound', max: 12 }];
+    const NET = [0, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768];
     const MEM = 16; // GB, the pretend Mac's
     // What each app uses on its own, in tenths of the Mac (processor) and GB (memory).
     const USE = { Cutroom: { cpu: 4.6, ram: 1.8 }, Tabs: { cpu: 0.7, ram: 3.4 }, Tunes: { cpu: 0.2, ram: 0.3 } };
     const plugs = new Map(); // app -> { levels, on, pod, avg }
-    let picking = false, hover = null, menu = null, progress = 0, fanA = 0, timer = 0;
+    let picking = false, hover = null, menu = null, progress = 0, load = 0, fanA = 0, timer = 0;
     const rel = (el) => { const r = el.getBoundingClientRect(), b = stage.getBoundingClientRect(); return { x: r.left - b.left, y: r.top - b.top, w: r.width, h: r.height }; };
     const box = (el, r) => Object.assign(el.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
     const lim = (L) => L >= 1 && L < 10;
@@ -3755,7 +3766,7 @@
       pod.type = 'button'; pod.className = 'pod';
       pod.setAttribute('aria-label', `${app}'s plugin`);
       stage.appendChild(pod);
-      const p = { levels: { cpu: 0, ram: 0, out: 0 }, on: true, pod, win: w, avg: { ...USE[app] } };
+      const p = { levels: { cpu: 0, ram: 0, net: 0, out: 0 }, on: true, focus: false, pod, win: w, avg: { ...USE[app] } };
       plugs.set(app, p);
       paintPod(app); placePod(app);
       pod.addEventListener('click', (e) => { e.stopPropagation(); if (menu?.app === app) closeMenu(); else openMenu(app); });
@@ -3767,17 +3778,24 @@
     }
     function paintPod(app) {
       const p = plugs.get(app);
-      const pips = ['cpu', 'ram', 'out'].map((a) => { const L = p.levels[a]; return `<u class="${L >= 11 ? 'b' : lim(L) ? 'l' : ''}" style="height:${lim(L) ? 2 + L * 0.8 : L >= 11 ? 10 : 4}px"></u>`; }).join('');
+      const pips = ['cpu', 'ram', 'net', 'out'].map((a) => { const L = p.levels[a]; return `<u class="${L >= 11 ? 'b' : lim(L) ? 'l' : ''}" style="height:${lim(L) ? 2 + L * 0.8 : L >= 11 ? 10 : 4}px"></u>`; }).join('');
       p.pod.className = `pod${p.on ? '' : ' off'}`;
       p.pod.innerHTML = `<i class="led"></i>${p.on ? 'Active' : 'Inactive'}<span class="pips">${pips}</span>`;
     }
 
     // ---------- the menu ----------
-    const valueText = (a, L) => (a === 'out' && L > 0 ? `${L <= 10 ? L * 10 : L === 11 ? 150 : 200}%` : L === 0 ? 'Off' : L === 10 ? 'All of it' : L === 11 ? 'Boost' : L === 12 ? 'Overdrive' : `${L} of 10`);
+    const kb = (n) => (n >= 1024 ? `${n / 1024} MB/s` : `${n} KB/s`);
+    const valueText = (a, L) => {
+      if (L === 0) return 'Off';
+      if (a === 'out') return `${L <= 10 ? L * 10 : L === 11 ? 150 : 200}%`;
+      if (L < 10) return a === 'net' ? kb(NET[L]) : `${L} of 10`;
+      return L === 10 ? 'All of it' : L === 11 ? 'Boost' : 'Overdrive';
+    };
     function whatText(app, a, L) {
       if (L === 0) return 'Off: Pane leaves it alone.';
       if (a === 'cpu') return L < 10 ? `Up to ${L} tenths of the processor.` : L === 10 ? 'All of it: no limit.' : L === 11 ? 'Boost: busy apps wait for it.' : 'Overdrive: every other app waits.';
-      if (a === 'ram') return L < 10 ? `A line at ${(MEM * L / 10).toFixed(1)} GB.` : L === 10 ? 'All of it: no line.' : 'Boost: big apps hide when you come to it.';
+      if (a === 'ram') return L < 10 ? `A line at ${(MEM * L / 10).toFixed(1)} GB.` : L === 10 ? 'All of it: no line.' : L === 11 ? 'Boost: big apps hide when you come to it.' : 'Overdrive: even smaller apps hide.';
+      if (a === 'net') return L < 10 ? `Up to ${kb(NET[L])} each way.` : L === 10 ? 'All of it: no limit.' : 'Boost: other downloads wait behind it.';
       return `Its own volume at ${L <= 10 ? L * 10 : L === 11 ? 150 : 200}%. Your Mac’s stays put.`;
     }
     function openMenu(app) {
@@ -3786,15 +3804,26 @@
       const m = document.createElement('div');
       m.className = 'plmenu'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', `${app}'s plugin`);
       m.innerHTML = `<div class="mt"><div><b></b><small><i></i><span class="st"></span></small></div><span class="grow"></span><span class="rock" role="switch" tabindex="0" aria-label="Active"></span></div>` +
-        SHARES.map((s) => `<div class="sh" data-a="${s.a}"><div class="hd">${s.n}<span class="use"></span><span class="v"></span></div><div class="rail" role="slider" tabindex="0" aria-label="${s.n} share" aria-valuemin="0" aria-valuemax="12">${'<i></i>'.repeat(13)}</div>${s.a === 'out' ? '' : '<div class="meter"><b></b><u></u></div>'}<p class="what"></p></div>`).join('');
+        SHARES.map((s) => `<div class="sh" data-a="${s.a}"><div class="hd">${s.n}<span class="use"></span><span class="v"></span></div><div class="rail" role="slider" tabindex="0" aria-label="${s.n} share" aria-valuemin="0" aria-valuemax="${s.max}">${'<i></i>'.repeat(s.max + 1)}</div>${s.a === 'out' || s.a === 'net' ? '' : '<div class="meter"><b></b><u></u></div>'}<p class="what"></p></div>`).join('') +
+        `<div class="foot"><button type="button" class="focus">Focus</button><button type="button" class="unplug">Unplug</button></div><p class="fwhat"></p>`;
       m.querySelector('.mt b').textContent = app;
       stage.appendChild(m);
       menu = { app, el: m };
       m.querySelectorAll('.rail').forEach((rail) => wireRail(app, rail));
-      m.querySelector('.rock').addEventListener('click', () => { p.on = !p.on; paintPod(app); paintMenu(); });
+      m.querySelector('.rock').addEventListener('click', () => { p.on = !p.on; if (!p.on) p.focus = false; paintPod(app); paintFocus(); paintMenu(); });
+      m.querySelector('.focus').addEventListener('click', () => {
+        const on = !p.focus;
+        for (const o of plugs.values()) o.focus = false;
+        p.focus = on && p.on;
+        paintFocus(); paintMenu();
+      });
+      m.querySelector('.unplug').addEventListener('click', () => {
+        p.pod.remove(); plugs.delete(app); closeMenu(true); paintFocus();
+        say(`Unplugged ${app}. Everything goes back.`);
+      });
       paintMenu();
       placeMenu();
-      const tips = { Cutroom: 'Hold Cutroom’s processor to 2, then boost it. Watch the export.', Tabs: 'Draw Tabs a memory line under what it’s using.', Tunes: 'Drag Tunes’ sound: its own volume, up to 200%.' };
+      const tips = { Cutroom: 'Hold Cutroom’s processor to 2, then boost it. Watch the export.', Tabs: 'Slow Tabs’ network, or draw a memory line under what it’s using.', Tunes: 'Drag Tunes’ sound: its own volume, up to 200%.' };
       say(tips[app]);
     }
     // Above the pod, right edges lined up; below it if there isn't room; beside it if neither fits. Never over
@@ -3802,18 +3831,23 @@
     function placeMenu() {
       if (!menu) return;
       const m = menu.el, p = plugs.get(menu.app);
+      if (!p) return;
       const pr = { x: p.pod.offsetLeft, y: p.pod.offsetTop, w: p.pod.offsetWidth, h: p.pod.offsetHeight };
-      const mh = m.offsetHeight, mw = m.offsetWidth, H = stage.offsetHeight, W = stage.offsetWidth;
-      let x = Math.max(6, Math.min(pr.x + pr.w - mw, W - mw - 6)), y, origin = '100% 100%';
-      if (pr.y - mh - 10 >= 6) y = pr.y - mh - 10;
-      else if (pr.y + pr.h + 10 + mh <= H - 6) { y = pr.y + pr.h + 10; origin = '100% 0'; }
-      else {
-        y = Math.max(6, Math.min(pr.y + pr.h - mh, H - mh - 6));
-        x = pr.x - mw - 10 >= 6 ? pr.x - mw - 10 : Math.min(pr.x + pr.w + 10, W - mw - 6);
-        origin = x < pr.x ? '100% 100%' : '0 100%';
-      }
-      m.style.transformOrigin = origin;
-      m.style.left = `${x}px`; m.style.top = `${y}px`;
+      const wr = { x: p.win.offsetLeft, y: p.win.offsetTop, w: p.win.offsetWidth, h: p.win.offsetHeight };
+      const mh = m.offsetHeight, mw = m.offsetWidth, H = stage.offsetHeight, W = stage.offsetWidth, gap = 10;
+      const box = (x, y, origin) => ({ x, y, origin });
+      const candidates = [
+        box(wr.x + wr.w + gap, Math.max(6, Math.min(wr.y, H - mh - 6)), '0 0'),
+        box(wr.x - mw - gap, Math.max(6, Math.min(wr.y, H - mh - 6)), '100% 0'),
+        box(Math.max(6, Math.min(pr.x + pr.w - mw, W - mw - 6)), pr.y - mh - gap, '100% 100%'),
+        box(Math.max(6, Math.min(pr.x + pr.w - mw, W - mw - 6)), pr.y + pr.h + gap, '100% 0'),
+      ];
+      const fits = (c) => c.x >= 6 && c.y >= 6 && c.x + mw <= W - 6 && c.y + mh <= H - 6;
+      const hitsPod = (c) => !(c.x + mw < pr.x - 4 || pr.x + pr.w < c.x - 4 || c.y + mh < pr.y - 4 || pr.y + pr.h < c.y - 4);
+      const hit = candidates.find((c) => fits(c) && !hitsPod(c)) || candidates.find(fits) || candidates[0];
+      m.style.transformOrigin = hit.origin;
+      m.style.left = `${Math.max(6, Math.min(hit.x, W - mw - 6))}px`;
+      m.style.top = `${Math.max(6, Math.min(hit.y, H - mh - 6))}px`;
     }
     function closeMenu(now) {
       if (!menu) return;
@@ -3823,7 +3857,9 @@
     }
     function paintMenu() {
       if (!menu) return;
-      const app = menu.app, p = plugs.get(app), m = menu.el, u = USE[app];
+      const app = menu.app, p = plugs.get(app), m = menu.el;
+      if (!p) { closeMenu(true); return; }
+      const u = USE[app];
       m.classList.toggle('off', !p.on);
       m.querySelector('.rock').classList.toggle('off', !p.on);
       const over = p.levels.ram >= 1 && p.levels.ram < 10 && u.ram > MEM * p.levels.ram / 10;
@@ -3837,37 +3873,58 @@
           c.className = k === 0 ? `o${L === 0 ? ' oo' : ''}` : k > 10 ? `b${k <= L ? ' bo' : ''}` : (k <= L && L >= 1 ? 'lim' : '');
         });
         sh.querySelector('.what').textContent = whatText(app, s.a, L);
-        if (s.a !== 'out') {
+        if (s.a === 'cpu' || s.a === 'ram') {
           const now = s.a === 'cpu' ? cpuNow(app) : u.ram, usual = s.a === 'cpu' ? p.avg.cpu : p.avg.ram;
           const sharesNow = s.a === 'cpu' ? now : now / MEM * 10, sharesUsual = s.a === 'cpu' ? usual : usual / MEM * 10;
-          sh.querySelector('.use').textContent = s.a === 'cpu' ? `${Math.round(now * 10)}% now, usually ${Math.round(usual * 10)}%` : `${now.toFixed(1)} GB now`;
+          sh.querySelector('.use').textContent = s.a === 'cpu' ? `${Math.round(now * 10)}%` : `${now.toFixed(1)} GB`;
           sh.querySelector('.meter b').style.width = `${Math.min(100, sharesNow * 10)}%`;
           sh.querySelector('.meter u').style.left = `${Math.min(100, sharesUsual * 10)}%`;
         }
       }
+      const focus = m.querySelector('.focus');
+      focus.classList.toggle('on', p.focus);
+      focus.setAttribute('aria-pressed', p.focus);
+      m.querySelector('.fwhat').textContent = p.focus ? 'Focus: the other windows blur, and they wait while you’re in this one.' : '';
       paintPod(app);
+      paintFocus();
+    }
+    function paintFocus() {
+      const on = [...plugs.values()].find((p) => p.on && p.focus);
+      const chip = document.getElementById('plfocus');
+      chip.classList.toggle('on', !!on && !menu);
+      chip.textContent = on ? `Focusing on ${[...plugs].find(([, p]) => p === on)[0]}` : '';
+      for (const [name, p] of plugs) p.win.classList.toggle('dim', !!on && p !== on);
+      for (const w of wins) if (![...plugs.values()].some((p) => p.win === w)) w.classList.toggle('dim', !!on);
     }
     function wireRail(app, rail) {
       const a = rail.closest('.sh').dataset.a, p = plugs.get(app);
-      const at = (x) => { const cells = [...rail.children]; for (let k = 0; k < cells.length; k++) if (x < cells[k].getBoundingClientRect().right + 1) return k; return 12; };
-      const set = (L) => { L = Math.max(0, Math.min(12, L)); if (p.levels[a] !== L) { p.levels[a] = L; paintMenu(); } };
+      const max = Number(rail.getAttribute('aria-valuemax'));
+      const at = (x) => { const cells = [...rail.children]; for (let k = 0; k < cells.length; k++) if (x < cells[k].getBoundingClientRect().right + 1) return k; return max; };
+      const set = (L) => { L = Math.max(0, Math.min(max, L)); if (p.levels[a] !== L) { p.levels[a] = L; paintMenu(); } };
       let held = false;
       rail.addEventListener('pointerdown', (e) => { held = true; try { rail.setPointerCapture(e.pointerId); } catch {} set(at(e.clientX)); });
       rail.addEventListener('pointermove', (e) => { if (held) set(at(e.clientX)); });
       rail.addEventListener('pointerup', () => { held = false; });
       rail.addEventListener('keydown', (e) => {
         const d = { ArrowLeft: -1, ArrowRight: 1, ArrowDown: -1, ArrowUp: 1 }[e.key];
-        if (d) { e.preventDefault(); set(p.levels[a] + d); } else if (e.key === 'Home') set(0); else if (e.key === 'End') set(12);
+        if (d) { e.preventDefault(); set(p.levels[a] + d); } else if (e.key === 'Home') set(0); else if (e.key === 'End') set(max);
       });
     }
 
     // ---------- the apps, doing their thing ----------
     // How fast Cutroom can go: its share caps it (it needs about 4.6 tenths), boosts lift it.
-    function speedOf(app) {
+    function shareSpeed(app, a, need) {
       const p = plugs.get(app);
       if (!p || !p.on) return 1;
-      const L = p.levels.cpu;
-      return L === 0 || L === 10 ? 1 : L === 11 ? 1.35 : L === 12 ? 1.7 : Math.min(1, L / USE[app].cpu);
+      const L = p.levels[a];
+      return L === 0 || L === 10 ? 1 : L === 11 ? 1.35 : L === 12 ? 1.7 : Math.min(1, L / need);
+    }
+    const speedOf = (app) => shareSpeed(app, 'cpu', USE[app].cpu);
+    function netOf(app) {
+      const p = plugs.get(app);
+      if (!p || !p.on) return 1;
+      const L = p.levels.net;
+      return L === 0 || L === 10 ? 1 : L === 11 ? 1.4 : Math.min(1, L / 6);
     }
     const cpuNow = (app) => Math.min(USE[app].cpu * (app === 'Cutroom' ? speedOf(app) : 1), 10) * (0.94 + Math.random() * 0.12);
     function tick() {
@@ -3875,6 +3932,10 @@
       progress = (progress + 0.6 * sp) % 100;
       document.getElementById('plexp').textContent = `Exporting video… ${Math.floor(progress)}%${sp < 0.98 ? ' (held back)' : sp > 1.02 ? ' (boosted)' : ''}`;
       document.getElementById('plbar').style.width = `${progress}%`;
+      const ns = netOf('Tabs');
+      load = (load + 0.7 * ns) % 100;
+      document.getElementById('pldl').textContent = `Loading page… ${Math.floor(load)}%${ns < 0.98 ? ' (held back)' : ns > 1.02 ? ' (boosted)' : ''}`;
+      document.getElementById('pldlbar').style.width = `${load}%`;
       fanA = (fanA + 40 * sp) % 360;
       document.getElementById('plfan').style.transform = `rotate(${fanA}deg)`;
       const t = plugs.get('Tunes'), L = t && t.on ? t.levels.out : 0;
@@ -3893,7 +3954,7 @@
     document.getElementById('plreplay').addEventListener('click', () => {
       endPick(); closeMenu(true);
       for (const p of plugs.values()) p.pod.remove();
-      plugs.clear(); progress = 0;
+      plugs.clear(); progress = 0; load = 0; paintFocus();
       say('Press ⌃⌘P or click the desk, then pick an app.');
     });
     addEventListener('resize', () => { for (const app of plugs.keys()) placePod(app); });

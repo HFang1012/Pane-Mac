@@ -2312,10 +2312,10 @@ ipcMain.on('debug:try', () => {
 });
 
 // ---------- Plugin: give an app more of your Mac, or less ----------
-// Work in progress: hidden from Pane (no shortcut, settings page, menu items or Debug actions) until it's ready.
-// Flip PLUGIN_READY to bring it back; tools.js marks it `wip` for the settings window the same way. While it's
-// hidden, the engine still starts once, only to undo anything a plugin from 1.5.29–1.5.31 left in place.
-const PLUGIN_READY = false;
+// PLUGIN_READY hides all of it (no shortcut, settings page, menu items or Debug actions) when false; tools.js
+// marks it `wip` for the settings window the same way. Hidden, the engine still starts once, only to undo
+// anything a plugin left in place.
+const PLUGIN_READY = true;
 // Press ⌃⌘P and the screen dims; point at any app's window (or pick it from the tray of open apps) and click.
 // A plugin lands on it: a badge on its window's bottom-right corner, which opens the plugin's menu. What a
 // plugin does lives in plugin-engine.js; this part is the picker, the badges and the menu.
